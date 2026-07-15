@@ -72,6 +72,12 @@ export default function Dashboard() {
   const [bitrate, setBitrate] = useState(0);
   const [isLive, setIsLive] = useState(false);
   const [showGoLive, setShowGoLive] = useState(false);
+  const [livePlatform, setLivePlatform] = useState<string>("");
+
+  // Map platform id → short display label for top bar
+  const PLATFORM_SHORT: Record<string, string> = {
+    youtube: "YT", twitch: "TW", facebook: "FB", custom: "CUSTOM",
+  };
 
   useEffect(() => {
     if (!isLive) return;
@@ -101,19 +107,27 @@ export default function Dashboard() {
         </div>
         <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Dashboard</span>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: "#FF5A2C18", border: "1px solid #FF5A2C40" }}>
-          <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: "#FF5A2C", letterSpacing: "0.06em" }}>LIVE</span>
-        </div>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#FF6B35" }}>YT</span>
-        <span className="mono" style={{ fontSize: 12, color: "#22D3EE" }}>{tc}</span>
+        {isLive && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: "#FF5A2C18", border: "1px solid #FF5A2C40" }}>
+            <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: "#FF5A2C", letterSpacing: "0.06em" }}>LIVE</span>
+          </div>
+        )}
+        {isLive && livePlatform && (
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#FF6B35" }}>
+            {PLATFORM_SHORT[livePlatform] ?? livePlatform.toUpperCase()}
+          </span>
+        )}
+        <span className="mono" style={{ fontSize: 12, color: isLive ? "#22D3EE" : "#50506A" }}>{isLive ? tc : "00:00:00"}</span>
         <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>1920×1080</span>
         <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>60fps</span>
         <span className="mono" style={{ fontSize: 11, color: "#4F9EFF" }}>H.264</span>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#22C55E" }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#22C55E" }}>SIG OK</span>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#22C55E" : "#50506A" }} />
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: isLive ? "#22C55E" : "#50506A" }}>
+            {isLive ? "SIG OK" : "OFFLINE"}
+          </span>
         </div>
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#50506A" }}>Default Profile</span>
       </div>
@@ -127,8 +141,14 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-3 py-1.5 panel-header-brand shrink-0">
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Program Output</span>
               <div className="flex items-center gap-1.5">
-                <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF5A2C", letterSpacing: "0.08em" }}>LIVE</span>
+                {isLive ? (
+                  <>
+                    <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF5A2C", letterSpacing: "0.08em" }}>LIVE</span>
+                  </>
+                ) : (
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#50506A", letterSpacing: "0.08em" }}>OFFLINE</span>
+                )}
               </div>
             </div>
             <div className="flex-1 relative overflow-hidden" style={{ background: "#161B2E", minHeight: 0 }}>
@@ -160,12 +180,12 @@ export default function Dashboard() {
               {/* Timecode strip */}
               <div className="absolute bottom-0 left-0 right-0 flex items-center gap-4 px-3 py-1.5" style={{ background: "rgba(0,0,0,0.75)", borderTop: "1px solid #2A3350" }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A", letterSpacing: "0.06em" }}>TC</span>
-                <span className="mono" style={{ fontSize: 11, color: "#22D3EE" }}>{tc}</span>
+                <span className="mono" style={{ fontSize: 11, color: isLive ? "#22D3EE" : "#50506A" }}>{isLive ? tc : "00:00:00"}</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#F8F8FF" }}>
-                  {SCENES.find(s => s.id === activeScene)?.name ?? "Scene 1"}
+                  {SCENES.find(s => s.id === activeScene)?.name ?? (activeScene !== null ? "Unknown" : "—")}
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#22C55E" }}>SRC ACTIVE</span>
+                {isLive && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#22C55E" }}>SRC ACTIVE</span>}
                 <div className="flex-1" />
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>VIEWERS</span>
                 <span className="mono" style={{ fontSize: 11, color: "#4F9EFF" }}>{viewers.toLocaleString()}</span>
@@ -273,9 +293,22 @@ export default function Dashboard() {
 
           {/* Live indicator */}
           <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid #2A3350" }}>
-            <div className="live-dot w-2 h-2 rounded-full" style={{ background: "#FF5A2C" }} />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#FF5A2C" }}>LIVE</span>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#A0A0B8" }}>on YouTube</span>
+            {isLive ? (
+              <>
+                <div className="live-dot w-2 h-2 rounded-full" style={{ background: "#FF5A2C" }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#FF5A2C" }}>LIVE</span>
+                {livePlatform && (
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#A0A0B8" }}>
+                    on {livePlatform.charAt(0).toUpperCase() + livePlatform.slice(1)}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 rounded-full" style={{ background: "#50506A" }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#50506A" }}>OFFLINE</span>
+              </>
+            )}
           </div>
 
           {/* Bitrate */}
@@ -291,7 +324,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-0" style={{ borderBottom: "1px solid #2A3350" }}>
             {[
 { label: "Viewers", value: viewers > 0 ? viewers.toLocaleString() : "—", sub: isLive ? "Live now" : "Offline", color: "#4F9EFF", icon: Users },
-              { label: "Uptime", value: tc, sub: "Session Live", color: "#22D3EE", icon: Clock },
+              { label: "Uptime", value: isLive ? tc : "00:00:00", sub: isLive ? "Session Live" : "—", color: "#22D3EE", icon: Clock },
             ].map(({ label, value, sub, color, icon: Icon }) => (
               <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5" style={{ borderRight: label === "Viewers" ? "1px solid #2A3350" : "none" }}>
                 <div className="flex items-center gap-1">
@@ -357,7 +390,7 @@ export default function Dashboard() {
       <GoLiveModal
         open={showGoLive}
         onClose={() => setShowGoLive(false)}
-        onGoLive={() => { setIsLive(true); setShowGoLive(false); }}
+        onGoLive={(cfg) => { setIsLive(true); setLivePlatform(cfg.platform); setShowGoLive(false); }}
       />
   </AppSidebar>
   );
