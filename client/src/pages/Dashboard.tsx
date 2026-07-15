@@ -1,113 +1,288 @@
-// RailShotTV — Chromatic Command — Dashboard
+// RailShotTV — Chromatic Command — Unified Broadcast Control Surface (OBS-style single screen)
 // Colors: Brand=#FF5A2C, Blue=#4F9EFF, Violet=#A855F7, Emerald=#22C55E, Cyan=#22D3EE, Amber=#FBBF24
-import { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
 import { useScenes } from "@/contexts/SceneContext";
-import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2, Pencil, Copy, Trash2, Edit2 } from "lucide-react";
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import {
+  Plus, Trash2, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown,
+  Mic, Music, Volume2, Square, Layers, Monitor, Camera, Globe, Type,
+  Image as ImageIcon, Bell, Trophy, AlignLeft, X, Search, Sparkles,
+  LayoutTemplate, Activity, Cpu, Users, Clock,
+} from "lucide-react";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 
+// ── Source type catalogue ─────────────────────────────────────────────────────
+const SOURCE_TYPES = [
+  { type: "display",    label: "Display Capture", icon: Monitor,   color: "#4F9EFF" },
+  { type: "camera",     label: "Camera / Webcam", icon: Camera,    color: "#22C55E" },
+  { type: "browser",    label: "Browser Source",  icon: Globe,     color: "#22D3EE" },
+  { type: "text",       label: "Text (GDI+)",     icon: Type,      color: "#A855F7" },
+  { type: "image",      label: "Image",           icon: ImageIcon, color: "#FBBF24" },
+  { type: "alert",      label: "Alert / Stinger", icon: Bell,      color: "#FF5A2C" },
+  { type: "scoreboard", label: "Scoreboard",      icon: Trophy,    color: "#FF5A2C" },
+  { type: "lowerthird", label: "Lower Third",     icon: AlignLeft, color: "#4F9EFF" },
+];
 
-// Audio channels — derived from active scene's audio sources
+// ── Overlay template catalogue ────────────────────────────────────────────────
+const OVERLAY_TEMPLATES = [
+  { id: "sb-pool",   name: "Billiards Scoreboard", cat: "scoreboard", icon: Trophy,    color: "#FF5A2C" },
+  { id: "sb-bball",  name: "Basketball Board",     cat: "scoreboard", icon: Trophy,    color: "#FBBF24" },
+  { id: "lt-player", name: "Player Lower Third",   cat: "lowerthird", icon: AlignLeft, color: "#4F9EFF" },
+  { id: "lt-team",   name: "Team Lower Third",     cat: "lowerthird", icon: AlignLeft, color: "#4F9EFF" },
+  { id: "ticker",    name: "Score Ticker",         cat: "browser",    icon: Globe,     color: "#22D3EE" },
+  { id: "alert-sub", name: "Sub Alert",            cat: "alert",      icon: Bell,      color: "#FF5A2C" },
+  { id: "logo",      name: "Logo Overlay",         cat: "image",      icon: ImageIcon, color: "#FBBF24" },
+  { id: "cam-frame", name: "Camera Frame",         cat: "camera",     icon: Camera,    color: "#22C55E" },
+];
 
-function VUMeter({ levels, color }: { levels: number[]; color: string }) {
+// ── VU Meter ──────────────────────────────────────────────────────────────────
+function VUMeter({ color, active }: { color: string; active: boolean }) {
   const [tick, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick(p => p + 1), 80); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setTick(p => p + 1), 80);
+    return () => clearInterval(t);
+  }, [active]);
+  const bars = [0.3, 0.5, 0.7, 0.85, 0.6, 0.4, 0.75, 0.55, 0.65, 0.45];
   return (
-    <div className="flex items-end gap-px" style={{ height: 28 }}>
-      {levels.map((l, i) => {
-        const jitter = (Math.sin(tick * 0.7 + i * 1.3) * 0.15 + Math.cos(tick * 0.4 + i * 0.8) * 0.1);
-        const h = Math.max(2, Math.round((l + jitter) * 28));
-        const pct = (l + jitter);
+    <div className="flex items-end gap-px" style={{ height: 20, width: 60 }}>
+      {bars.map((l, i) => {
+        const jitter = active ? (Math.sin(tick * 0.7 + i * 1.3) * 0.15 + Math.cos(tick * 0.4 + i * 0.8) * 0.1) : 0;
+        const h = Math.max(2, Math.round((l + jitter) * 20));
+        const pct = l + jitter;
         const c = pct > 0.85 ? "#EF4444" : pct > 0.65 ? "#FBBF24" : color;
-        return <div key={i} className="vu-bar" style={{ height: h, background: c, opacity: 0.9 }} />;
+        return <div key={i} style={{ width: 4, height: h, background: active ? c : "#303D5A", borderRadius: 1, transition: "height 0.08s" }} />;
       })}
     </div>
   );
 }
 
-function BitrateSparkline() {
+// ── Bitrate sparkline ─────────────────────────────────────────────────────────
+function BitrateSparkline({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dataRef = useRef<number[]>(Array(40).fill(8600));
+  const dataRef   = useRef<number[]>(Array(40).fill(0));
   useEffect(() => {
     const interval = setInterval(() => {
       const last = dataRef.current[dataRef.current.length - 1];
-      const next = Math.max(7000, Math.min(10000, last + (Math.random() - 0.48) * 300));
+      const next = active ? Math.max(7000, Math.min(10000, last + (Math.random() - 0.48) * 300)) : 0;
       dataRef.current = [...dataRef.current.slice(1), next];
       const canvas = canvasRef.current; if (!canvas) return;
       const ctx = canvas.getContext("2d"); if (!ctx) return;
-      const { width: w, height: h } = canvas;
-      ctx.clearRect(0, 0, w, h);
-      const data = dataRef.current;
-      const min = 6000, max = 11000;
-      const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * w, y: h - ((v - min) / (max - min)) * h * 0.85 - 2 }));
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, "rgba(59,130,246,0.4)");
-      grad.addColorStop(1, "rgba(59,130,246,0.02)");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const pts = dataRef.current.map((v, i) => ({
+        x: (i / 39) * canvas.width,
+        y: canvas.height - (v / 12000) * canvas.height,
+      }));
       ctx.beginPath();
-      ctx.moveTo(pts[0].x, h);
-      ctx.lineTo(pts[0].x, pts[0].y);
-      pts.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.lineTo(pts[pts.length-1].x, h);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      pts.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.strokeStyle = "#4F9EFF";
+      pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.strokeStyle = active ? "#4F9EFF" : "#303D5A";
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }, 200);
     return () => clearInterval(interval);
-  }, []);
-  return <canvas ref={canvasRef} width={200} height={44} style={{ width: "100%", height: 44 }} />;
+  }, [active]);
+  return <canvas ref={canvasRef} width={180} height={36} style={{ width: "100%", height: 36 }} />;
 }
 
+// ── Add Source Modal ──────────────────────────────────────────────────────────
+function AddSourceModal({ onAdd, onClose }: {
+  onAdd: (type: string, name: string, icon: React.ElementType, color: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName]       = useState(SOURCE_TYPES[0].label);
+  const [selected, setSelected] = useState(SOURCE_TYPES[0]);
+  useEffect(() => { setName(selected.label); }, [selected]);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.75)", zIndex: 9999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "#1E2640", border: "1px solid #2A3350", borderRadius: 10, width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "1px solid #2A3350" }}>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#F8F8FF" }}>Add Source</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#606078" }}><X size={16} /></button>
+        </div>
+        <div className="grid grid-cols-4 gap-2 p-4">
+          {SOURCE_TYPES.map(st => (
+            <button key={st.type} onClick={() => setSelected(st)}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 6px", borderRadius: 7, cursor: "pointer",
+                border: `1px solid ${selected.type === st.type ? st.color + "80" : "#2A3350"}`,
+                background: selected.type === st.type ? st.color + "18" : "#141928", transition: "all 0.15s" }}>
+              <st.icon size={20} style={{ color: selected.type === st.type ? st.color : "#606078" }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: selected.type === st.type ? "#F8F8FF" : "#606078", textAlign: "center", lineHeight: 1.2 }}>{st.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="px-4 pb-4">
+          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4", display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Source Name</label>
+          <input autoFocus value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
+            style={{ width: "100%", background: "#141928", border: "1px solid #303D5A", borderRadius: 6, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 13, padding: "8px 12px", outline: "none", boxSizing: "border-box" as const }} />
+        </div>
+        <div className="flex justify-end gap-2 px-4 pb-4">
+          <button onClick={onClose} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #303D5A", background: "none", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => { if (name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
+            style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "linear-gradient(135deg, #4F9EFF, #7C3AED)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Add Source
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Properties panel ──────────────────────────────────────────────────────────
+type SourceItem = ReturnType<typeof useScenes>["scenes"][0]["sources"][0];
+function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransform }: {
+  sourceId: number | null;
+  sources: SourceItem[];
+  onUpdateSettings: (k: string, v: string | number | boolean) => void;
+  onUpdateTransform: (k: string, v: number | boolean) => void;
+}) {
+  const src = sources.find(s => s.id === sourceId) ?? null;
+  if (!src) return (
+    <div className="flex flex-col items-center justify-center flex-1 gap-2" style={{ color: "#50506A" }}>
+      <Layers size={20} />
+      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>Select a source</span>
+    </div>
+  );
+  const setting = (k: string, def: string | number | boolean = "") => (src.settings as Record<string, unknown>)?.[k] ?? def;
+  const numIn = (val: number, onChange: (v: number) => void, min?: number, max?: number) => (
+    <input type="number" value={val} min={min} max={max} onChange={e => onChange(Number(e.target.value))}
+      style={{ width: 58, height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A855F7", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, padding: "0 5px", outline: "none" }} />
+  );
+  const txtIn = (val: string, onChange: (v: string) => void, placeholder = "", width = 120) => (
+    <input type="text" value={val} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      style={{ width, height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 5px", outline: "none" }} />
+  );
+  const tog = (val: boolean, onChange: (v: boolean) => void) => (
+    <div onClick={() => onChange(!val)} style={{ width: 28, height: 16, borderRadius: 8, background: val ? "#FF5A2C" : "#1A1A24", border: `1px solid ${val ? "#FF5A2C" : "#303D5A"}`, position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
+      <div style={{ position: "absolute", top: 2, left: val ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+    </div>
+  );
+  const selIn = (val: string, onChange: (v: string) => void, options: string[]) => (
+    <select value={val} onChange={e => onChange(e.target.value)} style={{ height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 4px", outline: "none" }}>
+      {options.map(o => <option key={o}>{o}</option>)}
+    </select>
+  );
+  const row = (label: string, input: React.ReactNode) => (
+    <div key={label} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid #1A1A24" }}>
+      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4" }}>{label}</span>
+      {input}
+    </div>
+  );
+  const t = (src as SourceItem & { _transform?: Record<string, number | boolean> })._transform ?? { x: 0, y: 0, w: 1920, h: 1080, rot: 0, opacity: 100 };
+  return (
+    <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
+      <div className="px-2 pt-2 pb-1">
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Transform</div>
+        {row("X", numIn(t.x as number, v => onUpdateTransform("x", v)))}
+        {row("Y", numIn(t.y as number, v => onUpdateTransform("y", v)))}
+        {row("W", numIn(t.w as number, v => onUpdateTransform("w", v), 1))}
+        {row("H", numIn(t.h as number, v => onUpdateTransform("h", v), 1))}
+        {row("Rot°", numIn(t.rot as number, v => onUpdateTransform("rot", v), -360, 360))}
+        {row("Opacity", numIn(t.opacity as number, v => onUpdateTransform("opacity", v), 0, 100))}
+        <div className="flex gap-1 mt-1.5 mb-1">
+          {["Flip H","Flip V","Reset"].map(l => (
+            <button key={l} onClick={() => onUpdateTransform(l === "Reset" ? "__reset" : l === "Flip H" ? "flipH" : "flipV", true)}
+              style={{ flex: 1, padding: "2px 0", borderRadius: 3, border: "1px solid #303D5A", background: "#1E2640", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, cursor: "pointer" }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div className="px-2 pb-2" style={{ borderTop: "1px solid #2A3350" }}>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3, marginTop: 6 }}>Settings</div>
+        {src.type === "camera" && (<>
+          {row("Device", selIn(setting("device","Default Camera") as string, v => onUpdateSettings("device", v), ["Default Camera","USB Camera 1","USB Camera 2","IP Camera (RTSP)","NDI Source"]))}
+          {row("RTSP URL", txtIn(setting("rtsp","") as string, v => onUpdateSettings("rtsp", v), "rtsp://..."))}
+          {row("Flip H", tog(setting("flipCam",false) as boolean, v => onUpdateSettings("flipCam", v)))}
+        </>)}
+        {src.type === "browser" && (<>
+          {row("URL", txtIn(setting("url","") as string, v => onUpdateSettings("url", v), "https://...", 130))}
+          {row("W px", numIn(setting("bw",1920) as number, v => onUpdateSettings("bw", v), 1))}
+          {row("H px", numIn(setting("bh",1080) as number, v => onUpdateSettings("bh", v), 1))}
+          {row("Refresh", tog(setting("refresh",true) as boolean, v => onUpdateSettings("refresh", v)))}
+        </>)}
+        {src.type === "image" && (<>
+          {row("Path / URL", txtIn(setting("src","") as string, v => onUpdateSettings("src", v), "/path/to/img", 130))}
+        </>)}
+        {src.type === "text" && (<>
+          {row("Content", txtIn(setting("text","") as string, v => onUpdateSettings("text", v), "Enter text...", 130))}
+          {row("Size", numIn(setting("fontSize",48) as number, v => onUpdateSettings("fontSize", v), 8, 400))}
+          {row("Bold", tog(setting("bold",false) as boolean, v => onUpdateSettings("bold", v)))}
+        </>)}
+        {src.type === "display" && (<>
+          {row("Monitor", selIn(setting("monitor","Primary Monitor") as string, v => onUpdateSettings("monitor", v), ["Primary Monitor","Secondary Monitor","Monitor 3"]))}
+          {row("Cursor", tog(setting("cursor",true) as boolean, v => onUpdateSettings("cursor", v)))}
+        </>)}
+        {src.type === "alert" && (<>
+          {row("Alert URL", txtIn(setting("alertUrl","") as string, v => onUpdateSettings("alertUrl", v), "https://...", 130))}
+        </>)}
+        {src.type === "scoreboard" && (<>
+          {row("Sport", selIn(setting("sport","Billiards") as string, v => onUpdateSettings("sport", v), ["Billiards","Basketball","Football","Soccer","Tennis"]))}
+        </>)}
+        {src.type === "lowerthird" && (<>
+          {row("Title", txtIn(setting("title","") as string, v => onUpdateSettings("title", v), "Player Name", 120))}
+          {row("Subtitle", txtIn(setting("subtitle","") as string, v => onUpdateSettings("subtitle", v), "Team / Role", 120))}
+          {row("Duration s", numIn(setting("duration",5) as number, v => onUpdateSettings("duration", v), 1, 60))}
+        </>)}
+        {!["camera","browser","image","text","display","alert","scoreboard","lowerthird","overlay"].includes(src.type) && (
+          <div style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 10, paddingTop: 6 }}>No settings for this type.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main unified broadcast control surface ────────────────────────────────────
 export default function Dashboard() {
-  const { scenes, activeSceneId: activeScene, setActiveSceneId: setActiveScene,
-          setEditingSceneId, addScene, duplicateScene, deleteScene, renameScene } = useScenes();
-  const [, navigate] = useLocation();
-  // Build audio channels from active scene sources
-  const activeSceneObj = scenes.find(s => s.id === activeScene) ?? null;
+  const {
+    scenes, activeSceneId, setActiveSceneId,
+    addScene, renameScene, deleteScene, duplicateScene,
+    addSource, removeSource, updateSource, moveSource, updateSourceSettings,
+  } = useScenes();
+  // SceneContext addScene returns void and auto-activates; we track the new id via scenes length change
+  const handleAddScene = useCallback((name?: string) => {
+    addScene();
+    // SceneContext auto-activates the new scene; we just clear source selection
+    setSelectedSourceId(null);
+  }, [addScene]);
+
+  // Stream state
+  const [isLive, setIsLive]             = useState(false);
+  const [livePlatform, setLivePlatform] = useState("");
+  const [showGoLive, setShowGoLive]     = useState(false);
+  const [tc, setTc]                     = useState("00:00:00");
+  const [bitrate, setBitrate]           = useState(0);
+  const [viewers, setViewers]           = useState(0);
+
+  // Scene rename
+  const [renamingSceneId, setRenamingSceneId] = useState<number | null>(null);
+  const [renameValue, setRenameValue]         = useState("");
+
+  // Source state
+  const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
+  const [showAddSource, setShowAddSource]       = useState(false);
+  const [sourceTransforms, setSourceTransforms] = useState<Record<number, Record<string, number | boolean>>>({});
+
+  // Overlay browser
+  const [overlayBrowserOpen, setOverlayBrowserOpen] = useState(false);
+  const [overlaySearch, setOverlaySearch]           = useState("");
+
+  // Audio mixer
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
-  const audioChannels = (activeSceneObj?.sources ?? []).filter(s => ["camera","display"].includes(s.type)).map(s => ({
-    id: s.id, name: s.name, sub: s.type === "camera" ? "Camera Input" : "Desktop Audio",
-    icon: s.type === "camera" ? Mic : Music, color: s.color,
-  }));
-  const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [tc, setTc] = useState("00:00:00");
 
-  const startRename = (scene: { id: number; name: string }) => {
-    setRenamingId(scene.id);
-    setRenameValue(scene.name);
-  };
+  // Active scene
+  const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
+  const sources      = activeScene?.sources ?? [];
+  const selectedSource = sources.find(s => s.id === selectedSourceId) ?? null;
 
-  const commitRename = () => {
-    if (renamingId === null) return;
-    const trimmed = renameValue.trim();
-    if (trimmed) renameScene(renamingId, trimmed);
-    setRenamingId(null);
-  };
-
-  const openSceneEditor = (sceneId: number) => {
-    setEditingSceneId(sceneId);
-    navigate("/scenes");
-  };
-  const [viewers, setViewers] = useState(0);
-  const [bitrate, setBitrate] = useState(0);
-  const [isLive, setIsLive] = useState(false);
-  const [showGoLive, setShowGoLive] = useState(false);
-  const [livePlatform, setLivePlatform] = useState<string>("");
-
-  // Map platform id → short display label for top bar
-  const PLATFORM_SHORT: Record<string, string> = {
-    youtube: "YT", twitch: "TW", facebook: "FB", custom: "CUSTOM",
-  };
-
+  // Timecode
   useEffect(() => {
     if (!isLive) return;
     let secs = 0;
@@ -117,408 +292,379 @@ export default function Dashboard() {
       const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
       const s = String(secs % 60).padStart(2, "0");
       setTc(`${h}:${m}:${s}`);
+      setBitrate(prev => Math.max(7000, Math.min(10000, prev + (Math.random() - 0.48) * 300)));
+      if (Math.random() < 0.05) setViewers(v => v + Math.floor(Math.random() * 3));
     }, 1000);
     return () => clearInterval(t);
   }, [isLive]);
 
+  // Handlers
+  const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
+    if (activeSceneId === null) { toast.error("Create a scene first"); return; }
+    const id = addSource(activeSceneId, { name, type, icon, color, visible: true, locked: false, settings: {} });
+    setSelectedSourceId(id);
+    toast.success(`Added "${name}"`);
+  }, [activeSceneId, addSource]);
+
+  const handleDeleteSource = useCallback(() => {
+    if (activeSceneId === null || selectedSourceId === null) return;
+    removeSource(activeSceneId, selectedSourceId);
+    setSelectedSourceId(null);
+  }, [activeSceneId, selectedSourceId, removeSource]);
+
+  const handleUpdateSettings = useCallback((k: string, v: string | number | boolean) => {
+    if (activeSceneId === null || selectedSourceId === null) return;
+    updateSourceSettings(activeSceneId, selectedSourceId, k, v);
+  }, [activeSceneId, selectedSourceId, updateSourceSettings]);
+
+  const handleUpdateTransform = useCallback((k: string, v: number | boolean) => {
+    if (selectedSourceId === null) return;
+    if (k === "__reset") { setSourceTransforms(p => { const n = { ...p }; delete n[selectedSourceId]; return n; }); return; }
+    setSourceTransforms(p => ({ ...p, [selectedSourceId]: { ...(p[selectedSourceId] ?? {}), [k]: v } }));
+  }, [selectedSourceId]);
+
+  const audioChannels = useMemo(() =>
+    sources.filter(s => ["camera","display"].includes(s.type)),
+    [sources]
+  );
+
+  const filteredOverlays = useMemo(() =>
+    OVERLAY_TEMPLATES.filter(t => t.name.toLowerCase().includes(overlaySearch.toLowerCase())),
+    [overlaySearch]
+  );
+
   return (
     <AppSidebar>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      {/* Live top border */}
-      <div className="live-top-border" />
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#0F1520" }}>
 
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#1A2035", borderBottom: "1px solid #2A3350" }}>
-        {/* RailShotTV wordmark */}
-        <div className="flex items-center gap-1 mr-1">
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#F8F8FF", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#FF5A2C", letterSpacing: "0.06em", lineHeight: 1 }}>TV</span>
-        </div>
-        <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
-        <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Dashboard</span>
-        {isLive && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: "#FF5A2C18", border: "1px solid #FF5A2C40" }}>
-            <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: "#FF5A2C", letterSpacing: "0.06em" }}>LIVE</span>
+        {/* ── Top bar ── */}
+        <div className="flex items-center gap-3 px-3 shrink-0" style={{ height: 44, background: "#1A2035", borderBottom: "1px solid #2A3350" }}>
+          <div className="flex items-center gap-1">
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#F8F8FF", letterSpacing: "0.06em" }}>RAILSHOT</span>
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#FF5A2C", letterSpacing: "0.06em" }}>TV</span>
           </div>
-        )}
-        {isLive && livePlatform && (
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#FF6B35" }}>
-            {PLATFORM_SHORT[livePlatform] ?? livePlatform.toUpperCase()}
-          </span>
-        )}
-        <span className="mono" style={{ fontSize: 12, color: isLive ? "#22D3EE" : "#50506A" }}>{isLive ? tc : "00:00:00"}</span>
-        <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>1920×1080</span>
-        <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>60fps</span>
-        <span className="mono" style={{ fontSize: 11, color: "#4F9EFF" }}>H.264</span>
-        <div className="flex-1" />
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#22C55E" : "#50506A" }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: isLive ? "#22C55E" : "#50506A" }}>
-            {isLive ? "SIG OK" : "OFFLINE"}
-          </span>
-        </div>
-        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#50506A" }}>Default Profile</span>
-      </div>
-
-      {/* Body */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {/* Center */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Program output */}
-          <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
-            <div className="flex items-center justify-between px-3 py-1.5 panel-header-brand shrink-0">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Program Output</span>
-              <div className="flex items-center gap-1.5">
-                {isLive ? (
-                  <>
-                    <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF5A2C", letterSpacing: "0.08em" }}>LIVE</span>
-                  </>
-                ) : (
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#50506A", letterSpacing: "0.08em" }}>OFFLINE</span>
-                )}
-              </div>
-            </div>
-            <div className="flex-1 relative overflow-hidden" style={{ background: "#161B2E", minHeight: 0 }}>
-              {/* Corner brackets */}
-              {[["top-2 left-2","border-t-2 border-l-2"],["top-2 right-2","border-t-2 border-r-2"],["bottom-2 left-2","border-b-2 border-l-2"],["bottom-2 right-2","border-b-2 border-r-2"]].map(([pos, bdr], i) => (
-                <div key={i} className={`absolute ${pos} ${bdr} w-4 h-4`} style={{ borderColor: "#4F9EFF40" }} />
-              ))}
-            {/* Empty canvas placeholder */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <Monitor size={28} style={{ color: "#303D5A" }} />
-              <span className="mono" style={{ fontSize: 11, color: "#303D5A" }}>1920 × 1080 · 60fps · H.264</span>
-            </div>
-            {/* Broadcast canvas overlays */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.07 }}>
-              {/* Dynamic accent lines */}
-              <line x1="0" y1="100%" x2="40%" y2="0" stroke="#FF5A2C" strokeWidth="1"/>
-              <line x1="100%" y1="0" x2="60%" y2="100%" stroke="#FF5A2C" strokeWidth="1"/>
-              {/* Corner bracket accents */}
-              <circle cx="0" cy="0" r="18" fill="none" stroke="#FF5A2C" strokeWidth="1.5"/>
-              <circle cx="100%" cy="0" r="18" fill="none" stroke="#FF5A2C" strokeWidth="1.5"/>
-              <circle cx="0" cy="100%" r="18" fill="none" stroke="#FF5A2C" strokeWidth="1.5"/>
-              <circle cx="100%" cy="100%" r="18" fill="none" stroke="#FF5A2C" strokeWidth="1.5"/>
-              {/* Center spot */}
-              <circle cx="50%" cy="50%" r="4" fill="#FF5A2C"/>
-              <circle cx="50%" cy="50%" r="20" fill="none" stroke="#FF5A2C" strokeWidth="0.8"/>
-              {/* Safe area guides */}
-              <rect x="8" y="8" width="calc(100% - 16px)" height="calc(100% - 16px)" fill="none" stroke="#4F9EFF" strokeWidth="0.8" strokeDasharray="4 8"/>
-            </svg>
-              {/* Timecode strip */}
-              <div className="absolute bottom-0 left-0 right-0 flex items-center gap-4 px-3 py-1.5" style={{ background: "rgba(0,0,0,0.75)", borderTop: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A", letterSpacing: "0.06em" }}>TC</span>
-                <span className="mono" style={{ fontSize: 11, color: isLive ? "#22D3EE" : "#50506A" }}>{isLive ? tc : "00:00:00"}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#F8F8FF" }}>
-                  {scenes.find(s => s.id === activeScene)?.name ?? "—"}
-                </span>
-                {isLive && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#22C55E" }}>SRC ACTIVE</span>}
-                <div className="flex-1" />
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>VIEWERS</span>
-                <span className="mono" style={{ fontSize: 11, color: "#4F9EFF" }}>{viewers.toLocaleString()}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>BITRATE</span>
-                <span className="mono" style={{ fontSize: 11, color: "#FF5A2C" }}>{bitrate.toLocaleString()} kbps</span>
-              </div>
-            </div>
+          <div className="w-px h-4" style={{ background: "#303D5A" }} />
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: isLive ? "#4F9EFF" : "#50506A", letterSpacing: "0.04em" }}>{tc}</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>1920×1080</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>60fps</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>H.264</span>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: isLive ? "#FF5A2C18" : "#1E2640", border: `1px solid ${isLive ? "#FF5A2C40" : "#303D5A"}` }}>
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: isLive ? "#FF5A2C" : "#50506A" }}>
+              {isLive ? `LIVE · ${livePlatform.toUpperCase()}` : "OFFLINE"}
+            </span>
           </div>
+          {isLive && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#4F9EFF" }}>{Math.round(bitrate / 100) / 10} Mbps</span>}
+          {isLive && (
+            <div className="flex items-center gap-1">
+              <Users size={11} style={{ color: "#22C55E" }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#22C55E" }}>{viewers}</span>
+            </div>
+          )}
+          {!isLive ? (
+            <button onClick={() => setShowGoLive(true)}
+              style={{ height: 30, padding: "0 16px", background: "linear-gradient(135deg, #FF5A2C, #FF6B35)", boxShadow: "0 0 16px rgba(255,90,44,0.4)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", border: "none", borderRadius: 6, cursor: "pointer" }}>
+              ● GO LIVE
+            </button>
+          ) : (
+            <button onClick={() => { setIsLive(false); setLivePlatform(""); setTc("00:00:00"); setViewers(0); setBitrate(0); }}
+              style={{ height: 30, padding: "0 16px", background: "#7F1D1D", border: "1px solid #EF444440", color: "#FCA5A5", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", borderRadius: 6, cursor: "pointer" }}>
+              ■ END STREAM
+            </button>
+          )}
+        </div>
 
-          {/* Scenes */}
-          <div className="shrink-0" style={{ borderTop: "1px solid #2A3350" }}>
-            <div className="flex items-center justify-between px-3 py-1.5 panel-header-blue">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Scenes</span>
-              <div className="flex items-center gap-1">
-                {[ChevronLeft, ChevronRight].map((Icon, i) => (
-                  <button key={i} className="flex items-center justify-center rounded transition-colors" style={{ width: 22, height: 22, background: "#1A1A24", border: "1px solid #303D5A" }}>
-                    <Icon size={12} style={{ color: "#8892A4" }} />
-                  </button>
-                ))}
-                <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
-                {[LayoutGrid, List].map((Icon, i) => (
-                  <button key={i} className="flex items-center justify-center rounded transition-colors" style={{ width: 22, height: 22, background: "#1A1A24", border: "1px solid #303D5A" }}>
-                    <Icon size={12} style={{ color: "#8892A4" }} />
-                  </button>
-                ))}
-                <button className="flex items-center justify-center rounded transition-colors ml-1" style={{ width: 22, height: 22, background: "#FF5A2C18", border: "1px solid #FF5A2C40" }}>
-                  <Plus size={12} style={{ color: "#FF5A2C" }} onClick={addScene} />
+        {/* ── Main 3-column layout ── */}
+        <div className="flex flex-1 overflow-hidden">
+
+          {/* ── LEFT: Scenes + Sources ── */}
+          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 220, background: "#141928", borderRight: "1px solid #2A3350" }}>
+
+            {/* Scenes section */}
+            <div className="flex flex-col shrink-0" style={{ height: "40%", borderBottom: "1px solid #2A3350" }}>
+              <div className="flex items-center justify-between px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Scenes</span>
+                  <button onClick={() => { handleAddScene(); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#4F9EFF", display: "flex" }}>
+                  <Plus size={14} />
                 </button>
               </div>
-            </div>
-            <div className="flex gap-2 px-3 py-2 overflow-x-auto" style={{ background: "#1A2035" }}>
-              {scenes.length === 0 && (
-                <div className="flex flex-col items-center justify-center w-full py-3 gap-1" style={{ opacity: 0.45 }}>
-                  <Monitor size={18} style={{ color: "#50506A" }} />
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#50506A" }}>No scenes — click + to add one</span>
-                </div>
-              )}
-              {scenes.map(scene => (
-                <ContextMenu key={scene.id}>
-                  <ContextMenuTrigger asChild>
-                    <div
-                      onClick={() => setActiveScene(scene.id)}
-                      onDoubleClick={() => startRename(scene)}
-                      className="flex flex-col items-center gap-1 rounded shrink-0 transition-all duration-150 cursor-pointer select-none group"
-                      style={{
-                        width: 100, padding: "8px 6px",
-                        background: activeScene === scene.id ? "#4F9EFF18" : "#1E2640",
-                        border: activeScene === scene.id ? "1px solid #4F9EFF50" : "1px solid #2A3350",
-                        boxShadow: activeScene === scene.id ? "0 0 14px rgba(59,130,246,0.2)" : "none",
-                      }}
-                    >
-                      {/* Thumbnail */}
-                      <div className="w-full rounded flex items-center justify-center relative" style={{ height: 52, background: "#161B2E", border: "1px solid #2A3350" }}>
-                        <Monitor size={16} style={{ color: activeScene === scene.id ? "#4F9EFF" : "#303D5A" }} />
-                        {/* Hover overlay with edit + dropdown */}
-                        <div className="absolute inset-0 rounded flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "rgba(0,0,0,0.6)" }}>
-                          <button
-                            onClick={e => { e.stopPropagation(); startRename(scene); }}
-                            title="Rename"
-                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, cursor: "pointer" }}
-                          >
-                            <Pencil size={11} style={{ color: "#4F9EFF" }} />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); openSceneEditor(scene.id); }}
-                            title="Edit scene sources"
-                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#FF5A2C22", border: "1px solid #FF5A2C60", borderRadius: 4, cursor: "pointer" }}
-                          >
-                            <Edit2 size={11} style={{ color: "#FF5A2C" }} />
-                          </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                onClick={e => e.stopPropagation()}
-                                title="More options"
-                                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, cursor: "pointer", fontSize: 14, color: "#8892A4", lineHeight: 1 }}
-                              >⋯</button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350", zIndex: 9999 }}>
-                              <DropdownMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => openSceneEditor(scene.id)} style={{ cursor: "pointer" }}>
-                                <Edit2 size={13} className="mr-2" style={{ color: "#FF5A2C" }} /> Edit Sources
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
-                                <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => duplicateScene(scene)} style={{ cursor: "pointer" }}>
-                                <Copy size={13} className="mr-2" style={{ color: "#A855F7" }} /> Duplicate
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => deleteScene(scene.id)} style={{ cursor: "pointer", color: "#EF4444" }}>
-                                <Trash2 size={13} className="mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        {isLive && activeScene === scene.id && (
-                          <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 rounded" style={{ background: "#FF5A2C", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.06em" }}>
-                            <div className="live-dot w-1 h-1 rounded-full bg-white" />
-                            LIVE
-                          </div>
+              <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
+                {scenes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
+                    <Monitor size={18} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>No scenes — click + to add</span>
+                  </div>
+                ) : scenes.map(scene => (
+                  <ContextMenu key={scene.id}>
+                    <ContextMenuTrigger>
+                      <div
+                        onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); }}
+                        onDoubleClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }}
+                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer"
+                        style={{ background: scene.id === activeSceneId ? "#1E2640" : "transparent", borderLeft: `2px solid ${scene.id === activeSceneId ? "#FF5A2C" : "transparent"}` }}>
+                        <Monitor size={12} style={{ color: scene.id === activeSceneId ? "#FF5A2C" : "#606078", flexShrink: 0 }} />
+                        {renamingSceneId === scene.id ? (
+                          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                            onBlur={() => { if (renameValue.trim()) renameScene(scene.id, renameValue.trim()); setRenamingSceneId(null); }}
+                            onKeyDown={e => { if (e.key === "Enter") { if (renameValue.trim()) renameScene(scene.id, renameValue.trim()); setRenamingSceneId(null); } if (e.key === "Escape") setRenamingSceneId(null); }}
+                            onClick={e => e.stopPropagation()}
+                            style={{ flex: 1, background: "#0F1520", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 12, padding: "1px 4px", outline: "none" }} />
+                        ) : (
+                          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: scene.id === activeSceneId ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scene.name}</span>
                         )}
                       </div>
-                      {/* Name / rename input */}
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: activeScene === scene.id ? 600 : 400, color: activeScene === scene.id ? "#F8F8FF" : "#606078", whiteSpace: "nowrap" }}>
-                        {renamingId === scene.id ? (
-                          <input
-                            autoFocus
-                            value={renameValue}
-                            onChange={e => setRenameValue(e.target.value)}
-                            onBlur={commitRename}
-                            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
-                            onClick={e => e.stopPropagation()}
-                            style={{ width: 80, fontSize: 11, fontFamily: "'DM Sans', sans-serif", background: "#111827", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", padding: "1px 4px", outline: "none" }}
-                          />
-                        ) : scene.name}
-                      </span>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
+                      <ContextMenuItem onClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
+                      <ContextMenuItem onClick={() => duplicateScene(scene)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem onClick={() => { deleteScene(scene.id); if (activeSceneId === scene.id) setSelectedSourceId(null); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#EF4444" }}>Delete</ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+              </div>
+            </div>
+
+            {/* Sources section */}
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex items-center justify-between px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Sources</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setOverlayBrowserOpen(v => !v)} title="Overlay Library"
+                    style={{ background: overlayBrowserOpen ? "#A855F718" : "none", border: overlayBrowserOpen ? "1px solid #A855F740" : "1px solid transparent", borderRadius: 3, cursor: "pointer", color: overlayBrowserOpen ? "#A855F7" : "#606078", display: "flex", padding: 2 }}>
+                    <LayoutTemplate size={12} />
+                  </button>
+                  <button onClick={() => setShowAddSource(true)} disabled={activeSceneId === null}
+                    style={{ background: "none", border: "none", cursor: activeSceneId === null ? "not-allowed" : "pointer", color: activeSceneId === null ? "#303D5A" : "#4F9EFF", display: "flex" }}>
+                    <Plus size={14} />
+                  </button>
+                  <button onClick={handleDeleteSource} disabled={selectedSourceId === null}
+                    style={{ background: "none", border: "none", cursor: selectedSourceId === null ? "not-allowed" : "pointer", color: selectedSourceId === null ? "#303D5A" : "#EF4444", display: "flex" }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+              {/* Overlay browser */}
+              {overlayBrowserOpen && (
+                <div className="shrink-0 overflow-y-auto" style={{ maxHeight: 180, borderBottom: "1px solid #2A3350", background: "#0F1520" }}>
+                  <div className="flex items-center gap-1 px-2 py-1.5" style={{ borderBottom: "1px solid #1E2640" }}>
+                    <Search size={10} style={{ color: "#606078" }} />
+                    <input value={overlaySearch} onChange={e => setOverlaySearch(e.target.value)} placeholder="Search overlays…"
+                      style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }} />
+                  </div>
+                  {filteredOverlays.map(tmpl => (
+                    <div key={tmpl.id}
+                      onClick={() => handleAddSource(tmpl.cat, tmpl.name, tmpl.icon, tmpl.color)}
+                      className="flex items-center gap-2 px-2 py-1.5 cursor-pointer"
+                      style={{ borderBottom: "1px solid #1A1A24" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "#1E2640"}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                      <tmpl.icon size={12} style={{ color: tmpl.color, flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8" }}>{tmpl.name}</span>
+                      <Sparkles size={9} style={{ color: "#A855F7", marginLeft: "auto", flexShrink: 0 }} />
                     </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
-                    <ContextMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</ContextMenuLabel>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem onClick={() => openSceneEditor(scene.id)} style={{ cursor: "pointer" }}>
-                      <Edit2 size={13} className="mr-2" style={{ color: "#FF5A2C" }} /> Edit Sources
-                    </ContextMenuItem>
-                    <ContextMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
-                      <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
-                    </ContextMenuItem>
-                    <ContextMenuItem onClick={() => duplicateScene(scene)} style={{ cursor: "pointer" }}>
-                      <Copy size={13} className="mr-2" style={{ color: "#A855F7" }} /> Duplicate
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem onClick={() => deleteScene(scene.id)} style={{ cursor: "pointer", color: "#EF4444" }}>
-                      <Trash2 size={13} className="mr-2" /> Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
+                  ))}
+                </div>
+              )}
+              {/* Source list */}
+              <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
+                {activeSceneId === null ? (
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>Select a scene to view sources</span>
+                  </div>
+                ) : sources.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
+                    <Layers size={16} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>No sources — click + to add</span>
+                  </div>
+                ) : sources.map((src, idx) => {
+                  const isSelected = src.id === selectedSourceId;
+                  return (
+                    <div key={src.id}
+                      onClick={() => setSelectedSourceId(src.id)}
+                      className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
+                      style={{ background: isSelected ? "#1E2640" : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}` }}>
+                      <src.icon size={11} style={{ color: src.color, flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: isSelected ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { visible: !src.visible }); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: src.visible ? "#8892A4" : "#303D5A", display: "flex", padding: 1 }}>
+                          {src.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { locked: !src.locked }); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: src.locked ? "#FBBF24" : "#303D5A", display: "flex", padding: 1 }}>
+                          {src.locked ? <Lock size={10} /> : <Unlock size={10} />}
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx > 0) moveSource(activeSceneId, src.id, "up"); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
+                          <ChevronUp size={10} />
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx < sources.length - 1) moveSource(activeSceneId, src.id, "down"); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
+                          <ChevronDown size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          {/* Audio mixer */}
-          <div className="shrink-0" style={{ borderTop: "1px solid #2A3350" }}>
-            <div className="flex items-center justify-between px-3 py-1.5 panel-header-violet">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Audio Mixer</span>
-              <div className="flex items-center gap-2">
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4" }}>MASTER</span>
-                <Volume2 size={12} style={{ color: "#A855F7" }} />
-                <div className="rounded-full overflow-hidden" style={{ width: 80, height: 3, background: "#1A1A24" }}>
-                  <div style={{ width: "75%", height: "100%", background: "linear-gradient(90deg, #A855F7, #A78BFA)" }} />
-                </div>
-                <span className="mono" style={{ fontSize: 10, color: "#A855F7" }}>-6.0 dB</span>
+          {/* ── CENTER: Program canvas ── */}
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350", background: "#141928" }}>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Program Output</span>
+              <div className="flex-1" />
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: isLive ? "#FF5A2C" : "#50506A" }}>{isLive ? "LIVE" : "OFFLINE"}</span>
               </div>
             </div>
-            <div className="flex gap-0 overflow-x-auto" style={{ background: "#1A2035" }}>
-              {audioChannels.length === 0 ? (
-                <div className="flex items-center justify-center flex-1 py-4" style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
-                  No audio sources — add a Camera or Display source in Scene Editor
-                </div>
-              ) : audioChannels.map((ch) => {
-                const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
-                const isMuted = cs.muted;
-                const isSolo  = cs.solo;
-                return (
-                  <div key={ch.id} className="flex flex-col gap-1 px-3 py-2 shrink-0" style={{ minWidth: 130, borderRight: "1px solid #2A3350", opacity: isMuted ? 0.45 : 1, transition: "opacity 0.15s" }}>
-                    <div className="flex items-center gap-1.5">
-                      <ch.icon size={12} style={{ color: ch.color }} />
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>{ch.name}</span>
-                    </div>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A" }}>{ch.sub}</span>
-                    <VUMeter levels={[]} color={isMuted ? "#50506A" : ch.color} />
-                    <div className="flex items-center justify-between mt-0.5">
-                      <input type="range" min={0} max={100} value={cs.volume}
-                        onChange={e => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
-                        style={{ width: 60, accentColor: ch.color, cursor: "pointer" }} />
-                      <div className="flex gap-1">
-                        <button onClick={() => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, solo: !isSolo } }))}
-                          className="flex items-center justify-center rounded"
-                          style={{ width: 18, height: 18, background: isSolo ? "#FBBF24" : "#1A1A24", border: `1px solid ${isSolo ? "#FBBF24" : "#303D5A"}`, fontSize: 9, fontWeight: 700, color: isSolo ? "#1A1A24" : "#8892A4", fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>
-                          S
-                        </button>
-                        <button onClick={() => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, muted: !isMuted } }))}
-                          className="flex items-center justify-center rounded"
-                          style={{ width: 18, height: 18, background: isMuted ? "#EF4444" : "#1A1A24", border: `1px solid ${isMuted ? "#EF4444" : "#303D5A"}`, fontSize: 9, fontWeight: 700, color: isMuted ? "#fff" : "#8892A4", fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>
-                          M
-                        </button>
-                      </div>
-                    </div>
+            <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: "#0A0E1A", position: "relative" }}>
+              <div style={{ position: "relative", width: "100%", maxWidth: "calc((100vh - 44px - 32px - 36px - 80px) * 16/9)", aspectRatio: "16/9", background: "#000", border: "1px solid #2A3350", borderRadius: 4, overflow: "hidden" }}>
+                {sources.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center w-full h-full gap-2" style={{ color: "#303D5A" }}>
+                    <Monitor size={32} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>
+                      {activeSceneId === null ? "Select or create a scene" : "Add sources to this scene"}
+                    </span>
                   </div>
-                );
-              })}
+                ) : (
+                  <div className="w-full h-full flex flex-wrap gap-1 p-2 items-start content-start" style={{ background: "#0A0E1A" }}>
+                    {sources.filter(s => s.visible).map(s => (
+                      <div key={s.id} onClick={() => setSelectedSourceId(s.id)}
+                        className="flex items-center gap-1 px-2 py-1 rounded cursor-pointer"
+                        style={{ border: `1px solid ${s.id === selectedSourceId ? s.color : s.color + "40"}`, background: s.color + "12", boxShadow: s.id === selectedSourceId ? `0 0 8px ${s.color}40` : "none" }}>
+                        <s.icon size={10} style={{ color: s.color }} />
+                        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: s.id === selectedSourceId ? "#F8F8FF" : "#8892A4" }}>{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Corner markers */}
+                {(["top-left","top-right","bottom-left","bottom-right"] as const).map(pos => (
+                  <div key={pos} style={{ position: "absolute", width: 16, height: 16,
+                    top: pos.includes("top") ? 4 : "auto", bottom: pos.includes("bottom") ? 4 : "auto",
+                    left: pos.includes("left") ? 4 : "auto", right: pos.includes("right") ? 4 : "auto",
+                    borderTop: pos.includes("top") ? "2px solid #303D5A" : "none",
+                    borderBottom: pos.includes("bottom") ? "2px solid #303D5A" : "none",
+                    borderLeft: pos.includes("left") ? "2px solid #303D5A" : "none",
+                    borderRight: pos.includes("right") ? "2px solid #303D5A" : "none",
+                  }} />
+                ))}
+              </div>
+            </div>
+            {/* Transitions strip */}
+            <div className="flex items-center gap-2 px-3 shrink-0" style={{ height: 36, background: "#141928", borderTop: "1px solid #2A3350" }}>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", letterSpacing: "0.08em", textTransform: "uppercase" }}>Transition</span>
+              {["Cut","Fade","Slide","Wipe"].map(t => (
+                <button key={t} style={{ padding: "2px 10px", borderRadius: 4, border: "1px solid #303D5A", background: "transparent", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer" }}>{t}</button>
+              ))}
+              <div className="flex-1" />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#F8F8FF" }}>{activeScene?.name ?? "—"}</span>
+            </div>
+          </div>
+
+          {/* ── RIGHT: Properties + Stream Status ── */}
+          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 240, background: "#141928", borderLeft: "1px solid #2A3350" }}>
+            {/* Properties */}
+            <div className="flex flex-col overflow-hidden" style={{ flex: 1, borderBottom: "1px solid #2A3350" }}>
+              <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  {selectedSource ? `Props — ${selectedSource.name}` : "Properties"}
+                </span>
+              </div>
+              <PropertiesPanel
+                sourceId={selectedSourceId}
+                sources={sources}
+                onUpdateSettings={handleUpdateSettings}
+                onUpdateTransform={handleUpdateTransform}
+              />
+            </div>
+            {/* Stream Status */}
+            <div className="flex flex-col shrink-0">
+              <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Stream Status</span>
+              </div>
+              <div className="px-3 py-2 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, color: isLive ? "#FF5A2C" : "#50506A" }}>
+                    {isLive ? `LIVE · ${livePlatform.toUpperCase()}` : "OFFLINE"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", textTransform: "uppercase", letterSpacing: "0.08em" }}>Bitrate</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#4F9EFF" }}>{isLive ? `${Math.round(bitrate / 100) / 10} Mbps` : "—"}</span>
+                </div>
+                <BitrateSparkline active={isLive} />
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { icon: Users,    label: "Viewers", val: isLive ? String(viewers) : "—", color: "#22C55E" },
+                    { icon: Clock,    label: "Uptime",  val: isLive ? tc : "—",              color: "#4F9EFF" },
+                    { icon: Cpu,      label: "CPU",     val: isLive ? "12%" : "—",           color: "#A855F7" },
+                    { icon: Activity, label: "Health",  val: isLive ? "Good" : "—",          color: "#22C55E" },
+                  ].map(({ icon: Icon, label, val, color }) => (
+                    <div key={label} className="flex flex-col gap-0.5 px-2 py-1.5 rounded" style={{ background: "#1A2035", border: "1px solid #2A3350" }}>
+                      <div className="flex items-center gap-1">
+                        <Icon size={9} style={{ color }} />
+                        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#606078", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+                      </div>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Right panel */}
-        <div className="flex flex-col shrink-0 overflow-y-auto" style={{ width: 240, background: "#1A2035", borderLeft: "1px solid #2A3350" }}>
-          {/* Stream status */}
-          <div className="panel-header-brand px-3 py-1.5 shrink-0">
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Stream Status</span>
+        {/* ── BOTTOM: Audio Mixer ── */}
+        <div className="flex flex-col shrink-0" style={{ borderTop: "1px solid #2A3350", background: "#141928" }}>
+          <div className="flex items-center justify-between px-3 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Audio Mixer</span>
+            <Volume2 size={11} style={{ color: "#A855F7" }} />
           </div>
-
-          {/* Live indicator */}
-          <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid #2A3350" }}>
-            {isLive ? (
-              <>
-                <div className="live-dot w-2 h-2 rounded-full" style={{ background: "#FF5A2C" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#FF5A2C" }}>LIVE</span>
-                {livePlatform && (
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#A0A0B8" }}>
-                    on {livePlatform.charAt(0).toUpperCase() + livePlatform.slice(1)}
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="w-2 h-2 rounded-full" style={{ background: "#50506A" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#50506A" }}>OFFLINE</span>
-              </>
-            )}
-          </div>
-
-          {/* Bitrate */}
-          <div className="px-3 py-2.5" style={{ borderBottom: "1px solid #2A3350" }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4", letterSpacing: "0.08em", textTransform: "uppercase" }}>Bitrate</span>
-              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: "#4F9EFF", letterSpacing: "0.04em" }}>{bitrate.toLocaleString()} <span style={{ fontSize: 12, color: "#8892A4", fontFamily: "'JetBrains Mono', monospace" }}>kbps</span></span>
-            </div>
-            <BitrateSparkline />
-          </div>
-
-          {/* Viewers + Uptime */}
-          <div className="grid grid-cols-2 gap-0" style={{ borderBottom: "1px solid #2A3350" }}>
-            {[
-{ label: "Viewers", value: viewers > 0 ? viewers.toLocaleString() : "—", sub: isLive ? "Live now" : "Offline", color: "#4F9EFF", icon: Users },
-              { label: "Uptime", value: isLive ? tc : "00:00:00", sub: isLive ? "Session Live" : "—", color: "#22D3EE", icon: Clock },
-            ].map(({ label, value, sub, color, icon: Icon }) => (
-              <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5" style={{ borderRight: label === "Viewers" ? "1px solid #2A3350" : "none" }}>
-                <div className="flex items-center gap-1">
-                  <Icon size={11} style={{ color }} />
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
-                </div>
-                <span className="mono" style={{ fontSize: label === "Uptime" ? 14 : 22, fontWeight: 700, color: "#F8F8FF", fontFamily: label === "Uptime" ? "'JetBrains Mono', monospace" : "'Bebas Neue', sans-serif", letterSpacing: label === "Uptime" ? "0.02em" : "0.04em" }}>{value}</span>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color }}>{sub}</span>
+          <div className="flex gap-0 overflow-x-auto" style={{ height: 80 }}>
+            {audioChannels.length === 0 ? (
+              <div className="flex items-center justify-center flex-1" style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
+                No audio sources — add a Camera or Display source
               </div>
-            ))}
-          </div>
-
-          {/* Stream health */}
-          <div className="px-3 py-2.5" style={{ borderBottom: "1px solid #2A3350" }}>
-            <div className="flex items-center justify-between mb-2">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4", letterSpacing: "0.08em", textTransform: "uppercase" }}>Stream Health</span>
-              <Activity size={11} style={{ color: "#22C55E" }} />
-            </div>
-            {[
-            { label: "CPU",     pct: 0,  color: "#22C55E" },
-            { label: "GPU",     pct: 0,  color: "#22C55E" },
-            { label: "Network", pct: 0,  color: "#22C55E", text: isLive ? "—" : "Offline" },
-            ].map(({ label, pct, color, text }) => (
-              <div key={label} className="flex items-center gap-2 mb-1.5">
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8", width: 52 }}>{label}</span>
-                <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: "#1A1A24" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2, transition: "width 0.5s ease" }} />
+            ) : audioChannels.map(ch => {
+              const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+              return (
+                <div key={ch.id} className="flex items-center gap-2 px-3 shrink-0" style={{ minWidth: 160, borderRight: "1px solid #2A3350", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                  <VUMeter color={ch.color} active={isLive && !cs.muted} />
+                  <div className="flex flex-col gap-1" style={{ flex: 1 }}>
+                    <div className="flex items-center gap-1">
+                      {ch.type === "camera" ? <Mic size={10} style={{ color: ch.color }} /> : <Music size={10} style={{ color: ch.color }} />}
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 600, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>{ch.name}</span>
+                    </div>
+                    <input type="range" min={0} max={100} value={cs.volume}
+                      onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
+                      style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
+                    <div className="flex gap-1">
+                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
+                        style={{ flex: 1, padding: "1px 0", borderRadius: 3, border: `1px solid ${cs.solo ? "#FBBF24" : "#303D5A"}`, background: cs.solo ? "#FBBF24" : "#1A1A24", color: cs.solo ? "#1A1A24" : "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>S</button>
+                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
+                        style={{ flex: 1, padding: "1px 0", borderRadius: 3, border: `1px solid ${cs.muted ? "#EF4444" : "#303D5A"}`, background: cs.muted ? "#EF4444" : "#1A1A24", color: cs.muted ? "#fff" : "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>M</button>
+                    </div>
+                  </div>
                 </div>
-                <span className="mono" style={{ fontSize: 10, color, width: text ? 56 : 28, textAlign: "right" }}>{text ?? `${pct}%`}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
-
-          {/* Go Live / End Stream button */}
-          <div className="px-3 py-3 mt-auto">
-            {!isLive ? (
-              <button
-                onClick={() => setShowGoLive(true)}
-                className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
-                style={{ height: 44, background: "linear-gradient(135deg, #FF5A2C 0%, #FF6B35 100%)", boxShadow: "0 0 24px rgba(255,90,44,0.45)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em", border: "none", cursor: "pointer" }}
-                onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-              >
-                <span style={{ fontSize: 15, lineHeight: 1 }}>●</span>
-                GO LIVE
-              </button>
-            ) : (
-              <button
-                onClick={() => { setIsLive(false); setLivePlatform(''); setTc('00:00:00'); setViewers(0); setBitrate(0); }}
-                className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
-                style={{ height: 44, background: "linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%)", boxShadow: "0 0 16px rgba(239,68,68,0.3)", color: "#FCA5A5", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em", border: "1px solid #EF444440", cursor: "pointer" }}
-                onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-              >
-                <Square size={13} fill="#FCA5A5" />
-                END STREAM
-              </button>
-            )}
-          </div>
+        </div>
       </div>
-    </div>
-    </div>
-      <GoLiveModal
-        open={showGoLive}
-        onClose={() => setShowGoLive(false)}
-        onGoLive={(cfg) => { setIsLive(true); setLivePlatform(cfg.platform); setShowGoLive(false); }}
-      />
-  </AppSidebar>
+
+      {/* Modals */}
+      {showAddSource && <AddSourceModal onAdd={handleAddSource} onClose={() => setShowAddSource(false)} />}
+      <GoLiveModal open={showGoLive} onClose={() => setShowGoLive(false)}
+        onGoLive={(cfg: { platform: string }) => { setIsLive(true); setLivePlatform(cfg.platform); setShowGoLive(false); }} />
+    </AppSidebar>
   );
 }

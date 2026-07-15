@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { SceneProvider } from "./contexts/SceneContext";
 import Dashboard from "./pages/Dashboard";
-import SceneEditor from "./pages/SceneEditor";
+import { Redirect } from "wouter";
 import ChatPanel from "./pages/ChatPanel";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
@@ -16,7 +16,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/scenes" component={SceneEditor} />
+      <Route path="/scenes"><Redirect to="/" /></Route>
       <Route path="/chat" component={ChatPanel} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />

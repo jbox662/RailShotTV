@@ -2,12 +2,11 @@
 // AppSidebar: 56px icon-only rail + children content area
 import React from "react";
 import { useLocation, Link } from "wouter";
-import { Tv2, Layers, MessageSquare, BarChart2, Settings, Trophy, CalendarDays } from "lucide-react";
+import { Tv2, MessageSquare, BarChart2, Settings, Trophy, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
   { path: "/",           icon: Tv2,           label: "Dashboard",    glow: "rgba(255,90,44,0.65)",   active: "#FF5A2C" },
-  { path: "/scenes",     icon: Layers,        label: "Scene Editor", glow: "rgba(79,158,255,0.65)",  active: "#4F9EFF" },
   { path: "/chat",       icon: MessageSquare, label: "Chat",         glow: "rgba(168,85,247,0.65)",  active: "#A855F7" },
   { path: "/analytics",  icon: BarChart2,     label: "Analytics",    glow: "rgba(34,211,238,0.65)",  active: "#22D3EE" },
   { path: "/scoreboard", icon: Trophy,        label: "Scoreboard",   glow: "rgba(34,197,94,0.65)",   active: "#22C55E" },
