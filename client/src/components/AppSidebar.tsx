@@ -1,74 +1,89 @@
-// RailShotTV — Chromatic Command
-// AppSidebar: 56px icon-only rail, colored glows per section, cue-ball mark
+// RailShotTV — Chromatic Command — Bright Edition
+// AppSidebar: 56px icon-only rail + children content area
+import React from "react";
 import { useLocation, Link } from "wouter";
 import { Tv2, Layers, MessageSquare, BarChart2, Settings } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { path: "/",          icon: Tv2,           label: "Dashboard",    glow: "rgba(255,77,28,0.55)",  active: "#FF4D1C" },
-  { path: "/scenes",    icon: Layers,         label: "Scene Editor", glow: "rgba(59,130,246,0.55)", active: "#3B82F6" },
-  { path: "/chat",      icon: MessageSquare,  label: "Chat",         glow: "rgba(139,92,246,0.55)", active: "#8B5CF6" },
-  { path: "/analytics", icon: BarChart2,      label: "Analytics",    glow: "rgba(6,182,212,0.55)",  active: "#06B6D4" },
-  { path: "/settings",  icon: Settings,       label: "Settings",     glow: "rgba(100,100,140,0.4)", active: "#A0A0B8" },
+  { path: "/",          icon: Tv2,           label: "Dashboard",    glow: "rgba(255,90,44,0.65)",   active: "#FF5A2C" },
+  { path: "/scenes",    icon: Layers,         label: "Scene Editor", glow: "rgba(79,158,255,0.65)",  active: "#4F9EFF" },
+  { path: "/chat",      icon: MessageSquare,  label: "Chat",         glow: "rgba(168,85,247,0.65)",  active: "#A855F7" },
+  { path: "/analytics", icon: BarChart2,      label: "Analytics",    glow: "rgba(34,211,238,0.65)",  active: "#22D3EE" },
+  { path: "/settings",  icon: Settings,       label: "Settings",     glow: "rgba(120,120,160,0.45)", active: "#94A3B8" },
 ];
 
-export default function AppSidebar({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+type Props = { children?: React.ReactNode };
 
+export default function AppSidebar({ children }: Props) {
+  const [location] = useLocation();
   return (
-    <div className="flex h-screen w-full overflow-hidden" style={{ background: "#0A0A0F" }}>
-      {/* Icon-only rail */}
-      <aside
-        className="flex flex-col items-center shrink-0 h-full"
-        style={{ width: 56, minWidth: 56, background: "#0D0D15", borderRight: "1px solid #1E1E2E" }}
-      >
+    <div style={{ display: "flex", width: "100%", height: "100vh", overflow: "hidden" }}>
+      {/* Icon rail */}
+      <aside style={{
+        width: 56, minWidth: 56, height: "100vh", flexShrink: 0,
+        background: "#111827",
+        borderRight: "1px solid rgba(255,255,255,0.08)",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        paddingTop: 0, paddingBottom: 12, zIndex: 50,
+      }}>
         {/* Logo mark */}
-        <div
-          className="flex items-center justify-center w-full shrink-0"
-          style={{ height: 46, borderBottom: "1px solid #1E1E2E" }}
-        >
-          <div
-            className="flex items-center justify-center rounded-sm"
-            style={{
-              width: 30, height: 30,
-              background: "linear-gradient(135deg, #FF4D1C 0%, #FF7A4D 100%)",
-              boxShadow: "0 0 16px rgba(255,77,28,0.55)"
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <circle cx="9" cy="9" r="7.5" fill="white" fillOpacity="0.95"/>
-              <line x1="4.5" y1="13.5" x2="13.5" y2="4.5" stroke="#FF4D1C" strokeWidth="2.2" strokeLinecap="round"/>
+        <div style={{
+          width: 56, height: 46, display: "flex", alignItems: "center", justifyContent: "center",
+          borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 8, flexShrink: 0,
+        }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: "50%",
+            background: "linear-gradient(135deg, #FF5A2C 0%, #FF8C42 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 18px rgba(255,90,44,0.55)",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="3" fill="white" opacity="0.9"/>
+              <line x1="1" y1="8" x2="6" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
+              <line x1="10" y1="8" x2="15" y2="8" stroke="white" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
+              <line x1="8" y1="1" x2="8" y2="6" stroke="white" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
+              <line x1="8" y1="10" x2="8" y2="15" stroke="white" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
             </svg>
           </div>
         </div>
-        {/* Diagonal cue-angle accent line below logo */}
-        <div style={{ width: 32, height: 1, background: "linear-gradient(90deg, transparent, #FF4D1C40, transparent)", marginTop: 0 }} />
 
-        {/* Nav */}
-        <nav className="flex flex-col items-center gap-1 w-full pt-3 flex-1 px-2">
+        {/* Nav items */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, width: "100%", alignItems: "center", paddingTop: 4 }}>
           {NAV_ITEMS.map(({ path, icon: Icon, label, glow, active }) => {
             const isActive = location === path;
             return (
-              <Tooltip key={path} delayDuration={200}>
+              <Tooltip key={path} delayDuration={300}>
                 <TooltipTrigger asChild>
                   <Link href={path}>
                     <div
-                      className="flex items-center justify-center rounded-md transition-all duration-150"
                       style={{
-                        width: 38, height: 38,
-                        background: isActive ? `${active}1A` : "transparent",
+                        width: 40, height: 40, borderRadius: 8,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: isActive ? `${active}22` : "transparent",
+                        border: isActive ? `1px solid ${active}55` : "1px solid transparent",
                         boxShadow: isActive ? `0 0 16px ${glow}` : "none",
-                        border: isActive ? `1px solid ${active}35` : "1px solid transparent",
+                        transition: "all 0.18s cubic-bezier(0.23,1,0.32,1)",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={e => {
+                        if (!isActive) {
+                          (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.06)";
+                          (e.currentTarget as HTMLDivElement).style.border = "1px solid rgba(255,255,255,0.1)";
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!isActive) {
+                          (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                          (e.currentTarget as HTMLDivElement).style.border = "1px solid transparent";
+                        }
                       }}
                     >
-                      <Icon size={17} style={{ color: isActive ? active : "#50506A", transition: "color 0.15s" }} />
+                      <Icon size={18} color={isActive ? active : "#6B7280"} strokeWidth={isActive ? 2.2 : 1.8} />
                     </div>
                   </Link>
                 </TooltipTrigger>
-                <TooltipContent
-                  side="right"
-                  style={{ background: "#1A1A24", border: "1px solid #2A2A3A", color: "#F8F8FF", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}
-                >
+                <TooltipContent side="right" style={{ background: "#1E2A3A", border: "1px solid rgba(255,255,255,0.12)", color: "#E2E8F0", fontSize: 12 }}>
                   {label}
                 </TooltipContent>
               </Tooltip>
@@ -76,21 +91,21 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
           })}
         </nav>
 
-        {/* Bottom — signal bars + version */}
-        <div className="flex flex-col items-center gap-2 pb-3">
-          <div className="flex items-end gap-px">
-            {[4, 6, 8, 10, 12].map((h, i) => (
-              <div key={i} style={{ width: 3, height: h, background: i < 4 ? "#FF4D1C" : "#2A2A3A", borderRadius: 1, opacity: i < 4 ? 0.9 - i * 0.1 : 0.4 }} />
+        {/* Signal strength at bottom */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, paddingBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 2 }}>
+            {[3, 5, 7, 9, 11].map((h, i) => (
+              <div key={i} style={{ width: 3, height: h, borderRadius: 1.5, background: i < 4 ? "#22C55E" : "#2D3748" }} />
             ))}
           </div>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#3A3A50", letterSpacing: "0.05em" }}>v2.5</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#4B5563", letterSpacing: "0.05em" }}>v2.5</span>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0A0A0F" }}>
+      {/* Page content */}
+      <div style={{ flex: 1, minWidth: 0, height: "100vh", overflow: "hidden" }}>
         {children}
-      </main>
+      </div>
     </div>
   );
 }
