@@ -135,7 +135,7 @@ function ProgramCanvas({
             {src.type === "browser" && url ? (
               <iframe
                 src={url}
-                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: isSelected ? "none" : "auto" }}
+                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: "none" }}
                 title={src.name}
                 sandbox="allow-scripts allow-same-origin allow-forms"
               />
@@ -438,6 +438,9 @@ export default function Dashboard() {
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
   const [showAddSource, setShowAddSource]       = useState(false);
   const [sourceTransforms, setSourceTransforms] = useState<Record<number, Record<string, number | boolean>>>({});
+  const [activeTransition, setActiveTransition] = useState<string>("Cut");
+  const [renamingSourceId, setRenamingSourceId] = useState<number | null>(null);
+  const [renameSourceValue, setRenameSourceValue] = useState("");
   const [canvasTransforms, setCanvasTransforms] = useState<Record<number, CanvasTransform>>(() => {
     try { const s = localStorage.getItem("railshot_canvas_transforms_v1"); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
@@ -500,6 +503,19 @@ export default function Dashboard() {
     if (k === "__reset") { setSourceTransforms(p => { const n = { ...p }; delete n[selectedSourceId]; return n; }); return; }
     setSourceTransforms(p => ({ ...p, [selectedSourceId]: { ...(p[selectedSourceId] ?? {}), [k]: v } }));
   }, [selectedSourceId]);
+
+  const handleRenameSource = useCallback((id: number, newName: string) => {
+    if (!activeSceneId || !newName.trim()) { setRenamingSourceId(null); return; }
+    updateSource(activeSceneId, id, { name: newName.trim() });
+    setRenamingSourceId(null);
+  }, [activeSceneId, updateSource]);
+
+  const handleDuplicateSource = useCallback((src: SourceItem) => {
+    if (!activeSceneId) return;
+    const newId = addSource(activeSceneId, { ...src, settings: { ...src.settings } });
+    setSelectedSourceId(newId);
+    toast.success(`Duplicated "${src.name}"`);
+  }, [activeSceneId, addSource]);
 
   const audioChannels = useMemo(() =>
     sources.filter(s => ["camera","display"].includes(s.type)),
@@ -660,31 +676,49 @@ export default function Dashboard() {
                 ) : sources.map((src, idx) => {
                   const isSelected = src.id === selectedSourceId;
                   return (
-                    <div key={src.id}
-                      onClick={() => setSelectedSourceId(src.id)}
-                      className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
-                      style={{ background: isSelected ? "#1E2640" : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}` }}>
-                      <src.icon size={11} style={{ color: src.color, flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: isSelected ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { visible: !src.visible }); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: src.visible ? "#8892A4" : "#303D5A", display: "flex", padding: 1 }}>
-                          {src.visible ? <Eye size={10} /> : <EyeOff size={10} />}
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { locked: !src.locked }); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: src.locked ? "#FBBF24" : "#303D5A", display: "flex", padding: 1 }}>
-                          {src.locked ? <Lock size={10} /> : <Unlock size={10} />}
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx > 0) moveSource(activeSceneId, src.id, "up"); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
-                          <ChevronUp size={10} />
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx < sources.length - 1) moveSource(activeSceneId, src.id, "down"); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
-                          <ChevronDown size={10} />
-                        </button>
-                      </div>
-                    </div>
+                    <ContextMenu key={src.id}>
+                      <ContextMenuTrigger asChild>
+                        <div
+                          onClick={() => setSelectedSourceId(src.id)}
+                          className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
+                          style={{ background: isSelected ? "#1E2640" : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}` }}>
+                          <src.icon size={11} style={{ color: src.color, flexShrink: 0 }} />
+                          {renamingSourceId === src.id ? (
+                            <input autoFocus value={renameSourceValue} onChange={e => setRenameSourceValue(e.target.value)}
+                              onBlur={() => handleRenameSource(src.id, renameSourceValue)}
+                              onKeyDown={e => { if (e.key === "Enter") handleRenameSource(src.id, renameSourceValue); if (e.key === "Escape") setRenamingSourceId(null); }}
+                              onClick={e => e.stopPropagation()}
+                              style={{ flex: 1, background: "#0F1520", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 11, padding: "1px 4px", outline: "none" }} />
+                          ) : (
+                            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: isSelected ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
+                          )}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { visible: !src.visible }); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: src.visible ? "#8892A4" : "#303D5A", display: "flex", padding: 1 }}>
+                              {src.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { locked: !src.locked }); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: src.locked ? "#FBBF24" : "#303D5A", display: "flex", padding: 1 }}>
+                              {src.locked ? <Lock size={10} /> : <Unlock size={10} />}
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx > 0) moveSource(activeSceneId, src.id, "up"); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
+                              <ChevronUp size={10} />
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx < sources.length - 1) moveSource(activeSceneId, src.id, "down"); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
+                              <ChevronDown size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
+                        <ContextMenuItem onClick={() => { setSelectedSourceId(src.id); setRenamingSourceId(src.id); setRenameSourceValue(src.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
+                        <ContextMenuItem onClick={() => handleDuplicateSource(src)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={() => { if (activeSceneId) { removeSource(activeSceneId, src.id); if (selectedSourceId === src.id) setSelectedSourceId(null); } }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#EF4444" }}>Delete</ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   );
                 })}
               </div>
@@ -734,7 +768,14 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 px-3 shrink-0" style={{ height: 36, background: "#141928", borderTop: "1px solid #2A3350" }}>
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", letterSpacing: "0.08em", textTransform: "uppercase" }}>Transition</span>
               {["Cut","Fade","Slide","Wipe"].map(t => (
-                <button key={t} style={{ padding: "2px 10px", borderRadius: 4, border: "1px solid #303D5A", background: "transparent", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer" }}>{t}</button>
+                <button key={t}
+                  onClick={() => setActiveTransition(t)}
+                  style={{ padding: "2px 10px", borderRadius: 4,
+                    border: `1px solid ${activeTransition === t ? "#4F9EFF40" : "#303D5A"}`,
+                    background: activeTransition === t ? "#4F9EFF18" : "transparent",
+                    color: activeTransition === t ? "#4F9EFF" : "#8892A4",
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer",
+                    transition: "all 0.15s" }}>{t}</button>
               ))}
               <div className="flex-1" />
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
