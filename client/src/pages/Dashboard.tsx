@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
-import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2 } from "lucide-react";
+import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2, Pencil, Copy, Trash2 } from "lucide-react";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 // Scene type
 type Scene = { id: number; name: string };
@@ -79,6 +81,18 @@ export default function Dashboard() {
     setScenes(prev => [...prev, { id, name }]);
     setNextSceneId(id + 1);
     setActiveScene(id);
+  };
+
+  const duplicateScene = (scene: Scene) => {
+    const id = nextSceneId;
+    setScenes(prev => [...prev, { id, name: `${scene.name} (copy)` }]);
+    setNextSceneId(id + 1);
+    setActiveScene(id);
+  };
+
+  const deleteScene = (id: number) => {
+    setScenes(prev => prev.filter(s => s.id !== id));
+    setActiveScene(prev => (prev === id ? null : prev));
   };
 
   const startRename = (scene: Scene) => {
@@ -250,41 +264,93 @@ export default function Dashboard() {
                 </div>
               )}
               {scenes.map(scene => (
-                <button
-                  key={scene.id}
-                  onClick={() => setActiveScene(scene.id)}
-                  onDoubleClick={() => startRename(scene)}
-                  className="flex flex-col items-center gap-1 rounded shrink-0 transition-all duration-150"
-                  style={{
-                    width: 100, padding: "8px 6px",
-                    background: activeScene === scene.id ? "#4F9EFF18" : "#1E2640",
-                    border: activeScene === scene.id ? "1px solid #4F9EFF50" : "1px solid #2A3350",
-                    boxShadow: activeScene === scene.id ? "0 0 14px rgba(59,130,246,0.2)" : "none",
-                  }}
-                >
-                  <div className="w-full rounded flex items-center justify-center relative" style={{ height: 52, background: "#161B2E", border: "1px solid #2A3350" }}>
-                    <Monitor size={16} style={{ color: activeScene === scene.id ? "#4F9EFF" : "#303D5A" }} />
-                    {isLive && activeScene === scene.id && (
-                      <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 rounded" style={{ background: "#FF5A2C", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.06em" }}>
-                        <div className="live-dot w-1 h-1 rounded-full bg-white" />
-                        LIVE
+                <ContextMenu key={scene.id}>
+                  <ContextMenuTrigger asChild>
+                    <div
+                      onClick={() => setActiveScene(scene.id)}
+                      onDoubleClick={() => startRename(scene)}
+                      className="flex flex-col items-center gap-1 rounded shrink-0 transition-all duration-150 cursor-pointer select-none group"
+                      style={{
+                        width: 100, padding: "8px 6px",
+                        background: activeScene === scene.id ? "#4F9EFF18" : "#1E2640",
+                        border: activeScene === scene.id ? "1px solid #4F9EFF50" : "1px solid #2A3350",
+                        boxShadow: activeScene === scene.id ? "0 0 14px rgba(59,130,246,0.2)" : "none",
+                      }}
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-full rounded flex items-center justify-center relative" style={{ height: 52, background: "#161B2E", border: "1px solid #2A3350" }}>
+                        <Monitor size={16} style={{ color: activeScene === scene.id ? "#4F9EFF" : "#303D5A" }} />
+                        {/* Hover overlay with edit + dropdown */}
+                        <div className="absolute inset-0 rounded flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "rgba(0,0,0,0.6)" }}>
+                          <button
+                            onClick={e => { e.stopPropagation(); startRename(scene); }}
+                            title="Rename"
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, cursor: "pointer" }}
+                          >
+                            <Pencil size={11} style={{ color: "#4F9EFF" }} />
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={e => e.stopPropagation()}
+                                title="More options"
+                                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, cursor: "pointer", fontSize: 14, color: "#8892A4", lineHeight: 1 }}
+                              >⋯</button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350", zIndex: 9999 }}>
+                              <DropdownMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
+                                <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => duplicateScene(scene)} style={{ cursor: "pointer" }}>
+                                <Copy size={13} className="mr-2" style={{ color: "#A855F7" }} /> Duplicate
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => deleteScene(scene.id)} style={{ cursor: "pointer", color: "#EF4444" }}>
+                                <Trash2 size={13} className="mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        {isLive && activeScene === scene.id && (
+                          <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 rounded" style={{ background: "#FF5A2C", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.06em" }}>
+                            <div className="live-dot w-1 h-1 rounded-full bg-white" />
+                            LIVE
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: activeScene === scene.id ? 600 : 400, color: activeScene === scene.id ? "#F8F8FF" : "#606078", whiteSpace: "nowrap" }}>
-                    {renamingId === scene.id ? (
-                      <input
-                        autoFocus
-                        value={renameValue}
-                        onChange={e => setRenameValue(e.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
-                        onClick={e => e.stopPropagation()}
-                        style={{ width: 80, fontSize: 11, fontFamily: "'DM Sans', sans-serif", background: "#111827", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", padding: "1px 4px", outline: "none" }}
-                      />
-                    ) : scene.name}
-                  </span>
-                </button>
+                      {/* Name / rename input */}
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: activeScene === scene.id ? 600 : 400, color: activeScene === scene.id ? "#F8F8FF" : "#606078", whiteSpace: "nowrap" }}>
+                        {renamingId === scene.id ? (
+                          <input
+                            autoFocus
+                            value={renameValue}
+                            onChange={e => setRenameValue(e.target.value)}
+                            onBlur={commitRename}
+                            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                            onClick={e => e.stopPropagation()}
+                            style={{ width: 80, fontSize: 11, fontFamily: "'DM Sans', sans-serif", background: "#111827", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", padding: "1px 4px", outline: "none" }}
+                          />
+                        ) : scene.name}
+                      </span>
+                    </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
+                    <ContextMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
+                      <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => duplicateScene(scene)} style={{ cursor: "pointer" }}>
+                      <Copy size={13} className="mr-2" style={{ color: "#A855F7" }} /> Duplicate
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => deleteScene(scene.id)} style={{ cursor: "pointer", color: "#EF4444" }}>
+                      <Trash2 size={13} className="mr-2" /> Delete
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               ))}
             </div>
           </div>
