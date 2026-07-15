@@ -102,6 +102,7 @@ export default function Dashboard() {
 
   return (
     <AppSidebar>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* Live top border */}
       <div className="live-top-border" />
 
@@ -132,7 +133,7 @@ export default function Dashboard() {
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
         {/* Center */}
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Program output */}
@@ -346,10 +347,11 @@ export default function Dashboard() {
             >
               <Square size={13} fill="white" />
               END STREAM
-            </button>
-          </div>
+          </button>
         </div>
       </div>
+    </div>
+    </div>
     </AppSidebar>
   );
 }
