@@ -1,108 +1,94 @@
-/**
- * Nexus Broadcast — Obsidian Studio Dark Theme
- * Persistent left sidebar with navigation icons + labels (220px)
- * Active item: blue left-border (3px) + #1E2130 background
- * Font: Inter for labels, Space Grotesk for brand name
- */
-import { Link, useLocation } from "wouter";
-import {
-  LayoutDashboard,
-  Layers,
-  Settings,
-  BarChart2,
-  MessageSquare,
-  Radio,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+// RailShotTV — Chromatic Command
+// AppSidebar: 56px icon-only rail, colored glows per section, cue-ball mark
+import { useLocation, Link } from "wouter";
+import { Tv2, Layers, MessageSquare, BarChart2, Settings } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { label: "Scene Editor", icon: Layers, href: "/scenes" },
-  { label: "Chat & Audience", icon: MessageSquare, href: "/chat" },
-  { label: "Analytics", icon: BarChart2, href: "/analytics" },
-  { label: "Settings", icon: Settings, href: "/settings" },
+const NAV_ITEMS = [
+  { path: "/",          icon: Tv2,           label: "Dashboard",    glow: "rgba(255,77,28,0.55)",  active: "#FF4D1C" },
+  { path: "/scenes",    icon: Layers,         label: "Scene Editor", glow: "rgba(59,130,246,0.55)", active: "#3B82F6" },
+  { path: "/chat",      icon: MessageSquare,  label: "Chat",         glow: "rgba(139,92,246,0.55)", active: "#8B5CF6" },
+  { path: "/analytics", icon: BarChart2,      label: "Analytics",    glow: "rgba(6,182,212,0.55)",  active: "#06B6D4" },
+  { path: "/settings",  icon: Settings,       label: "Settings",     glow: "rgba(100,100,140,0.4)", active: "#A0A0B8" },
 ];
 
 export default function AppSidebar({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   return (
-    <div className="flex h-screen w-full overflow-hidden" style={{ background: "#0E0F14" }}>
-      {/* Sidebar */}
+    <div className="flex h-screen w-full overflow-hidden" style={{ background: "#0A0A0F" }}>
+      {/* Icon-only rail */}
       <aside
-        className="flex flex-col shrink-0 h-full border-r"
-        style={{ width: 220, background: "#111318", borderColor: "rgba(255,255,255,0.07)" }}
+        className="flex flex-col items-center shrink-0 h-full"
+        style={{ width: 56, minWidth: 56, background: "#0D0D15", borderRight: "1px solid #1E1E2E" }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b" style={{ borderColor: "rgba(255,255,255,0.07)", minHeight: 56 }}>
-          <div className="flex items-center justify-center rounded" style={{ width: 28, height: 28, background: "#3B82F6" }}>
-            <Radio size={15} color="white" />
-          </div>
-          <div>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 13, color: "#fff", letterSpacing: "0.04em" }}>
-              NEXUS
-            </div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", marginTop: -1 }}>
-              BROADCAST
-            </div>
-          </div>
-          <div className="ml-auto flex items-center gap-1">
-            <div className="rounded px-1.5 py-0.5" style={{ background: "#3B82F6", fontSize: 9, fontWeight: 700, color: "#fff", letterSpacing: "0.06em" }}>
-              PRO
-            </div>
+        {/* Logo mark */}
+        <div
+          className="flex items-center justify-center w-full shrink-0"
+          style={{ height: 46, borderBottom: "1px solid #1E1E2E" }}
+        >
+          <div
+            className="flex items-center justify-center rounded-sm"
+            style={{
+              width: 30, height: 30,
+              background: "linear-gradient(135deg, #FF4D1C 0%, #FF7A4D 100%)",
+              boxShadow: "0 0 16px rgba(255,77,28,0.55)"
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="7.5" fill="white" fillOpacity="0.95"/>
+              <line x1="4.5" y1="13.5" x2="13.5" y2="4.5" stroke="#FF4D1C" strokeWidth="2.2" strokeLinecap="round"/>
+            </svg>
           </div>
         </div>
+        {/* Diagonal cue-angle accent line below logo */}
+        <div style={{ width: 32, height: 1, background: "linear-gradient(90deg, transparent, #FF4D1C40, transparent)", marginTop: 0 }} />
 
         {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto">
-          {navItems.map((item) => {
-            const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+        <nav className="flex flex-col items-center gap-1 w-full pt-3 flex-1 px-2">
+          {NAV_ITEMS.map(({ path, icon: Icon, label, glow, active }) => {
+            const isActive = location === path;
             return (
-              <Link key={item.href} href={item.href}>
-                <div
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-all duration-150 relative",
-                    active ? "text-white" : "text-white/50 hover:text-white/80"
-                  )}
-                  style={active ? { background: "#1A1D2B", borderLeft: "3px solid #3B82F6", paddingLeft: 13 } : { borderLeft: "3px solid transparent" }}
+              <Tooltip key={path} delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Link href={path}>
+                    <div
+                      className="flex items-center justify-center rounded-md transition-all duration-150"
+                      style={{
+                        width: 38, height: 38,
+                        background: isActive ? `${active}1A` : "transparent",
+                        boxShadow: isActive ? `0 0 16px ${glow}` : "none",
+                        border: isActive ? `1px solid ${active}35` : "1px solid transparent",
+                      }}
+                    >
+                      <Icon size={17} style={{ color: isActive ? active : "#50506A", transition: "color 0.15s" }} />
+                    </div>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  style={{ background: "#1A1A24", border: "1px solid #2A2A3A", color: "#F8F8FF", fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}
                 >
-                  <item.icon size={16} strokeWidth={active ? 2 : 1.5} />
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: active ? 500 : 400 }}>
-                    {item.label}
-                  </span>
-                </div>
-              </Link>
+                  {label}
+                </TooltipContent>
+              </Tooltip>
             );
           })}
         </nav>
 
-        {/* Connection status */}
-        <div className="px-4 py-3 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
-          <div className="flex items-center gap-2">
-            <Wifi size={13} color="#22C55E" />
-            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: "#22C55E", fontWeight: 500 }}>Connected · Excellent</span>
+        {/* Bottom — signal bars + version */}
+        <div className="flex flex-col items-center gap-2 pb-3">
+          <div className="flex items-end gap-px">
+            {[4, 6, 8, 10, 12].map((h, i) => (
+              <div key={i} style={{ width: 3, height: h, background: i < 4 ? "#FF4D1C" : "#2A2A3A", borderRadius: 1, opacity: i < 4 ? 0.9 - i * 0.1 : 0.4 }} />
+            ))}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#EF4444" }} />
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.5)" }}>LIVE · 01:23:47</span>
-          </div>
-          <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <div className="flex items-center gap-1.5">
-              <div className="flex gap-px">
-                {[1,2,3,4,5].map(i => (
-                  <div key={i} style={{ width: 3, height: 8 + i * 2, background: i <= 4 ? "#3B82F6" : "rgba(255,255,255,0.1)", borderRadius: 1 }} />
-                ))}
-              </div>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "rgba(255,255,255,0.3)" }}>NEXUS v2.4.1</span>
-            </div>
-          </div>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#3A3A50", letterSpacing: "0.05em" }}>v2.5</span>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0E0F14" }}>
+      <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0A0A0F" }}>
         {children}
       </main>
     </div>

@@ -1,242 +1,204 @@
-/**
- * Nexus Broadcast — Analytics & Stream Health (Screen 4)
- * Obsidian Studio Dark Theme
- */
-import { useState, useEffect } from "react";
+// RailShotTV — Chromatic Command — Analytics
+import { useState, useEffect, useRef } from "react";
 import AppSidebar from "@/components/AppSidebar";
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
-import { Users, Clock, UserPlus, DollarSign, Download, RefreshCw } from "lucide-react";
+import { TrendingUp, Users, Clock, DollarSign, Activity, Download } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
-const viewerData = [
-  { time: "12:00", viewers: 420 }, { time: "12:15", viewers: 680 }, { time: "12:30", viewers: 1100 },
-  { time: "12:45", viewers: 1580 }, { time: "13:00", viewers: 2200 }, { time: "13:15", viewers: 2847 },
-  { time: "13:30", viewers: 3152 }, { time: "13:45", viewers: 2900 }, { time: "14:00", viewers: 2650 },
-];
-
-const healthData = Array.from({ length: 20 }, (_, i) => ({
-  t: i,
-  bitrate: 5800 + Math.random() * 400,
-  cpu: 25 + Math.random() * 8,
-  gpu: 38 + Math.random() * 10,
-  fps: 59 + Math.random() * 2,
-  dropped: Math.random() * 0.02,
+const generateViewerData = () => Array.from({ length: 24 }, (_, i) => ({
+  time: `${String(i).padStart(2,"0")}:00`,
+  viewers: Math.floor(800 + Math.random() * 2400 + Math.sin(i * 0.5) * 600),
 }));
 
-const platformData = [
-  { name: "Twitch", value: 54, color: "#9146FF" },
-  { name: "YouTube", value: 31, color: "#FF0000" },
-  { name: "Facebook", value: 15, color: "#1877F2" },
+const HEALTH_DATA = Array.from({ length: 30 }, (_, i) => ({
+  t: i,
+  bitrate: 8000 + Math.sin(i * 0.4) * 800 + Math.random() * 400,
+  cpu: 22 + Math.sin(i * 0.3) * 8 + Math.random() * 5,
+  gpu: 38 + Math.cos(i * 0.35) * 10 + Math.random() * 5,
+  fps: 59 + Math.random() * 1.5,
+}));
+
+const SESSIONS = [
+  { date: "Jul 14, 2026", duration: "2h 18m", peak: 3152, avg: 2341, revenue: "$184.50", quality: 98 },
+  { date: "Jul 13, 2026", duration: "1h 52m", peak: 2890, avg: 2105, revenue: "$142.00", quality: 97 },
+  { date: "Jul 12, 2026", duration: "3h 04m", peak: 4210, avg: 3180, revenue: "$267.80", quality: 99 },
+  { date: "Jul 11, 2026", duration: "1h 37m", peak: 1980, avg: 1540, revenue: "$98.20", quality: 95 },
+  { date: "Jul 10, 2026", duration: "2h 45m", peak: 3640, avg: 2780, revenue: "$221.40", quality: 98 },
 ];
 
-const countryData = [
-  { country: "United States", pct: 32 },
-  { country: "Germany", pct: 12 },
-  { country: "Brazil", pct: 9 },
-  { country: "United Kingdom", pct: 7 },
-  { country: "Canada", pct: 5 },
+const AUDIENCE = [
+  { platform: "Twitch", pct: 54, color: "#8B5CF6" },
+  { platform: "YouTube", pct: 31, color: "#EF4444" },
+  { platform: "Facebook", pct: 15, color: "#3B82F6" },
 ];
 
-const sessions = [
-  { date: "Jul 13, 2026 · 2:00 PM", duration: "3h 12m", peak: 3152, avg: 2187, revenue: "$184.50", score: "Excellent", scoreColor: "#22C55E" },
-  { date: "Jul 12, 2026 · 2:15 PM", duration: "2h 45m", peak: 2876, avg: 1984, revenue: "$162.30", score: "Excellent", scoreColor: "#22C55E" },
-  { date: "Jul 11, 2026 · 1:30 PM", duration: "3h 05m", peak: 2541, avg: 1763, revenue: "$142.80", score: "Good", scoreColor: "#3B82F6" },
-  { date: "Jul 10, 2026 · 3:00 PM", duration: "2h 20m", peak: 2103, avg: 1412, revenue: "$121.40", score: "Good", scoreColor: "#3B82F6" },
-  { date: "Jul 9, 2026 · 2:10 PM", duration: "2h 10m", peak: 1892, avg: 1238, revenue: "$98.70", score: "Fair", scoreColor: "#F59E0B" },
+const COUNTRIES = [
+  { name: "United States", pct: 42 },
+  { name: "Canada", pct: 18 },
+  { name: "United Kingdom", pct: 12 },
+  { name: "Germany", pct: 8 },
+  { name: "Australia", pct: 6 },
 ];
-
-const kpis = [
-  { label: "PEAK VIEWERS", value: "3,152", sub: "+18.7% vs yesterday", icon: Users, color: "#3B82F6" },
-  { label: "AVG. WATCH TIME", value: "18m 42s", sub: "+12.4% vs yesterday", icon: Clock, color: "#06B6D4" },
-  { label: "NEW FOLLOWERS", value: "+247", sub: "+29.3% vs yesterday", icon: UserPlus, color: "#22C55E" },
-  { label: "TOTAL REVENUE", value: "$184.50", sub: "+15.2% vs yesterday", icon: DollarSign, color: "#F59E0B" },
-];
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="rounded px-2 py-1.5" style={{ background: "#1A1D2B", border: "1px solid rgba(255,255,255,0.15)", fontSize: 11 }}>
-        <div style={{ color: "rgba(255,255,255,0.5)" }}>{label}</div>
-        <div style={{ color: "#3B82F6", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{payload[0]?.value?.toLocaleString()} viewers</div>
-      </div>
-    );
-  }
-  return null;
-};
 
 export default function Analytics() {
+  const [viewerData] = useState(generateViewerData);
+  const [range, setRange] = useState("6h");
+
   return (
     <AppSidebar>
-      <div className="flex flex-col h-full overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
-        {/* Top bar */}
-        <div className="flex items-center px-4 border-b shrink-0" style={{ borderColor: "rgba(255,255,255,0.07)", minHeight: 46, background: "#0D0E12" }}>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 12, color: "#fff", letterSpacing: "0.1em" }}>ANALYTICS</span>
-          <div className="mx-3 w-px h-4" style={{ background: "rgba(255,255,255,0.1)" }} />
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>STREAM HEALTH MONITOR</span>
-          <div className="ml-auto flex items-center gap-2">
-            <button className="flex items-center gap-1.5 rounded px-3 py-1" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-              <Clock size={10} /> TODAY
-            </button>
-            <button className="flex items-center gap-1.5 rounded px-3 py-1" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-              <Download size={10} /> EXPORT
-            </button>
-            <button className="rounded p-1.5" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.1)" }}>
-              <RefreshCw size={11} color="rgba(255,255,255,0.4)" />
-            </button>
-          </div>
+      {/* Top bar */}
+      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#0D0D15", borderBottom: "1px solid #1E1E2E" }}>
+        <div className="flex items-center gap-1 mr-1">
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#F8F8FF", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#FF4D1C", letterSpacing: "0.06em", lineHeight: 1 }}>TV</span>
+        </div>
+        <div className="w-px h-4 mx-1" style={{ background: "#2A2A3A" }} />
+        <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Analytics</span>
+        <div className="flex-1" />
+        {["5m","15m","1h","3h","6h","12h"].map(r => (
+          <button key={r} onClick={() => setRange(r)} className="px-2 py-0.5 rounded text-xs transition-all" style={{ background: range === r ? "#06B6D418" : "transparent", border: range === r ? "1px solid #06B6D440" : "1px solid transparent", color: range === r ? "#06B6D4" : "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>{r}</button>
+        ))}
+        <button className="flex items-center gap-1.5 px-2.5 py-1 rounded" style={{ background: "#1A1A24", border: "1px solid #2A2A3A" }}>
+          <Download size={12} style={{ color: "#606078" }} />
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#606078" }}>Export</span>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3" style={{ background: "#0A0A0F" }}>
+        {/* KPI cards */}
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          {[
+            { label: "Peak Viewers", value: "3,152", sub: "+18% vs last", color: "#3B82F6", icon: Users },
+            { label: "Avg Watch Time", value: "18m 42s", sub: "+4m 12s vs last", color: "#8B5CF6", icon: Clock },
+            { label: "New Followers", value: "+247", sub: "This session", color: "#10B981", icon: TrendingUp },
+            { label: "Total Revenue", value: "$184.50", sub: "Subs + Donations", color: "#F59E0B", icon: DollarSign },
+          ].map(({ label, value, sub, color, icon: Icon }) => (
+            <div key={label} className="rounded p-3" style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+                <Icon size={14} style={{ color }} />
+              </div>
+              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: "#F8F8FF", lineHeight: 1, letterSpacing: "0.04em" }}>{value}</div>
+              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color, marginTop: 4 }}>{sub}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-4 gap-3">
-            {kpis.map(kpi => (
-              <div key={kpi.label} className="rounded-lg p-3" style={{ background: "#111318", border: `1px solid ${kpi.color}30` }}>
-                <div className="flex items-center justify-between mb-1">
-                  <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em" }}>{kpi.label}</span>
-                  <kpi.icon size={13} color={kpi.color} />
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>{kpi.value}</div>
-                <div style={{ fontSize: 10, color: kpi.color, marginTop: 2 }}>{kpi.sub}</div>
-              </div>
-            ))}
+        {/* Main viewer chart */}
+        <div className="rounded mb-4" style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+          <div className="flex items-center justify-between px-4 py-2.5 panel-header-cyan rounded-t">
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Viewer Count</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ background: "#06B6D418", border: "1px solid #06B6D440" }}>
+              <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#06B6D4" }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#06B6D4", fontWeight: 600 }}>LIVE DATA</span>
+            </div>
           </div>
-
-          {/* Viewer Chart */}
-          <div className="rounded-lg p-3" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="flex items-center justify-between mb-3">
-              <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Viewer Count Over Time</span>
-              <div className="flex items-center gap-2 mr-2">
-                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#EF4444" }} />
-                <span style={{ fontSize: 9, color: "#EF4444", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "0.08em" }}>LIVE DATA</span>
-              </div>
-              <div className="flex gap-1">
-                {["5m", "15m", "1h", "3h", "6h", "12h"].map(t => (
-                  <button key={t} className="rounded px-2 py-0.5 text-xs" style={{ background: t === "3h" ? "#3B82F6" : "rgba(255,255,255,0.05)", color: t === "3h" ? "#fff" : "rgba(255,255,255,0.4)", fontSize: 10 }}>{t}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-4 mb-2" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "rgba(255,255,255,0.3)" }}>
-              <span>PEAK: <span style={{ color: "#3B82F6", fontWeight: 600 }}>3,152</span></span>
-              <span>AVG: <span style={{ color: "rgba(255,255,255,0.6)" }}>2,187</span></span>
-              <span>CURRENT: <span style={{ color: "#22C55E", fontWeight: 600 }}>2,847</span></span>
-              <span style={{ marginLeft: "auto" }}>RANGE: <span style={{ color: "rgba(255,255,255,0.5)" }}>12:00 — 14:00</span></span>
-            </div>
+          <div className="px-2 pb-3 pt-1">
             <ResponsiveContainer width="100%" height={140}>
-              <AreaChart data={viewerData}>
+              <AreaChart data={viewerData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="viewerGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.02}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="time" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="viewers" stroke="#3B82F6" strokeWidth={2} fill="url(#viewerGrad)" dot={false} />
+                <XAxis dataKey="time" tick={{ fill: "#50506A", fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }} tickLine={false} axisLine={false} interval={3} />
+                <YAxis tick={{ fill: "#50506A", fontSize: 9, fontFamily: "'JetBrains Mono', monospace" }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "#1A1A24", border: "1px solid #2A2A3A", borderRadius: 4, fontSize: 11, fontFamily: "'DM Sans', sans-serif", color: "#F8F8FF" }} />
+                <Area type="monotone" dataKey="viewers" stroke="#06B6D4" strokeWidth={2} fill="url(#viewerGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
+        </div>
 
-          {/* Health + Audience */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Stream Health */}
-            <div className="rounded-lg p-3" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <div className="flex items-center justify-between mb-3">
-                <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Stream Health</span>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#22C55E" }} />
-                  <span style={{ fontSize: 10, color: "#22C55E" }}>Excellent</span>
-                </div>
-              </div>
-              {[
-                { key: "bitrate", label: "Bitrate", color: "#3B82F6", format: (v: number) => `${Math.round(v / 100) * 100} kbps` },
-                { key: "cpu", label: "CPU Usage", color: "#22C55E", format: (v: number) => `${v.toFixed(0)}%` },
-                { key: "gpu", label: "GPU Usage", color: "#06B6D4", format: (v: number) => `${v.toFixed(0)}%` },
-                { key: "fps", label: "Frame Rate", color: "#fff", format: (v: number) => `${v.toFixed(0)} fps` },
-                { key: "dropped", label: "Dropped Frames", color: "#EF4444", format: (v: number) => `${(v * 100).toFixed(2)}%` },
-              ].map(metric => (
-                <div key={metric.key} className="mb-1.5">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full" style={{ background: metric.color }} />
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{metric.label}</span>
-                    </div>
-                    <span style={{ fontSize: 10, color: metric.color, fontFamily: "'JetBrains Mono', monospace" }}>
-                      {metric.format(healthData[healthData.length - 1][metric.key as keyof typeof healthData[0]] as number)}
-                    </span>
+        {/* Bottom row */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {/* Stream health */}
+          <div className="col-span-2 rounded" style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+            <div className="px-4 py-2.5 panel-header-emerald rounded-t">
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Stream Health</span>
+            </div>
+            <div className="px-3 pb-3 pt-1">
+              <ResponsiveContainer width="100%" height={100}>
+                <LineChart data={HEALTH_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="t" hide />
+                  <YAxis hide />
+                  <Tooltip contentStyle={{ background: "#1A1A24", border: "1px solid #2A2A3A", borderRadius: 4, fontSize: 10, fontFamily: "'DM Sans', sans-serif", color: "#F8F8FF" }} />
+                  <Line type="monotone" dataKey="bitrate" stroke="#3B82F6" strokeWidth={1.5} dot={false} name="Bitrate" />
+                  <Line type="monotone" dataKey="cpu" stroke="#10B981" strokeWidth={1.5} dot={false} name="CPU %" />
+                  <Line type="monotone" dataKey="gpu" stroke="#06B6D4" strokeWidth={1.5} dot={false} name="GPU %" />
+                  <Line type="monotone" dataKey="fps" stroke="#F59E0B" strokeWidth={1.5} dot={false} name="FPS" />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="flex gap-4 mt-1">
+                {[["Bitrate","#3B82F6"],["CPU","#10B981"],["GPU","#06B6D4"],["FPS","#F59E0B"]].map(([l,c]) => (
+                  <div key={l} className="flex items-center gap-1">
+                    <div className="w-3 h-0.5 rounded" style={{ background: c }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078" }}>{l}</span>
                   </div>
-                  <ResponsiveContainer width="100%" height={28}>
-                    <LineChart data={healthData}>
-                      <Line type="monotone" dataKey={metric.key} stroke={metric.color} strokeWidth={1.5} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ))}
-            </div>
-
-            {/* Audience Breakdown */}
-            <div className="rounded-lg p-3" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <div className="flex items-center justify-between mb-3">
-                <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Audience Breakdown</span>
-              </div>
-              <div className="flex gap-4">
-                <PieChart width={120} height={120}>
-                  <Pie data={platformData} cx={55} cy={55} innerRadius={35} outerRadius={55} dataKey="value" strokeWidth={0}>
-                    {platformData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Pie>
-                </PieChart>
-                <div className="flex flex-col justify-center gap-2">
-                  {platformData.map(p => (
-                    <div key={p.name} className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{p.name}</span>
-                      <span style={{ fontSize: 11, color: "#fff", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{p.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", marginTop: 12, marginBottom: 8 }}>TOP COUNTRIES</div>
-              {countryData.map(c => (
-                <div key={c.country} className="flex items-center gap-2 mb-1.5">
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", width: 110, flexShrink: 0 }}>{c.country}</span>
-                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: "rgba(255,255,255,0.08)" }}>
-                    <div style={{ width: `${(c.pct / 32) * 100}%`, height: "100%", background: "#3B82F6", borderRadius: 9999 }} />
-                  </div>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", width: 28, textAlign: "right" }}>{c.pct}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Session History */}
-          <div className="rounded-lg overflow-hidden" style={{ background: "#111318", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="px-4 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Recent Stream Sessions</span>
-            </div>
-            <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  {["Date", "Duration", "Peak Viewers", "Avg Viewers", "Revenue", "Quality Score"].map(h => (
-                    <th key={h} className="px-4 py-2 text-left" style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.06em" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s, i) => (
-                  <tr key={i} className="transition-colors hover:bg-white/[0.02]" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <td className="px-4 py-2.5" style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{s.date}</td>
-                    <td className="px-4 py-2.5" style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontFamily: "'JetBrains Mono', monospace" }}>{s.duration}</td>
-                    <td className="px-4 py-2.5" style={{ fontSize: 11, color: "#3B82F6", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{s.peak.toLocaleString()}</td>
-                    <td className="px-4 py-2.5" style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontFamily: "'JetBrains Mono', monospace" }}>{s.avg.toLocaleString()}</td>
-                    <td className="px-4 py-2.5" style={{ fontSize: 11, color: "#22C55E", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{s.revenue}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="rounded px-2 py-0.5" style={{ fontSize: 10, fontWeight: 600, background: `${s.scoreColor}22`, color: s.scoreColor, border: `1px solid ${s.scoreColor}44` }}>{s.score}</span>
-                    </td>
-                  </tr>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
+
+          {/* Audience breakdown */}
+          <div className="rounded" style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+            <div className="px-4 py-2.5 panel-header-violet rounded-t">
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Audience</span>
+            </div>
+            <div className="px-3 py-2">
+              {AUDIENCE.map(({ platform, pct, color }) => (
+                <div key={platform} className="flex items-center gap-2 mb-2">
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8", width: 64 }}>{platform}</span>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, background: "#1A1A24" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 2 }} />
+                  </div>
+                  <span className="mono" style={{ fontSize: 11, color, width: 32, textAlign: "right" }}>{pct}%</span>
+                </div>
+              ))}
+              <div className="mt-2 pt-2" style={{ borderTop: "1px solid #1E1E2E" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", letterSpacing: "0.08em", textTransform: "uppercase" }}>Top Countries</span>
+                {COUNTRIES.map(({ name, pct }) => (
+                  <div key={name} className="flex items-center gap-2 mt-1.5">
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#A0A0B8", flex: 1 }}>{name}</span>
+                    <div className="rounded-full overflow-hidden" style={{ width: 48, height: 3, background: "#1A1A24" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: "#06B6D4", borderRadius: 2 }} />
+                    </div>
+                    <span className="mono" style={{ fontSize: 10, color: "#06B6D4", width: 28, textAlign: "right" }}>{pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sessions table */}
+        <div className="rounded" style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+          <div className="px-4 py-2.5 panel-header-brand rounded-t">
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Recent Sessions</span>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1E1E2E" }}>
+                {["Date","Duration","Peak","Avg","Revenue","Quality"].map(h => (
+                  <th key={h} className="px-4 py-2 text-left" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SESSIONS.map((s, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #1A1A24" }}>
+                  <td className="px-4 py-2.5" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#A0A0B8" }}>{s.date}</td>
+                  <td className="px-4 py-2.5 mono" style={{ fontSize: 12, color: "#F8F8FF" }}>{s.duration}</td>
+                  <td className="px-4 py-2.5 mono" style={{ fontSize: 12, color: "#06B6D4" }}>{s.peak.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 mono" style={{ fontSize: 12, color: "#A0A0B8" }}>{s.avg.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 mono" style={{ fontSize: 12, color: "#10B981" }}>{s.revenue}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="px-2 py-0.5 rounded text-xs mono" style={{ background: s.quality >= 98 ? "#10B98118" : "#F59E0B18", border: `1px solid ${s.quality >= 98 ? "#10B98140" : "#F59E0B40"}`, color: s.quality >= 98 ? "#10B981" : "#F59E0B" }}>{s.quality}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </AppSidebar>
