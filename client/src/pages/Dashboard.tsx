@@ -2,6 +2,7 @@
 // Colors: Brand=#FF5A2C, Blue=#4F9EFF, Violet=#A855F7, Emerald=#22C55E, Cyan=#22D3EE, Amber=#FBBF24
 import { useState, useEffect, useRef } from "react";
 import AppSidebar from "@/components/AppSidebar";
+import GoLiveModal from "@/components/GoLiveModal";
 import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2 } from "lucide-react";
 
 const SCENES = [
@@ -79,6 +80,8 @@ export default function Dashboard() {
   const [tc, setTc] = useState("01:23:49");
   const [viewers, setViewers] = useState(2853);
   const [bitrate, setBitrate] = useState(8642);
+  const [isLive, setIsLive] = useState(false);
+  const [showGoLive, setShowGoLive] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -339,19 +342,40 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* End stream button */}
+          {/* Go Live / End Stream button */}
           <div className="px-3 py-3 mt-auto">
-            <button
-              className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
-              style={{ height: 44, background: "linear-gradient(135deg, #FF5A2C 0%, #FF6B35 100%)", boxShadow: "0 0 20px rgba(255,77,28,0.35)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em" }}
-            >
-              <Square size={13} fill="white" />
-              END STREAM
-          </button>
-        </div>
+            {!isLive ? (
+              <button
+                onClick={() => setShowGoLive(true)}
+                className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
+                style={{ height: 44, background: "linear-gradient(135deg, #FF5A2C 0%, #FF6B35 100%)", boxShadow: "0 0 24px rgba(255,90,44,0.45)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em", border: "none", cursor: "pointer" }}
+                onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+              >
+                <span style={{ fontSize: 15, lineHeight: 1 }}>●</span>
+                GO LIVE
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsLive(false)}
+                className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
+                style={{ height: 44, background: "linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%)", boxShadow: "0 0 16px rgba(239,68,68,0.3)", color: "#FCA5A5", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em", border: "1px solid #EF444440", cursor: "pointer" }}
+                onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+              >
+                <Square size={13} fill="#FCA5A5" />
+                END STREAM
+              </button>
+            )}
+          </div>
       </div>
     </div>
     </div>
-    </AppSidebar>
+      <GoLiveModal
+        open={showGoLive}
+        onClose={() => setShowGoLive(false)}
+        onGoLive={() => { setIsLive(true); setShowGoLive(false); }}
+      />
+  </AppSidebar>
   );
 }
