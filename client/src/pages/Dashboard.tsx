@@ -10,8 +10,7 @@ import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, C
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 
-// Audio channels populated from OBS audio manager at runtime
-const CHANNELS: { name: string; sub: string; icon: typeof Mic; color: string; levels: number[]; db: string }[] = [];
+// Audio channels — derived from active scene's audio sources
 
 function VUMeter({ levels, color }: { levels: number[]; color: string }) {
   const [tick, setTick] = useState(0);
@@ -71,6 +70,13 @@ export default function Dashboard() {
   const { scenes, activeSceneId: activeScene, setActiveSceneId: setActiveScene,
           setEditingSceneId, addScene, duplicateScene, deleteScene, renameScene } = useScenes();
   const [, navigate] = useLocation();
+  // Build audio channels from active scene sources
+  const activeSceneObj = scenes.find(s => s.id === activeScene) ?? null;
+  const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
+  const audioChannels = (activeSceneObj?.sources ?? []).filter(s => ["camera","display"].includes(s.type)).map(s => ({
+    id: s.id, name: s.name, sub: s.type === "camera" ? "Camera Input" : "Desktop Audio",
+    icon: s.type === "camera" ? Mic : Music, color: s.color,
+  }));
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tc, setTc] = useState("00:00:00");
@@ -365,26 +371,42 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex gap-0 overflow-x-auto" style={{ background: "#1A2035" }}>
-              {CHANNELS.map((ch, idx) => (
-                <div key={idx} className="flex flex-col gap-1 px-3 py-2 shrink-0" style={{ minWidth: 130, borderRight: "1px solid #2A3350" }}>
-                  <div className="flex items-center gap-1.5">
-                    <ch.icon size={12} style={{ color: ch.color }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, color: "#F8F8FF" }}>{ch.name}</span>
-                  </div>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A" }}>{ch.sub}</span>
-                  <VUMeter levels={ch.levels} color={ch.color} />
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="mono" style={{ fontSize: 10, color: ch.color }}>{ch.db} dB</span>
-                    <div className="flex gap-1">
-                      {["S","M"].map(l => (
-                        <button key={l} className="flex items-center justify-center rounded" style={{ width: 18, height: 18, background: "#1A1A24", border: "1px solid #303D5A", fontSize: 9, fontWeight: 700, color: "#8892A4", fontFamily: "'DM Sans', sans-serif" }}>
-                          {l}
+              {audioChannels.length === 0 ? (
+                <div className="flex items-center justify-center flex-1 py-4" style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
+                  No audio sources — add a Camera or Display source in Scene Editor
+                </div>
+              ) : audioChannels.map((ch) => {
+                const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+                const isMuted = cs.muted;
+                const isSolo  = cs.solo;
+                return (
+                  <div key={ch.id} className="flex flex-col gap-1 px-3 py-2 shrink-0" style={{ minWidth: 130, borderRight: "1px solid #2A3350", opacity: isMuted ? 0.45 : 1, transition: "opacity 0.15s" }}>
+                    <div className="flex items-center gap-1.5">
+                      <ch.icon size={12} style={{ color: ch.color }} />
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>{ch.name}</span>
+                    </div>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A" }}>{ch.sub}</span>
+                    <VUMeter levels={[]} color={isMuted ? "#50506A" : ch.color} />
+                    <div className="flex items-center justify-between mt-0.5">
+                      <input type="range" min={0} max={100} value={cs.volume}
+                        onChange={e => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
+                        style={{ width: 60, accentColor: ch.color, cursor: "pointer" }} />
+                      <div className="flex gap-1">
+                        <button onClick={() => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, solo: !isSolo } }))}
+                          className="flex items-center justify-center rounded"
+                          style={{ width: 18, height: 18, background: isSolo ? "#FBBF24" : "#1A1A24", border: `1px solid ${isSolo ? "#FBBF24" : "#303D5A"}`, fontSize: 9, fontWeight: 700, color: isSolo ? "#1A1A24" : "#8892A4", fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>
+                          S
                         </button>
-                      ))}
+                        <button onClick={() => setChannelState(prev => ({ ...prev, [ch.id]: { ...cs, muted: !isMuted } }))}
+                          className="flex items-center justify-center rounded"
+                          style={{ width: 18, height: 18, background: isMuted ? "#EF4444" : "#1A1A24", border: `1px solid ${isMuted ? "#EF4444" : "#303D5A"}`, fontSize: 9, fontWeight: 700, color: isMuted ? "#fff" : "#8892A4", fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>
+                          M
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -478,7 +500,7 @@ export default function Dashboard() {
               </button>
             ) : (
               <button
-                onClick={() => setIsLive(false)}
+                onClick={() => { setIsLive(false); setLivePlatform(''); setTc('00:00:00'); setViewers(0); setBitrate(0); }}
                 className="w-full flex items-center justify-center gap-2 rounded font-bold transition-all duration-150"
                 style={{ height: 44, background: "linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%)", boxShadow: "0 0 16px rgba(239,68,68,0.3)", color: "#FCA5A5", fontFamily: "'DM Sans', sans-serif", fontSize: 13, letterSpacing: "0.06em", border: "1px solid #EF444440", cursor: "pointer" }}
                 onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}

@@ -2,6 +2,7 @@
 // ScoreboardPage: configurable event scoreboard with live overlay preview
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import AppSidebar from "@/components/AppSidebar";
+import { useScenes } from "@/contexts/SceneContext";
 import { toast } from "sonner";
 import {
   Trophy, Play, Pause, RotateCcw, Eye, EyeOff, Plus, Minus,
@@ -310,6 +311,7 @@ function SectionHeader({ icon: Icon, label, color = "#4F9EFF" }: { icon: React.F
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ScoreboardPage() {
+  const { activeSceneId, addSource } = useScenes();
   const [state, setState] = useState<ScoreboardState>({
     sport: "generic",
     layout: "lower-third",
@@ -395,14 +397,26 @@ export default function ScoreboardPage() {
               {state.visible ? <Eye size={13} /> : <EyeOff size={13} />}
               {state.visible ? "OVERLAY ON" : "OVERLAY OFF"}
             </button>
-            <button onClick={() => { toast.success("Scoreboard preset saved"); }} style={{
+            <button onClick={() => {
+              try {
+                localStorage.setItem("railshot_scoreboard_preset", JSON.stringify(state));
+                toast.success("Preset saved to browser storage");
+              } catch { toast.error("Failed to save preset"); }
+            }} style={{
               display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
               background: "rgba(79,158,255,0.12)", border: "1px solid rgba(79,158,255,0.3)",
               borderRadius: 6, color: "#4F9EFF", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>
               <Save size={13} /> SAVE PRESET
             </button>
-            <button onClick={() => { toast.info("Load preset — coming in Phase 4C"); }} style={{
+            <button onClick={() => {
+              try {
+                const raw = localStorage.getItem("railshot_scoreboard_preset");
+                if (!raw) { toast.info("No saved preset found"); return; }
+                setState(JSON.parse(raw));
+                toast.success("Preset loaded");
+              } catch { toast.error("Failed to load preset"); }
+            }} style={{
               display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
               background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)",
               borderRadius: 6, color: "#A855F7", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -663,7 +677,23 @@ export default function ScoreboardPage() {
                   background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
                   color: "#EF4444", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,
                 }}>Reset All Scores & Timer</button>
-                <button onClick={() => { update({ visible: true }); toast.success("Overlay pushed to scene"); }} style={{
+                <button onClick={() => {
+                  update({ visible: true });
+                  if (activeSceneId !== null) {
+                    addSource(activeSceneId, {
+                      name: `Scoreboard — ${state.sport}`,
+                      type: "scoreboard",
+                      icon: (() => null) as React.ElementType,
+                      color: "#22C55E",
+                      visible: true,
+                      locked: false,
+                      settings: { sport: state.sport, teamAName: state.teamA.name, teamBName: state.teamB.name },
+                    });
+                    toast.success(`Scoreboard added to scene`);
+                  } else {
+                    toast.info("No active scene — create a scene on the Dashboard first");
+                  }
+                }} style={{
                   padding: "8px 10px", borderRadius: 6, cursor: "pointer",
                   background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)",
                   color: "#22C55E", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600,

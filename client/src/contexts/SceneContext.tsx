@@ -9,6 +9,7 @@ export type SourceItem = {
   color: string;
   visible: boolean;
   locked: boolean;
+  settings: Record<string, string | number | boolean>;
 };
 
 export type SceneItem = {
@@ -36,6 +37,7 @@ type SceneContextType = {
   removeSource: (sceneId: number, sourceId: number) => void;
   updateSource: (sceneId: number, sourceId: number, patch: Partial<SourceItem>) => void;
   moveSource: (sceneId: number, sourceId: number, dir: "up" | "down") => void;
+  updateSourceSettings: (sceneId: number, sourceId: number, key: string, value: string | number | boolean) => void;
 };
 
 const SceneContext = createContext<SceneContextType | null>(null);
@@ -118,12 +120,19 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const updateSourceSettings = useCallback((sceneId: number, sourceId: number, key: string, value: string | number | boolean) => {
+    setScenes(prev => prev.map(s => s.id === sceneId
+      ? { ...s, sources: s.sources.map(src => src.id === sourceId ? { ...src, settings: { ...src.settings, [key]: value } } : src) }
+      : s
+    ));
+  }, []);
+
   return (
     <SceneContext.Provider value={{
       scenes, activeSceneId, editingSceneId, nextSceneId,
       setActiveSceneId, setEditingSceneId,
       addScene, duplicateScene, deleteScene, renameScene,
-      addSource, removeSource, updateSource, moveSource,
+      addSource, removeSource, updateSource, moveSource, updateSourceSettings,
     }}>
       {children}
     </SceneContext.Provider>

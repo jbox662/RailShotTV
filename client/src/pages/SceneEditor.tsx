@@ -276,7 +276,7 @@ export default function SceneEditor() {
   const [activeTrans, setActiveTrans]       = useState("Cut");
   const { scenes, editingSceneId, addSource: ctxAddSource,
           removeSource: ctxRemoveSource, updateSource: ctxUpdateSource,
-          moveSource: ctxMoveSource } = useScenes();
+          moveSource: ctxMoveSource, updateSourceSettings: ctxUpdateSettings } = useScenes();
   const editingScene = scenes.find(s => s.id === editingSceneId) ?? null;
   const sources = editingScene?.sources ?? [];
   const [browserOpen, setBrowserOpen]       = useState(true);
@@ -297,7 +297,7 @@ export default function SceneEditor() {
 
   const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
     if (!editingSceneId) { toast.error("No scene selected — go back to Dashboard and click Edit on a scene"); return; }
-    const newId = ctxAddSource(editingSceneId, { name, type, icon, color, visible: true, locked: false });
+    const newId = ctxAddSource(editingSceneId, { name, type, icon, color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     toast.success(`Added "${name}"`);
   }, [editingSceneId, ctxAddSource]);
@@ -351,7 +351,7 @@ export default function SceneEditor() {
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x, y }]);
     // Add to sources list
     const IconComp = template.icon;
-    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: IconComp, color: template.color, visible: true, locked: false });
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: IconComp, color: template.color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     setDropFlash(true);
     setAddedToast(template.name);
@@ -363,7 +363,7 @@ export default function SceneEditor() {
   const handleAddTemplate = useCallback((template: typeof OVERLAY_TEMPLATES[0]) => {
     const newId = nextId.current++;
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x: 10 + Math.random() * 30, y: 10 + Math.random() * 30 }]);
-    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: template.icon, color: template.color, visible: true, locked: false });
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: template.icon, color: template.color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     setAddedToast(template.name);
     setTimeout(() => setAddedToast(null), 2500);
@@ -665,42 +665,117 @@ export default function SceneEditor() {
           {/* Properties */}
           <div className="px-3 py-1.5 shrink-0" style={{ borderBottom: "1px solid #2A3350", background: "#141928" }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              Properties — {sources.find(s => s.id === selectedSource)?.name ?? "—"}
+              {selectedSource !== null ? `Properties — ${sources.find(s => s.id === selectedSource)?.name ?? ""}` : "Properties"}
             </span>
           </div>
-          <div className="flex flex-col gap-0 px-3 py-2">
-            {[["Position X","640"],["Position Y","270"],["Width","640"],["Height","360"],["Rotation","0°"],["Opacity","100%"]].map(([label, val]) => (
+          {selectedSource === null ? (
+            <div className="flex flex-col items-center justify-center flex-1 gap-2" style={{ color: "#50506A", paddingTop: 24 }}>
+              <Layers size={22} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>Select a source to edit</span>
+            </div>
+          ) : (() => {
+            const src = sources.find(s => s.id === selectedSource);
+            if (!src) return null;
+            const t = getTransform(selectedSource);
+            const setT = (k: string, v: number | boolean) => setTransform(selectedSource, { [k]: v } as Parameters<typeof setTransform>[1]);
+            const setSetting = (k: string, v: string | number | boolean) => {
+              if (editingSceneId) ctxUpdateSettings(editingSceneId, selectedSource, k, v);
+            };
+            const setting = (k: string, def: string | number | boolean = "") => (src.settings?.[k] ?? def);
+            const propRow = (label: string, input: React.ReactNode) => (
               <div key={label} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid #1A1A24" }}>
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4" }}>{label}</span>
-                <div className="flex items-center rounded px-2" style={{ height: 22, background: "#1E2640", border: "1px solid #303D5A", minWidth: 64 }}>
-                  <span className="mono" style={{ fontSize: 11, color: "#A855F7" }}>{val}</span>
+                {input}
+              </div>
+            );
+            const numIn = (val: number, onChange: (v: number) => void, min?: number, max?: number) => (
+              <input type="number" value={val} min={min} max={max} onChange={e => onChange(Number(e.target.value))}
+                style={{ width: 64, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A855F7", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "0 6px", outline: "none" }} />
+            );
+            const txtIn = (val: string, onChange: (v: string) => void, placeholder = "", width = 140) => (
+              <input type="text" value={val} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+                style={{ width, height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 11, padding: "0 6px", outline: "none" }} />
+            );
+            const tog = (val: boolean, onChange: (v: boolean) => void) => (
+              <div onClick={() => onChange(!val)} style={{ width: 32, height: 18, borderRadius: 9, background: val ? "#FF5A2C" : "#1A1A24", border: `1px solid ${val ? "#FF5A2C" : "#303D5A"}`, position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
+                <div style={{ position: "absolute", top: 2, left: val ? 14 : 2, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+              </div>
+            );
+            const selIn = (val: string, onChange: (v: string) => void, options: string[]) => (
+              <select value={val} onChange={e => onChange(e.target.value)} style={{ height: 22, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 11, padding: "0 6px", outline: "none" }}>
+                {options.map(o => <option key={o}>{o}</option>)}
+              </select>
+            );
+            return (
+              <div className="flex flex-col overflow-y-auto" style={{ flex: 1, scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
+                <div className="px-3 pt-2 pb-1">
+                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>Transform</div>
+                  {propRow("Position X", numIn(t.x, v => setT("x", v)))}
+                  {propRow("Position Y", numIn(t.y, v => setT("y", v)))}
+                  {propRow("Width",      numIn(t.w, v => setT("w", v), 1))}
+                  {propRow("Height",     numIn(t.h, v => setT("h", v), 1))}
+                  {propRow("Rotation",   numIn(t.rot, v => setT("rot", v), -360, 360))}
+                  {propRow("Opacity %",  numIn(t.opacity, v => setT("opacity", v), 0, 100))}
+                  <div className="flex gap-1.5 mt-2 mb-1">
+                    {[
+                      { label: "Flip H", action: () => setT("flipH", !t.flipH) },
+                      { label: "Flip V", action: () => setT("flipV", !t.flipV) },
+                      { label: "Reset",  action: () => setTransforms(prev => { const n = { ...prev }; delete n[selectedSource!]; return n; }) },
+                    ].map(({ label, action }) => (
+                      <button key={label} onClick={action} style={{ flex: 1, padding: "3px 0", borderRadius: 4, border: "1px solid #303D5A", background: "#1E2640", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer" }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="px-3 pt-1 pb-3" style={{ borderTop: "1px solid #2A3350" }}>
+                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, marginTop: 6 }}>Source Settings</div>
+                  {src.type === "camera" && (<>
+                    {propRow("Device", selIn(setting("device", "Default Camera") as string, v => setSetting("device", v), ["Default Camera","USB Camera 1","USB Camera 2","IP Camera (RTSP)","NDI Source"]))}
+                    {propRow("Custom RTSP URL", txtIn(setting("rtsp", "") as string, v => setSetting("rtsp", v), "rtsp://192.168.1.x/stream"))}
+                    {propRow("Flip Horizontal", tog(setting("flipCam", false) as boolean, v => setSetting("flipCam", v)))}
+                    {propRow("Audio Device", selIn(setting("audioDev", "Default Microphone") as string, v => setSetting("audioDev", v), ["Default Microphone","USB Microphone","Headset Mic","None"]))}
+                  </>)}
+                  {src.type === "browser" && (<>
+                    {propRow("URL", txtIn(setting("url", "") as string, v => setSetting("url", v), "https://example.com/overlay", 150))}
+                    {propRow("Width px",  numIn(setting("bw", 1920) as number, v => setSetting("bw", v), 1))}
+                    {propRow("Height px", numIn(setting("bh", 1080) as number, v => setSetting("bh", v), 1))}
+                    {propRow("Custom CSS", txtIn(setting("css", "") as string, v => setSetting("css", v), "body { background: transparent; }", 150))}
+                    {propRow("Refresh on activate", tog(setting("refresh", true) as boolean, v => setSetting("refresh", v)))}
+                  </>)}
+                  {src.type === "image" && (<>
+                    {propRow("Image Path / URL", txtIn(setting("src", "") as string, v => setSetting("src", v), "/path/to/logo.png", 150))}
+                    {propRow("Unload when hidden", tog(setting("unload", false) as boolean, v => setSetting("unload", v)))}
+                  </>)}
+                  {src.type === "text" && (<>
+                    {propRow("Text Content", txtIn(setting("text", "") as string, v => setSetting("text", v), "Enter text here...", 150))}
+                    {propRow("Font Size", numIn(setting("fontSize", 48) as number, v => setSetting("fontSize", v), 8, 400))}
+                    {propRow("Bold",   tog(setting("bold",   false) as boolean, v => setSetting("bold",   v)))}
+                    {propRow("Italic", tog(setting("italic", false) as boolean, v => setSetting("italic", v)))}
+                  </>)}
+                  {src.type === "display" && (<>
+                    {propRow("Monitor", selIn(setting("monitor", "Primary Monitor") as string, v => setSetting("monitor", v), ["Primary Monitor","Secondary Monitor","Monitor 3"]))}
+                    {propRow("Capture Cursor", tog(setting("cursor", true) as boolean, v => setSetting("cursor", v)))}
+                  </>)}
+                  {src.type === "alert" && (<>
+                    {propRow("Alert URL", txtIn(setting("alertUrl", "") as string, v => setSetting("alertUrl", v), "https://alerts.streamlabs.com/...", 150))}
+                    {propRow("Width px",  numIn(setting("aw", 800) as number, v => setSetting("aw", v), 1))}
+                    {propRow("Height px", numIn(setting("ah", 600) as number, v => setSetting("ah", v), 1))}
+                  </>)}
+                  {src.type === "scoreboard" && (<>
+                    {propRow("Sport Preset", selIn(setting("sport", "Billiards") as string, v => setSetting("sport", v), ["Billiards","Basketball","Football","Soccer","Tennis","Custom"]))}
+                    {propRow("Show Timer", tog(setting("showTimer", true) as boolean, v => setSetting("showTimer", v)))}
+                  </>)}
+                  {src.type === "lower-third" && (<>
+                    {propRow("Title",    txtIn(setting("title",    "") as string, v => setSetting("title",    v), "Player Name", 150))}
+                    {propRow("Subtitle", txtIn(setting("subtitle", "") as string, v => setSetting("subtitle", v), "Team / Role", 150))}
+                    {propRow("Duration (s)", numIn(setting("duration", 5) as number, v => setSetting("duration", v), 1, 60))}
+                  </>)}
+                  {!["camera","browser","image","text","display","alert","scoreboard","lower-third"].includes(src.type) && (
+                    <div style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11, paddingTop: 8 }}>No configurable settings for this source type.</div>
+                  )}
                 </div>
               </div>
-            ))}
-            <div className="flex items-center justify-between py-2 mt-1" style={{ borderTop: "1px solid #303D5A" }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8", fontWeight: 600 }}>Chroma Key</span>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-sm" style={{ background: "#22C55E", border: "1px solid #303D5A" }} />
-                <div className="w-8 h-4 rounded-full relative" style={{ background: "#22C55E" }}>
-                  <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-white" />
-                </div>
-              </div>
-            </div>
-            {selectedSource !== null && (
-              <div className="flex gap-2 mt-1">
-                {[
-                  { label: "Flip H", action: () => setTransform(selectedSource!, { flipH: !getTransform(selectedSource!).flipH }) },
-                  { label: "Flip V", action: () => setTransform(selectedSource!, { flipV: !getTransform(selectedSource!).flipV }) },
-                  { label: "Reset",  action: () => setTransforms(prev => { const n = { ...prev }; delete n[selectedSource!]; return n; }) },
-                ].map(({ label, action }) => (
-                  <button key={label} onClick={action} className="flex-1 py-1 rounded transition-colors hover:bg-white/5"
-                    style={{ background: "#1E2640", border: "1px solid #303D5A", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
 
       </div>
