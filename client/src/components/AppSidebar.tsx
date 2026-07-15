@@ -2,17 +2,17 @@
 // AppSidebar: 56px icon-only rail + children content area
 import React from "react";
 import { useLocation, Link } from "wouter";
-import { Tv2, Layers, MessageSquare, BarChart2, Settings } from "lucide-react";
-import { Trophy } from "lucide-react";
+import { Tv2, Layers, MessageSquare, BarChart2, Settings, Trophy, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { path: "/",          icon: Tv2,           label: "Dashboard",    glow: "rgba(255,90,44,0.65)",   active: "#FF5A2C" },
-  { path: "/scenes",    icon: Layers,         label: "Scene Editor", glow: "rgba(79,158,255,0.65)",  active: "#4F9EFF" },
-  { path: "/chat",      icon: MessageSquare,  label: "Chat",         glow: "rgba(168,85,247,0.65)",  active: "#A855F7" },
-  { path: "/analytics", icon: BarChart2,      label: "Analytics",    glow: "rgba(34,211,238,0.65)",  active: "#22D3EE" },
-  { path: "/scoreboard",icon: Trophy,         label: "Scoreboard",   glow: "rgba(34,197,94,0.65)",   active: "#22C55E" },
-  { path: "/settings",  icon: Settings,       label: "Settings",     glow: "rgba(120,120,160,0.45)", active: "#94A3B8" },
+  { path: "/",           icon: Tv2,           label: "Dashboard",    glow: "rgba(255,90,44,0.65)",   active: "#FF5A2C" },
+  { path: "/scenes",     icon: Layers,        label: "Scene Editor", glow: "rgba(79,158,255,0.65)",  active: "#4F9EFF" },
+  { path: "/chat",       icon: MessageSquare, label: "Chat",         glow: "rgba(168,85,247,0.65)",  active: "#A855F7" },
+  { path: "/analytics",  icon: BarChart2,     label: "Analytics",    glow: "rgba(34,211,238,0.65)",  active: "#22D3EE" },
+  { path: "/scoreboard", icon: Trophy,        label: "Scoreboard",   glow: "rgba(34,197,94,0.65)",   active: "#22C55E" },
+  { path: "/schedule",   icon: CalendarDays,  label: "Schedule",     glow: "rgba(250,204,21,0.65)",  active: "#FACC15" },
+  { path: "/settings",   icon: Settings,      label: "Settings",     glow: "rgba(120,120,160,0.45)", active: "#94A3B8" },
 ];
 
 type Props = { children?: React.ReactNode };
