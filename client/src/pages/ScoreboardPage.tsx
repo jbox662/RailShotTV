@@ -684,6 +684,7 @@ export default function ScoreboardPage() {
                       name: `Scoreboard — ${state.sport}`,
                       type: "scoreboard",
                       icon: (() => null) as React.ElementType,
+                      iconKey: "scoreboard",
                       color: "#22C55E",
                       visible: true,
                       locked: false,

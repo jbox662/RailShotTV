@@ -297,7 +297,7 @@ export default function SceneEditor() {
 
   const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
     if (!editingSceneId) { toast.error("No scene selected — go back to Dashboard and click Edit on a scene"); return; }
-    const newId = ctxAddSource(editingSceneId, { name, type, icon, color, visible: true, locked: false, settings: {} });
+    const newId = ctxAddSource(editingSceneId, { name, type, icon, iconKey: type, color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     toast.success(`Added "${name}"`);
   }, [editingSceneId, ctxAddSource]);
@@ -351,7 +351,7 @@ export default function SceneEditor() {
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x, y }]);
     // Add to sources list
     const IconComp = template.icon;
-    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: IconComp, color: template.color, visible: true, locked: false, settings: {} });
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: IconComp, iconKey: "Layers", color: template.color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     setDropFlash(true);
     setAddedToast(template.name);
@@ -363,7 +363,7 @@ export default function SceneEditor() {
   const handleAddTemplate = useCallback((template: typeof OVERLAY_TEMPLATES[0]) => {
     const newId = nextId.current++;
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x: 10 + Math.random() * 30, y: 10 + Math.random() * 30 }]);
-    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: template.icon, color: template.color, visible: true, locked: false, settings: {} });
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: template.icon, iconKey: "Layers", color: template.color, visible: true, locked: false, settings: {} });
     setSelectedSource(newId);
     setAddedToast(template.name);
     setTimeout(() => setAddedToast(null), 2500);

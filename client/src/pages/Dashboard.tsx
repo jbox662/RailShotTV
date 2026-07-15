@@ -13,6 +13,175 @@ import {
 } from "lucide-react";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 
+
+// ── Canvas source transform ───────────────────────────────────────────────────
+type CanvasTransform = { x: number; y: number; w: number; h: number };
+const DEFAULT_TRANSFORMS: Record<string, CanvasTransform> = {
+  camera:     { x: 0.05, y: 0.05, w: 0.4,  h: 0.4  },
+  display:    { x: 0,    y: 0,    w: 1,    h: 1    },
+  browser:    { x: 0.1,  y: 0.1,  w: 0.8,  h: 0.8  },
+  image:      { x: 0.05, y: 0.05, w: 0.3,  h: 0.3  },
+  text:       { x: 0.1,  y: 0.7,  w: 0.5,  h: 0.12 },
+  alert:      { x: 0.2,  y: 0.05, w: 0.6,  h: 0.25 },
+  scoreboard: { x: 0.05, y: 0.05, w: 0.9,  h: 0.9  },
+  lowerthird: { x: 0.0,  y: 0.72, w: 1.0,  h: 0.2  },
+};
+// ── Program Canvas ────────────────────────────────────────────────────────────
+function ProgramCanvas({
+  sources, selectedId, transforms, onSelect, onTransformChange,
+}: {
+  sources: SourceItem[];
+  selectedId: number | null;
+  transforms: Record<number, CanvasTransform>;
+  onSelect: (id: number | null) => void;
+  onTransformChange: (id: number, t: CanvasTransform) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: number; startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const resizeRef = useRef<{ id: number; handle: string; startX: number; startY: number; orig: CanvasTransform } | null>(null);
+
+  const getTransform = (s: SourceItem): CanvasTransform =>
+    transforms[s.id] ?? DEFAULT_TRANSFORMS[s.type] ?? { x: 0.1, y: 0.1, w: 0.5, h: 0.5 };
+
+  const normPos = (e: React.MouseEvent | MouseEvent) => {
+    const el = containerRef.current;
+    if (!el) return { nx: 0, ny: 0 };
+    const r = el.getBoundingClientRect();
+    return { nx: (e.clientX - r.left) / r.width, ny: (e.clientY - r.top) / r.height };
+  };
+
+  // Mouse move / up on window
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (dragRef.current) {
+        const { id, startX, startY, origX, origY } = dragRef.current;
+        const el = containerRef.current; if (!el) return;
+        const r = el.getBoundingClientRect();
+        const dx = (e.clientX - startX) / r.width;
+        const dy = (e.clientY - startY) / r.height;
+        const prev = transforms[id] ?? DEFAULT_TRANSFORMS["browser"];
+        onTransformChange(id, { ...prev, x: Math.max(0, Math.min(1 - prev.w, origX + dx)), y: Math.max(0, Math.min(1 - prev.h, origY + dy)) });
+      }
+      if (resizeRef.current) {
+        const { id, handle, startX, startY, orig } = resizeRef.current;
+        const el = containerRef.current; if (!el) return;
+        const r = el.getBoundingClientRect();
+        const dx = (e.clientX - startX) / r.width;
+        const dy = (e.clientY - startY) / r.height;
+        let { x, y, w, h } = orig;
+        const MIN = 0.05;
+        if (handle.includes("e")) w = Math.max(MIN, Math.min(1 - x, orig.w + dx));
+        if (handle.includes("s")) h = Math.max(MIN, Math.min(1 - y, orig.h + dy));
+        if (handle.includes("w")) { const nw = Math.max(MIN, orig.w - dx); x = orig.x + orig.w - nw; w = nw; }
+        if (handle.includes("n")) { const nh = Math.max(MIN, orig.h - dy); y = orig.y + orig.h - nh; h = nh; }
+        onTransformChange(id, { x, y, w, h });
+      }
+    };
+    const onUp = () => { dragRef.current = null; resizeRef.current = null; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [transforms, onTransformChange]);
+
+  const HANDLES = ["n","s","e","w","nw","ne","sw","se"];
+  const handleCursor: Record<string, string> = { n:"ns-resize", s:"ns-resize", e:"ew-resize", w:"ew-resize", nw:"nwse-resize", se:"nwse-resize", ne:"nesw-resize", sw:"nesw-resize" };
+  const handlePos = (h: string, w: number, ht: number): React.CSSProperties => {
+    const mid = "50%"; const edge = -4;
+    const top    = h.includes("n") ? edge : h.includes("s") ? "calc(100% - 4px)" : mid;
+    const left   = h.includes("w") ? edge : h.includes("e") ? "calc(100% - 4px)" : mid;
+    return { position: "absolute", top, left, transform: "translate(-50%,-50%)", width: 8, height: 8, borderRadius: 2, background: "#4F9EFF", border: "1px solid #fff", cursor: handleCursor[h], zIndex: 10 };
+  };
+
+  const visibleSources = sources.filter(s => s.visible);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ position: "absolute", inset: 0, background: "#000", overflow: "hidden" }}
+      onClick={e => { if (e.target === containerRef.current) onSelect(null); }}
+    >
+      {visibleSources.length === 0 && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#303D5A", pointerEvents: "none" }}>
+          <Monitor size={32} />
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Add sources to this scene</span>
+        </div>
+      )}
+      {visibleSources.map(src => {
+        const t = getTransform(src);
+        const isSelected = src.id === selectedId;
+        const url = src.settings?.url as string | undefined;
+        return (
+          <div
+            key={src.id}
+            style={{
+              position: "absolute",
+              left: `${t.x * 100}%`, top: `${t.y * 100}%`,
+              width: `${t.w * 100}%`, height: `${t.h * 100}%`,
+              border: isSelected ? `2px solid #4F9EFF` : `1px solid ${src.color}55`,
+              boxSizing: "border-box",
+              cursor: src.locked ? "not-allowed" : "move",
+              userSelect: "none",
+              zIndex: isSelected ? 20 : 1,
+            }}
+            onMouseDown={e => {
+              if (src.locked) return;
+              e.stopPropagation();
+              onSelect(src.id);
+              const { nx, ny } = normPos(e);
+              dragRef.current = { id: src.id, startX: e.clientX, startY: e.clientY, origX: t.x, origY: t.y };
+            }}
+          >
+            {/* Source content */}
+            {src.type === "browser" && url ? (
+              <iframe
+                src={url}
+                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: isSelected ? "none" : "auto" }}
+                title={src.name}
+                sandbox="allow-scripts allow-same-origin allow-forms"
+              />
+            ) : src.type === "camera" ? (
+              <div style={{ width: "100%", height: "100%", background: "#0A1A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <src.icon size={24} style={{ color: src.color, opacity: 0.5 }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: src.color, opacity: 0.7 }}>{src.name}</span>
+              </div>
+            ) : src.type === "image" && (src.settings?.src as string) ? (
+              <img src={src.settings.src as string} alt={src.name} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            ) : src.type === "text" ? (
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 8px" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: Math.max(10, (src.settings?.fontSize as number ?? 48) * 0.4), color: "#F8F8FF", fontWeight: src.settings?.bold ? 700 : 400, textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>
+                  {(src.settings?.text as string) || src.name}
+                </span>
+              </div>
+            ) : (
+              <div style={{ width: "100%", height: "100%", background: src.color + "18", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <src.icon size={20} style={{ color: src.color, opacity: 0.6 }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: src.color, opacity: 0.8 }}>{src.name}</span>
+              </div>
+            )}
+            {/* Label bar */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.65)", padding: "1px 4px", display: "flex", alignItems: "center", gap: 3, pointerEvents: "none" }}>
+              <src.icon size={8} style={{ color: src.color, flexShrink: 0 }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
+              {url && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: "#22D3EE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{url}</span>}
+            </div>
+            {/* Resize handles */}
+            {isSelected && !src.locked && HANDLES.map(h => (
+              <div
+                key={h}
+                style={handlePos(h, t.w, t.h)}
+                onMouseDown={e => {
+                  e.stopPropagation();
+                  resizeRef.current = { id: src.id, handle: h, startX: e.clientX, startY: e.clientY, orig: { ...t } };
+                }}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Source type catalogue ─────────────────────────────────────────────────────
 const SOURCE_TYPES = [
   { type: "display",    label: "Display Capture", icon: Monitor,   color: "#4F9EFF" },
@@ -269,6 +438,15 @@ export default function Dashboard() {
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
   const [showAddSource, setShowAddSource]       = useState(false);
   const [sourceTransforms, setSourceTransforms] = useState<Record<number, Record<string, number | boolean>>>({});
+  const [canvasTransforms, setCanvasTransforms] = useState<Record<number, CanvasTransform>>(() => {
+    try { const s = localStorage.getItem("railshot_canvas_transforms_v1"); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("railshot_canvas_transforms_v1", JSON.stringify(canvasTransforms)); } catch {}
+  }, [canvasTransforms]);
+  const handleCanvasTransformChange = useCallback((id: number, t: CanvasTransform) => {
+    setCanvasTransforms(p => ({ ...p, [id]: t }));
+  }, []);
 
   // Overlay browser
   const [overlayBrowserOpen, setOverlayBrowserOpen] = useState(false);
@@ -301,7 +479,7 @@ export default function Dashboard() {
   // Handlers
   const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
     if (activeSceneId === null) { toast.error("Create a scene first"); return; }
-    const id = addSource(activeSceneId, { name, type, icon, color, visible: true, locked: false, settings: {} });
+    const id = addSource(activeSceneId, { name, type, icon, iconKey: type, color, visible: true, locked: false, settings: {} });
     setSelectedSourceId(id);
     toast.success(`Added "${name}"`);
   }, [activeSceneId, addSource]);
@@ -525,28 +703,23 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: "#0A0E1A", position: "relative" }}>
               <div style={{ position: "relative", width: "100%", maxWidth: "calc((100vh - 44px - 32px - 36px - 80px) * 16/9)", aspectRatio: "16/9", background: "#000", border: "1px solid #2A3350", borderRadius: 4, overflow: "hidden" }}>
-                {sources.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center w-full h-full gap-2" style={{ color: "#303D5A" }}>
+                {activeSceneId === null ? (
+                  <div className="flex flex-col items-center justify-center w-full h-full gap-2" style={{ color: "#303D5A", position: "absolute", inset: 0 }}>
                     <Monitor size={32} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>
-                      {activeSceneId === null ? "Select or create a scene" : "Add sources to this scene"}
-                    </span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Select or create a scene</span>
                   </div>
                 ) : (
-                  <div className="w-full h-full flex flex-wrap gap-1 p-2 items-start content-start" style={{ background: "#0A0E1A" }}>
-                    {sources.filter(s => s.visible).map(s => (
-                      <div key={s.id} onClick={() => setSelectedSourceId(s.id)}
-                        className="flex items-center gap-1 px-2 py-1 rounded cursor-pointer"
-                        style={{ border: `1px solid ${s.id === selectedSourceId ? s.color : s.color + "40"}`, background: s.color + "12", boxShadow: s.id === selectedSourceId ? `0 0 8px ${s.color}40` : "none" }}>
-                        <s.icon size={10} style={{ color: s.color }} />
-                        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: s.id === selectedSourceId ? "#F8F8FF" : "#8892A4" }}>{s.name}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <ProgramCanvas
+                    sources={sources}
+                    selectedId={selectedSourceId}
+                    transforms={canvasTransforms}
+                    onSelect={setSelectedSourceId}
+                    onTransformChange={handleCanvasTransformChange}
+                  />
                 )}
                 {/* Corner markers */}
                 {(["top-left","top-right","bottom-left","bottom-right"] as const).map(pos => (
-                  <div key={pos} style={{ position: "absolute", width: 16, height: 16,
+                  <div key={pos} style={{ position: "absolute", width: 16, height: 16, pointerEvents: "none",
                     top: pos.includes("top") ? 4 : "auto", bottom: pos.includes("bottom") ? 4 : "auto",
                     left: pos.includes("left") ? 4 : "auto", right: pos.includes("right") ? 4 : "auto",
                     borderTop: pos.includes("top") ? "2px solid #303D5A" : "none",

@@ -1,4 +1,17 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import {
+  Monitor, Camera, Globe, Type, ImageIcon, Bell, Trophy, AlignLeft,
+  Layers, LayoutGrid, Mic, Video, Music, Tv,
+} from "lucide-react";
+
+// ── Icon registry (serialisable key → component) ──────────────────────────────
+const ICON_MAP: Record<string, React.ElementType> = {
+  Monitor, Camera, Globe, Type, ImageIcon, Bell, Trophy, AlignLeft,
+  Layers, LayoutGrid, Mic, Video, Music, Tv,
+};
+const iconKey = (icon: React.ElementType): string =>
+  Object.keys(ICON_MAP).find(k => ICON_MAP[k] === icon) ?? "Layers";
+const iconFromKey = (key: string): React.ElementType => ICON_MAP[key] ?? Layers;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type SourceItem = {
@@ -6,6 +19,7 @@ export type SourceItem = {
   name: string;
   type: string;
   icon: React.ElementType;
+  iconKey: string;
   color: string;
   visible: boolean;
   locked: boolean;
@@ -18,11 +32,52 @@ export type SceneItem = {
   sources: SourceItem[];
 };
 
+// ── Serialisation helpers ─────────────────────────────────────────────────────
+type SerialSource = Omit<SourceItem, "icon"> & { iconKey: string };
+type SerialScene  = { id: number; name: string; sources: SerialSource[] };
+
+function serialiseScenes(scenes: SceneItem[]): SerialScene[] {
+  return scenes.map(s => ({
+    ...s,
+    sources: s.sources.map(src => {
+      const { icon, ...rest } = src;
+      return { ...rest, iconKey: iconKey(icon) };
+    }),
+  }));
+}
+
+function deserialiseScenes(raw: SerialScene[]): SceneItem[] {
+  return raw.map(s => ({
+    ...s,
+    sources: s.sources.map(src => ({
+      ...src,
+      icon: iconFromKey(src.iconKey),
+    })),
+  }));
+}
+
+const LS_KEY = "railshot_scenes_v2";
+
+function loadFromStorage(): { scenes: SceneItem[]; activeId: number | null; nextId: number } {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return { scenes: [], activeId: null, nextId: 1 };
+    const parsed = JSON.parse(raw) as { scenes: SerialScene[]; activeId: number | null; nextId: number };
+    return {
+      scenes: deserialiseScenes(parsed.scenes ?? []),
+      activeId: parsed.activeId ?? null,
+      nextId: parsed.nextId ?? 1,
+    };
+  } catch {
+    return { scenes: [], activeId: null, nextId: 1 };
+  }
+}
+
 // ── Context shape ─────────────────────────────────────────────────────────────
 type SceneContextType = {
   scenes: SceneItem[];
   activeSceneId: number | null;
-  editingSceneId: number | null;   // scene currently open in Scene Editor
+  editingSceneId: number | null;
   nextSceneId: number;
 
   setActiveSceneId: (id: number | null) => void;
@@ -53,10 +108,25 @@ let _nextId = 1;
 const freshId = () => _nextId++;
 
 export function SceneProvider({ children }: { children: ReactNode }) {
-  const [scenes, setScenes] = useState<SceneItem[]>([]);
-  const [activeSceneId, setActiveSceneId] = useState<number | null>(null);
+  const initial = loadFromStorage();
+  // Sync _nextId with stored value so IDs don't collide after reload
+  if (initial.nextId > _nextId) _nextId = initial.nextId;
+
+  const [scenes, setScenes] = useState<SceneItem[]>(initial.scenes);
+  const [activeSceneId, setActiveSceneId] = useState<number | null>(initial.activeId);
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [nextSceneId, setNextSceneId] = useState(1);
+  const [nextSceneId, setNextSceneId] = useState(initial.nextId);
+
+  // ── Persist to localStorage on every change ─────────────────────────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        scenes: serialiseScenes(scenes),
+        activeId: activeSceneId,
+        nextId: nextSceneId,
+      }));
+    } catch { /* quota exceeded — silently ignore */ }
+  }, [scenes, activeSceneId, nextSceneId]);
 
   // ── Scene CRUD ──────────────────────────────────────────────────────────────
   const addScene = useCallback(() => {
