@@ -147,9 +147,7 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
               background: "rgba(0,0,0,0.3)", borderLeft: `1px solid ${theme.accent}22`, borderRight: `1px solid ${theme.accent}22`,
             }}>
               <div style={{ padding: "0 16px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: state.teamA.color, lineHeight: 1 }}>
-                  {state.teamA.score}
-                </div>
+                <AnimatedScore value={state.teamA.score} color={state.teamA.color} fontSize={28} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", gap: 2 }}>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: subColor, letterSpacing: "0.1em" }}>
@@ -160,9 +158,7 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
                 </div>
               </div>
               <div style={{ padding: "0 16px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: state.teamB.color, lineHeight: 1 }}>
-                  {state.teamB.score}
-                </div>
+                <AnimatedScore value={state.teamB.score} color={state.teamB.color} fontSize={28} />
               </div>
             </div>
             {/* Team B */}
@@ -203,7 +199,7 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
           <div style={{ display: "flex", alignItems: "center", gap: 20, justifyContent: "center" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: textColor, marginBottom: 4 }}>{state.teamA.name || "Team A"}</div>
-              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 40, color: state.teamA.color, lineHeight: 1 }}>{state.teamA.score}</div>
+              <AnimatedScore value={state.teamA.score} color={state.teamA.color} fontSize={40} />
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: subColor, marginBottom: 4 }}>{preset.periodLabel.toUpperCase()} {state.period}</div>
@@ -212,7 +208,7 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: textColor, marginBottom: 4 }}>{state.teamB.name || "Team B"}</div>
-              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 40, color: state.teamB.color, lineHeight: 1 }}>{state.teamB.score}</div>
+              <AnimatedScore value={state.teamB.score} color={state.teamB.color} fontSize={40} />
             </div>
           </div>
         </div>
@@ -236,12 +232,12 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: textColor }}>{state.teamA.name || "A"}</span>
-              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: state.teamA.color, lineHeight: 1 }}>{state.teamA.score}</span>
+              <AnimatedScore value={state.teamA.score} color={state.teamA.color} fontSize={18} />
             </div>
             <div style={{ height: 1, background: `${theme.accent}33` }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: textColor }}>{state.teamB.name || "B"}</span>
-              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: state.teamB.color, lineHeight: 1 }}>{state.teamB.score}</span>
+              <AnimatedScore value={state.teamB.score} color={state.teamB.color} fontSize={18} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: subColor }}>{preset.periodLabel.toUpperCase()} {state.period}</span>
@@ -274,13 +270,87 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: subColor }}>{preset.periodLabel.toUpperCase()} {state.period} · {formatTime(state.timerSeconds)}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: state.teamB.color, marginRight: 8 }}>{state.teamB.score}</span>
+          <AnimatedScore value={state.teamB.score} color={state.teamB.color} fontSize={22} />
           <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: textColor }}>{state.teamB.name || "Team B"}</span>
           <div style={{ width: 24, height: 24, borderRadius: 3, background: state.teamB.color, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: 11, color: "#fff" }}>{state.teamB.logo}</div>
         </div>
       </div>
     </div>
   );
+}
+
+// ─── Animated Score ───────────────────────────────────────────────────────────
+// Each digit rolls up (increment) or down (decrement) with a slot-machine flip.
+function AnimatedScore({
+  value,
+  color,
+  fontSize = 28,
+  fontFamily = "'Bebas Neue', sans-serif",
+}: {
+  value: number;
+  color: string;
+  fontSize?: number;
+  fontFamily?: string;
+}) {
+  const prevRef = useRef(value);
+  const [displayedValue, setDisplayedValue] = React.useState(value);
+  const [animKey, setAnimKey] = React.useState(0);
+  const [direction, setDirection] = React.useState<"up" | "down">("up");
+
+  React.useEffect(() => {
+    if (value === prevRef.current) return;
+    const dir = value > prevRef.current ? "up" : "down";
+    setDirection(dir);
+    setAnimKey(k => k + 1);
+    prevRef.current = value;
+    const t = setTimeout(() => setDisplayedValue(value), 150);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  const digits = String(displayedValue).split("");
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        lineHeight: 1,
+        overflow: "hidden",
+        fontFamily,
+        fontSize,
+        color,
+      }}
+    >
+      {digits.map((d, i) => (
+        <span
+          key={`${animKey}-${i}`}
+          style={{
+            display: "inline-block",
+            animation: `scoreRoll${direction === "up" ? "Up" : "Down"} 0.3s cubic-bezier(0.23,1,0.32,1) both`,
+          }}
+        >
+          {d}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// Inject keyframes once into the document head
+if (typeof document !== "undefined" && !document.getElementById("score-roll-keyframes")) {
+  const style = document.createElement("style");
+  style.id = "score-roll-keyframes";
+  style.textContent = `
+    @keyframes scoreRollUp {
+      0%   { transform: translateY(60%); opacity: 0; }
+      100% { transform: translateY(0);   opacity: 1; }
+    }
+    @keyframes scoreRollDown {
+      0%   { transform: translateY(-60%); opacity: 0; }
+      100% { transform: translateY(0);    opacity: 1; }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 // ─── Score Button ─────────────────────────────────────────────────────────────
@@ -482,8 +552,8 @@ export default function ScoreboardPage() {
                 {/* Score control */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <ScoreBtn onClick={() => updateTeamA({ score: Math.max(0, state.teamA.score - 1) })} color={state.teamA.color}><Minus size={14} /></ScoreBtn>
-                  <div style={{ flex: 1, textAlign: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, color: state.teamA.color, lineHeight: 1 }}>
-                    {state.teamA.score}
+                  <div style={{ flex: 1, textAlign: "center", lineHeight: 1 }}>
+                    <AnimatedScore value={state.teamA.score} color={state.teamA.color} fontSize={32} />
                   </div>
                   <ScoreBtn onClick={() => updateTeamA({ score: state.teamA.score + 1 })} color={state.teamA.color}><Plus size={14} /></ScoreBtn>
                 </div>
@@ -520,8 +590,8 @@ export default function ScoreboardPage() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <ScoreBtn onClick={() => updateTeamB({ score: Math.max(0, state.teamB.score - 1) })} color={state.teamB.color}><Minus size={14} /></ScoreBtn>
-                  <div style={{ flex: 1, textAlign: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, color: state.teamB.color, lineHeight: 1 }}>
-                    {state.teamB.score}
+                  <div style={{ flex: 1, textAlign: "center", lineHeight: 1 }}>
+                    <AnimatedScore value={state.teamB.score} color={state.teamB.color} fontSize={32} />
                   </div>
                   <ScoreBtn onClick={() => updateTeamB({ score: state.teamB.score + 1 })} color={state.teamB.color}><Plus size={14} /></ScoreBtn>
                 </div>
