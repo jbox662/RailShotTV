@@ -4,40 +4,15 @@ import AppSidebar from "@/components/AppSidebar";
 import { TrendingUp, Users, Clock, DollarSign, Activity, Download } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
-const generateViewerData = () => Array.from({ length: 24 }, (_, i) => ({
-  time: `${String(i).padStart(2,"0")}:00`,
-  viewers: Math.floor(800 + Math.random() * 2400 + Math.sin(i * 0.5) * 600),
-}));
+const generateViewerData = () => [] as { time: string; viewers: number }[];
 
-const HEALTH_DATA = Array.from({ length: 30 }, (_, i) => ({
-  t: i,
-  bitrate: 8000 + Math.sin(i * 0.4) * 800 + Math.random() * 400,
-  cpu: 22 + Math.sin(i * 0.3) * 8 + Math.random() * 5,
-  gpu: 38 + Math.cos(i * 0.35) * 10 + Math.random() * 5,
-  fps: 59 + Math.random() * 1.5,
-}));
+const HEALTH_DATA: { t: number; bitrate: number; cpu: number; gpu: number; fps: number }[] = [];
 
-const SESSIONS = [
-  { date: "Jul 14, 2026", duration: "2h 18m", peak: 3152, avg: 2341, revenue: "$184.50", quality: 98 },
-  { date: "Jul 13, 2026", duration: "1h 52m", peak: 2890, avg: 2105, revenue: "$142.00", quality: 97 },
-  { date: "Jul 12, 2026", duration: "3h 04m", peak: 4210, avg: 3180, revenue: "$267.80", quality: 99 },
-  { date: "Jul 11, 2026", duration: "1h 37m", peak: 1980, avg: 1540, revenue: "$98.20", quality: 95 },
-  { date: "Jul 10, 2026", duration: "2h 45m", peak: 3640, avg: 2780, revenue: "$221.40", quality: 98 },
-];
+const SESSIONS: { date: string; duration: string; peak: number; avg: number; revenue: string; quality: number }[] = [];
 
-const AUDIENCE = [
-  { platform: "Twitch", pct: 54, color: "#A855F7" },
-  { platform: "YouTube", pct: 31, color: "#EF4444" },
-  { platform: "Facebook", pct: 15, color: "#4F9EFF" },
-];
+const AUDIENCE: { platform: string; pct: number; color: string }[] = [];
 
-const COUNTRIES = [
-  { name: "United States", pct: 42 },
-  { name: "Canada", pct: 18 },
-  { name: "United Kingdom", pct: 12 },
-  { name: "Germany", pct: 8 },
-  { name: "Australia", pct: 6 },
-];
+const COUNTRIES: { name: string; pct: number }[] = [];
 
 export default function Analytics() {
   const [viewerData] = useState(generateViewerData);

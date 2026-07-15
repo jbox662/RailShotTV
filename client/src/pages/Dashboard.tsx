@@ -5,21 +5,11 @@ import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
 import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2 } from "lucide-react";
 
-const SCENES = [
-  { id: 1, name: "Main View", live: true },
-  { id: 2, name: "Wide Angle" },
-  { id: 3, name: "Replay" },
-  { id: 4, name: "Interview" },
-  { id: 5, name: "Scoreboard" },
-  { id: 6, name: "End Screen" },
-];
+// Scenes populated from OBS at runtime
+const SCENES: { id: number; name: string; live?: boolean }[] = [];
 
-const CHANNELS = [
-  { name: "Host Mic", sub: "XLR Input 1", icon: Mic, color: "#A855F7", levels: [0.6,0.7,0.5,0.8,0.6,0.4,0.7,0.5,0.6,0.8,0.5,0.7,0.6,0.4,0.5,0.7,0.8,0.6,0.5,0.7], db: "-3.2" },
-  { name: "Commentator", sub: "USB Audio", icon: Mic, color: "#4F9EFF", levels: [0.4,0.5,0.3,0.6,0.4,0.5,0.3,0.7,0.5,0.4,0.6,0.3,0.5,0.4,0.6,0.5,0.3,0.4,0.5,0.6], db: "-10.4" },
-  { name: "Music", sub: "Spotify", icon: Music, color: "#22C55E", levels: [0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3,0.2,0.3], db: "-18.1" },
-  { name: "Alert SFX", sub: "Stream Elements", icon: Bell, color: "#FBBF24", levels: [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1], db: "-28.0" },
-];
+// Audio channels populated from OBS audio manager at runtime
+const CHANNELS: { name: string; sub: string; icon: typeof Mic; color: string; levels: number[]; db: string }[] = [];
 
 function VUMeter({ levels, color }: { levels: number[]; color: string }) {
   const [tick, setTick] = useState(0);
@@ -76,23 +66,16 @@ function BitrateSparkline() {
 }
 
 export default function Dashboard() {
-  const [activeScene, setActiveScene] = useState(1);
-  const [tc, setTc] = useState("01:23:49");
-  const [viewers, setViewers] = useState(2853);
-  const [bitrate, setBitrate] = useState(8642);
+  const [activeScene, setActiveScene] = useState<number | null>(null);
+  const [tc, setTc] = useState("00:00:00");
+  const [viewers, setViewers] = useState(0);
+  const [bitrate, setBitrate] = useState(0);
   const [isLive, setIsLive] = useState(false);
   const [showGoLive, setShowGoLive] = useState(false);
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setViewers(v => Math.max(2800, v + Math.floor((Math.random() - 0.48) * 5)));
-      setBitrate(v => Math.max(7000, Math.min(10000, v + Math.floor((Math.random() - 0.48) * 120))));
-    }, 1200);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    let secs = 83 * 60 + 49;
+    if (!isLive) return;
+    let secs = 0;
     const t = setInterval(() => {
       secs++;
       const h = String(Math.floor(secs / 3600)).padStart(2, "0");
@@ -101,7 +84,7 @@ export default function Dashboard() {
       setTc(`${h}:${m}:${s}`);
     }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [isLive]);
 
   return (
     <AppSidebar>
@@ -307,7 +290,7 @@ export default function Dashboard() {
           {/* Viewers + Uptime */}
           <div className="grid grid-cols-2 gap-0" style={{ borderBottom: "1px solid #2A3350" }}>
             {[
-              { label: "Viewers", value: viewers.toLocaleString(), sub: "Peak: 3,152", color: "#4F9EFF", icon: Users },
+{ label: "Viewers", value: viewers > 0 ? viewers.toLocaleString() : "—", sub: isLive ? "Live now" : "Offline", color: "#4F9EFF", icon: Users },
               { label: "Uptime", value: tc, sub: "Session Live", color: "#22D3EE", icon: Clock },
             ].map(({ label, value, sub, color, icon: Icon }) => (
               <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5" style={{ borderRight: label === "Viewers" ? "1px solid #2A3350" : "none" }}>
@@ -328,9 +311,9 @@ export default function Dashboard() {
               <Activity size={11} style={{ color: "#22C55E" }} />
             </div>
             {[
-              { label: "CPU", pct: 28, color: "#22C55E" },
-              { label: "GPU", pct: 42, color: "#22C55E" },
-              { label: "Network", pct: 15, color: "#22C55E", text: "Excellent" },
+            { label: "CPU",     pct: 0,  color: "#22C55E" },
+            { label: "GPU",     pct: 0,  color: "#22C55E" },
+            { label: "Network", pct: 0,  color: "#22C55E", text: isLive ? "—" : "Offline" },
             ].map(({ label, pct, color, text }) => (
               <div key={label} className="flex items-center gap-2 mb-1.5">
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8", width: 52 }}>{label}</span>

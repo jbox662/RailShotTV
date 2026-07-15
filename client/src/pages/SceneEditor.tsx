@@ -199,20 +199,16 @@ const OVERLAY_TEMPLATES = [
 ];
 
 // ── Source list ───────────────────────────────────────────────────────────────
-const INIT_SOURCES = [
-  { id: 1, name: "Display Capture",  type: "capture", icon: Monitor, color: "#4F9EFF", visible: true,  locked: false },
-  { id: 2, name: "Camera",           type: "camera",  icon: Camera,  color: "#A855F7", visible: true,  locked: false, selected: true },
-  { id: 3, name: "Score Overlay",    type: "text",    icon: Type,    color: "#FF5A2C", visible: true,  locked: false },
-  { id: 4, name: "Brand Watermark",  type: "image",   icon: Image,   color: "#22C55E", visible: true,  locked: true  },
-  { id: 5, name: "Alert Overlay",    type: "alert",   icon: Zap,     color: "#FBBF24", visible: false, locked: false },
-];
+// Sources start empty — populated when OBS sources are added
+type SourceItem = { id: number; name: string; type: string; icon: React.ElementType; color: string; visible: boolean; locked: boolean; selected?: boolean };
+const INIT_SOURCES: SourceItem[] = [];
 const TRANSITIONS = ["Cut","Fade","Slide","Wipe","Stinger"];
 
 // ── Dropped overlay indicator on canvas ──────────────────────────────────────
 interface CanvasOverlay { id: string; name: string; color: string; x: number; y: number }
 
 export default function SceneEditor() {
-  const [selectedSource, setSelectedSource] = useState(2);
+  const [selectedSource, setSelectedSource] = useState<number | null>(null);
   const [activeTrans, setActiveTrans]       = useState("Cut");
   const [sources, setSources]               = useState(INIT_SOURCES);
   const [browserOpen, setBrowserOpen]       = useState(true);

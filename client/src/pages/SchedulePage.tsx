@@ -75,68 +75,8 @@ const SPORT_ICONS: Record<string, string> = {
   "Custom Event": "🏆",
 };
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
-function makeMockEvents(): ScheduledEvent[] {
-  const now = new Date();
-  const add = (h: number, m = 0) => new Date(now.getTime() + h * 3600000 + m * 60000);
-  const sub = (h: number) => new Date(now.getTime() - h * 3600000);
-  return [
-    {
-      id: "1", title: "Championship Finals — Table 1",
-      description: "Season championship finals — main stage event.",
-      sport: "Custom Event", venue: "Main Arena — Stage 1",
-      startTime: add(0, 8), durationMinutes: 180,
-      platform: "YouTube", status: "upcoming",
-      thumbnail: "", remindersEnabled: true,
-      tags: ["championship", "finals"], estimatedViewers: 1200,
-    },
-    {
-      id: "2", title: "Pro League Quarterfinals",
-      description: "Pro league quarterfinal match.",
-      sport: "Esports", venue: "Main Arena — Stage 2",
-      startTime: add(3), durationMinutes: 120,
-      platform: "Twitch", status: "upcoming",
-      thumbnail: "", remindersEnabled: false,
-      tags: ["pro-league", "quarterfinals"], estimatedViewers: 850,
-    },
-    {
-      id: "3", title: "Youth Division Semifinal",
-      description: "Youth division semifinal — under 21 category.",
-      sport: "Basketball", venue: "Side Room — Court A",
-      startTime: add(6, 30), durationMinutes: 90,
-      platform: "Facebook", status: "upcoming",
-      thumbnail: "", remindersEnabled: true,
-      tags: ["youth", "semifinal"], estimatedViewers: 320,
-    },
-    {
-      id: "4", title: "Exhibition Match — Special Guests",
-      description: "Special exhibition match with invited professionals.",
-      sport: "Boxing", venue: "VIP Lounge — Ring 1",
-      startTime: add(24), durationMinutes: 60,
-      platform: "YouTube", status: "upcoming",
-      thumbnail: "", remindersEnabled: false,
-      tags: ["exhibition", "vip"], estimatedViewers: 2100,
-    },
-    {
-      id: "5", title: "Regional Open — Round 1",
-      description: "Regional open tournament, round 1.",
-      sport: "Soccer", venue: "Main Arena — Field 1",
-      startTime: add(48), durationMinutes: 240,
-      platform: "YouTube", status: "upcoming",
-      thumbnail: "", remindersEnabled: true,
-      tags: ["regional", "open"], estimatedViewers: 560,
-    },
-    {
-      id: "6", title: "Last Night — Grand Final",
-      description: "Grand final from last night's event.",
-      sport: "Custom Event", venue: "Main Arena",
-      startTime: sub(18), durationMinutes: 200,
-      platform: "YouTube", status: "completed",
-      thumbnail: "", remindersEnabled: false,
-      tags: ["grand-final"], estimatedViewers: 3400,
-    },
-  ];
-}
+// ── Event data — populated by user via New Event modal ──────────────────────
+function makeMockEvents(): ScheduledEvent[] { return []; }
 
 // ── Countdown component ────────────────────────────────────────────────────────
 function CountdownTimer({ target, status }: { target: Date; status: EventStatus }) {

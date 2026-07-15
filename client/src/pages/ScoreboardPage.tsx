@@ -314,14 +314,14 @@ export default function ScoreboardPage() {
     sport: "generic",
     layout: "lower-third",
     theme: "dark",
-    teamA: { name: "Team Alpha", score: 0, color: "#FF5A2C", logo: "A" },
-    teamB: { name: "Team Beta",  score: 0, color: "#4F9EFF", logo: "B" },
+    teamA: { name: "", score: 0, color: "#FF5A2C", logo: "A" },
+    teamB: { name: "", score: 0, color: "#4F9EFF", logo: "B" },
     period: "1",
     periodLabel: "Period",
     timerSeconds: 0,
     timerRunning: false,
     timerDirection: "up",
-    eventTitle: "LIVE EVENT",
+    eventTitle: "",
     visible: true,
   });
 

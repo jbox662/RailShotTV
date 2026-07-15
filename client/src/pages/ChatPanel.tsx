@@ -54,32 +54,11 @@ const PLATFORM_META: Record<Platform, { label: string; color: string; bg: string
   facebook: { label: "Facebook", color: "#1877F2", bg: "#1877F220" },
 };
 
-const DEMO_MESSAGES: ChatMessage[] = [
-  { id: 1,  platform: "twitch",  user: "StreamKing99",   color: "#9146FF", msg: "LET'S GOOO!! 🔥🔥🔥", time: "01:23:41" },
-  { id: 2,  platform: "youtube", user: "EventWatcher",   color: "#FF0000", msg: "Amazing production quality!", time: "01:23:43" },
-  { id: 3,  platform: "twitch",  user: "ProViewer",      color: "#4F9EFF", msg: "This setup is insane PogChamp", time: "01:23:45" },
-  { id: 4,  platform: "youtube", user: "StreamerFan",    color: "#FBBF24", msg: "Super Chat $25 — Keep it up!", time: "01:23:47", isDonation: true, donationAmount: "$25.00", isHighlight: true },
-  { id: 5,  platform: "twitch",  user: "NewSub_Mike",    color: "#A78BFA", msg: "just subscribed for 3 months! 🎉", time: "01:23:49", isSub: true, isHighlight: true },
-  { id: 6,  platform: "twitch",  user: "RailShotFan",    color: "#F87171", msg: "Best stream on the platform rn", time: "01:23:51" },
-  { id: 7,  platform: "youtube", user: "EventQueen",     color: "#34D399", msg: "That angle though 🎯", time: "01:23:53" },
-  { id: 8,  platform: "twitch",  user: "LiveAndRun",     color: "#60A5FA", msg: "GG EZ", time: "01:23:55" },
-  { id: 9,  platform: "twitch",  user: "Moderator_Dan",  color: "#34D399", msg: "Keep chat clean everyone 🙏", time: "01:23:58", isMod: true, badge: "MOD", badgeColor: "#22C55E" },
-  { id: 10, platform: "youtube", user: "EventFan_2026",  color: "#A78BFA", msg: "First time watching, this is amazing!", time: "01:24:01" },
-  { id: 11, platform: "twitch",  user: "GiftSub_Hero",   color: "#F59E0B", msg: "gifted 5 subs to the community! 🎁", time: "01:24:04", isSub: true, isHighlight: true },
-  { id: 12, platform: "twitch",  user: "ChatGuru",       color: "#818CF8", msg: "Clip that!! ClipIt", time: "01:24:06" },
-  { id: 13, platform: "youtube", user: "SuperFan_YT",    color: "#FF6B6B", msg: "Super Chat $10 — Love this stream!", time: "01:24:09", isDonation: true, donationAmount: "$10.00", isHighlight: true },
-  { id: 14, platform: "twitch",  user: "NightOwl_TV",    color: "#22D3EE", msg: "Been watching for 2 hours straight 👀", time: "01:24:11" },
-  { id: 15, platform: "facebook",user: "FB_Viewer_Joe",  color: "#1877F2", msg: "Watching from Facebook Live! 🙌", time: "01:24:13" },
-];
+// Messages arrive from real platform WebSocket connections — no demo data
+const DEMO_MESSAGES: ChatMessage[] = [];
 
-const DEMO_ACTIVITY: ActivityEvent[] = [
-  { id: 1, type: "follow",   platform: "twitch",  user: "NewViewer_42",    detail: "just followed",          time: "2s",  color: "#22C55E" },
-  { id: 2, type: "sub",      platform: "twitch",  user: "NewSub_Mike",     detail: "3-month sub",            time: "12s", color: "#A855F7" },
-  { id: 3, type: "superchat",platform: "youtube", user: "StreamerFan",     detail: "Super Chat",  amount: "$25.00", time: "24s", color: "#FBBF24" },
-  { id: 4, type: "giftsub",  platform: "twitch",  user: "GiftSub_Hero",    detail: "gifted 5 subs",          time: "42s", color: "#F59E0B" },
-  { id: 5, type: "raid",     platform: "twitch",  user: "StreamMasterTV",  detail: "raided with 142 viewers",time: "2m",  color: "#4F9EFF" },
-  { id: 6, type: "follow",   platform: "youtube", user: "EventLover_YT",   detail: "subscribed",             time: "3m",  color: "#FF0000" },
-];
+// Activity events arrive from real platform webhooks — no demo data
+const DEMO_ACTIVITY: ActivityEvent[] = [];
 
 const ACTIVITY_ICONS: Record<string, typeof Heart> = {
   follow: Heart, sub: Star, resub: Star, giftsub: Gift,
@@ -298,9 +277,9 @@ export default function ChatPanel() {
   const [emoteOnly, setEmoteOnly] = useState(false);
   const [muteAlerts, setMuteAlerts] = useState(false);
   const [connections, setConnections] = useState<Record<Platform, PlatformConn>>({
-    twitch:   { status: "connected",    channel: "railshottv",   viewers: 1842 },
-    youtube:  { status: "connected",    channel: "@RailShotTV",  viewers: 1011 },
-    facebook: { status: "disconnected", channel: "",             viewers: 0 },
+    twitch:   { status: "disconnected", channel: "", viewers: 0 },
+    youtube:  { status: "disconnected", channel: "", viewers: 0 },
+    facebook: { status: "disconnected", channel: "", viewers: 0 },
   });
   const bottomRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(100);
@@ -309,27 +288,6 @@ export default function ChatPanel() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Simulate incoming messages every 4–8 seconds
-  useEffect(() => {
-    const DEMO_INCOMING = [
-      { platform: "twitch" as Platform,  user: "FastViewer",    color: "#60A5FA", msg: "PogChamp PogChamp PogChamp" },
-      { platform: "youtube" as Platform, user: "YT_Watcher",    color: "#FF6B6B", msg: "Incredible stream quality!" },
-      { platform: "twitch" as Platform,  user: "CheerLeader",   color: "#A78BFA", msg: "Cheer100 Let's go!! 🎉" },
-      { platform: "twitch" as Platform,  user: "LateNightFan",  color: "#34D399", msg: "Just got here, what did I miss?" },
-      { platform: "youtube" as Platform, user: "GlobalViewer",  color: "#FBBF24", msg: "Watching from Australia 🇦🇺" },
-      { platform: "facebook" as Platform,user: "FB_Fan_Sarah",  color: "#1877F2", msg: "Sharing this with everyone!" },
-    ];
-    let idx = 0;
-    const interval = setInterval(() => {
-      const demo = DEMO_INCOMING[idx % DEMO_INCOMING.length];
-      const now = new Date();
-      const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
-      setMessages(prev => [...prev.slice(-99), { ...demo, id: nextId.current++, time }]);
-      idx++;
-    }, 5000 + Math.random() * 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleConnect = useCallback((platform: Platform) => {
     setConnections(prev => ({ ...prev, [platform]: { ...prev[platform], status: "connecting" } }));
