@@ -1,5 +1,6 @@
 // RailShotTV — Chromatic Command — Scene Editor + Overlay Source Browser
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useScenes } from "@/contexts/SceneContext";
 import AppSidebar from "@/components/AppSidebar";
 import { toast } from "sonner";
 import {
@@ -273,7 +274,11 @@ interface CanvasOverlay { id: string; name: string; color: string; x: number; y:
 export default function SceneEditor() {
   const [selectedSource, setSelectedSource] = useState<number | null>(null);
   const [activeTrans, setActiveTrans]       = useState("Cut");
-  const [sources, setSources]               = useState(INIT_SOURCES);
+  const { scenes, editingSceneId, addSource: ctxAddSource,
+          removeSource: ctxRemoveSource, updateSource: ctxUpdateSource,
+          moveSource: ctxMoveSource } = useScenes();
+  const editingScene = scenes.find(s => s.id === editingSceneId) ?? null;
+  const sources = editingScene?.sources ?? [];
   const [browserOpen, setBrowserOpen]       = useState(true);
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery]       = useState("");
@@ -291,38 +296,35 @@ export default function SceneEditor() {
     setTransforms(prev => ({ ...prev, [id]: { ...getTransform(id), ...patch } }));
 
   const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
-    const newId = nextId.current++;
-    setSources(prev => [...prev, { id: newId, name, type, icon, color, visible: true, locked: false }]);
+    if (!editingSceneId) { toast.error("No scene selected — go back to Dashboard and click Edit on a scene"); return; }
+    const newId = ctxAddSource(editingSceneId, { name, type, icon, color, visible: true, locked: false });
     setSelectedSource(newId);
     toast.success(`Added "${name}"`);
-  }, []);
+  }, [editingSceneId, ctxAddSource]);
 
   const handleDeleteSource = useCallback(() => {
     if (selectedSource === null) { toast.info("Select a source first"); return; }
-    setSources(prev => prev.filter(s => s.id !== selectedSource));
+    if (editingSceneId) ctxRemoveSource(editingSceneId, selectedSource);
     setCanvasOverlays(prev => prev.filter(o => o.id !== String(selectedSource)));
     setSelectedSource(null);
-  }, [selectedSource]);
+  }, [selectedSource, editingSceneId, ctxRemoveSource]);
 
   const handleToggleVisible = useCallback((id: number) => {
-    setSources(prev => prev.map(s => s.id === id ? { ...s, visible: !s.visible } : s));
-  }, []);
+    if (!editingSceneId) return;
+    const src = sources.find(s => s.id === id);
+    if (src) ctxUpdateSource(editingSceneId, id, { visible: !src.visible });
+  }, [editingSceneId, sources, ctxUpdateSource]);
 
   const handleToggleLock = useCallback((id: number) => {
-    setSources(prev => prev.map(s => s.id === id ? { ...s, locked: !s.locked } : s));
-  }, []);
+    if (!editingSceneId) return;
+    const src = sources.find(s => s.id === id);
+    if (src) ctxUpdateSource(editingSceneId, id, { locked: !src.locked });
+  }, [editingSceneId, sources, ctxUpdateSource]);
 
   const handleMoveSource = useCallback((id: number, dir: "up" | "down") => {
-    setSources(prev => {
-      const idx = prev.findIndex(s => s.id === id);
-      if (idx < 0) return prev;
-      const next = [...prev];
-      const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= next.length) return prev;
-      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      return next;
-    });
-  }, []);
+    if (!editingSceneId) return;
+    ctxMoveSource(editingSceneId, id, dir);
+  }, [editingSceneId, ctxMoveSource]);
 
   const filteredTemplates = OVERLAY_TEMPLATES.filter(t => {
     const catMatch = activeCategory === "all" || t.cat === activeCategory;
@@ -349,7 +351,7 @@ export default function SceneEditor() {
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x, y }]);
     // Add to sources list
     const IconComp = template.icon;
-    setSources(prev => [...prev, { id: newId, name: template.name, type: "overlay", icon: IconComp, color: template.color, visible: true, locked: false }]);
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: IconComp, color: template.color, visible: true, locked: false });
     setSelectedSource(newId);
     setDropFlash(true);
     setAddedToast(template.name);
@@ -361,7 +363,7 @@ export default function SceneEditor() {
   const handleAddTemplate = useCallback((template: typeof OVERLAY_TEMPLATES[0]) => {
     const newId = nextId.current++;
     setCanvasOverlays(prev => [...prev, { id: String(newId), name: template.name, color: template.color, x: 10 + Math.random() * 30, y: 10 + Math.random() * 30 }]);
-    setSources(prev => [...prev, { id: newId, name: template.name, type: "overlay", icon: template.icon, color: template.color, visible: true, locked: false }]);
+    if (editingSceneId) ctxAddSource(editingSceneId, { name: template.name, type: "overlay", icon: template.icon, color: template.color, visible: true, locked: false });
     setSelectedSource(newId);
     setAddedToast(template.name);
     setTimeout(() => setAddedToast(null), 2500);
@@ -378,7 +380,7 @@ export default function SceneEditor() {
         <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Scene Editor</span>
         <div className="px-2 py-0.5 rounded" style={{ background: "#4F9EFF18", border: "1px solid #4F9EFF40" }}>
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#4F9EFF", fontWeight: 600 }}>Event — Main</span>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#4F9EFF", fontWeight: 600 }}>{editingScene?.name ?? "No Scene Selected"}</span>
         </div>
         <div className="flex-1" />
         {/* Overlay browser toggle */}

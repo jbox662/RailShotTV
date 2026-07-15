@@ -1,14 +1,14 @@
 // RailShotTV — Chromatic Command — Dashboard
 // Colors: Brand=#FF5A2C, Blue=#4F9EFF, Violet=#A855F7, Emerald=#22C55E, Cyan=#22D3EE, Amber=#FBBF24
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
-import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2, Pencil, Copy, Trash2 } from "lucide-react";
+import { useScenes } from "@/contexts/SceneContext";
+import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2, Pencil, Copy, Trash2, Edit2 } from "lucide-react";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
-// Scene type
-type Scene = { id: number; name: string };
 
 // Audio channels populated from OBS audio manager at runtime
 const CHANNELS: { name: string; sub: string; icon: typeof Mic; color: string; levels: number[]; db: string }[] = [];
@@ -68,34 +68,14 @@ function BitrateSparkline() {
 }
 
 export default function Dashboard() {
-  const [activeScene, setActiveScene] = useState<number | null>(null);
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [nextSceneId, setNextSceneId] = useState(1);
+  const { scenes, activeSceneId: activeScene, setActiveSceneId: setActiveScene,
+          setEditingSceneId, addScene, duplicateScene, deleteScene, renameScene } = useScenes();
+  const [, navigate] = useLocation();
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [tc, setTc] = useState("00:00:00");
 
-  const addScene = () => {
-    const id = nextSceneId;
-    const name = `Scene ${id}`;
-    setScenes(prev => [...prev, { id, name }]);
-    setNextSceneId(id + 1);
-    setActiveScene(id);
-  };
-
-  const duplicateScene = (scene: Scene) => {
-    const id = nextSceneId;
-    setScenes(prev => [...prev, { id, name: `${scene.name} (copy)` }]);
-    setNextSceneId(id + 1);
-    setActiveScene(id);
-  };
-
-  const deleteScene = (id: number) => {
-    setScenes(prev => prev.filter(s => s.id !== id));
-    setActiveScene(prev => (prev === id ? null : prev));
-  };
-
-  const startRename = (scene: Scene) => {
+  const startRename = (scene: { id: number; name: string }) => {
     setRenamingId(scene.id);
     setRenameValue(scene.name);
   };
@@ -103,10 +83,13 @@ export default function Dashboard() {
   const commitRename = () => {
     if (renamingId === null) return;
     const trimmed = renameValue.trim();
-    if (trimmed) {
-      setScenes(prev => prev.map(s => s.id === renamingId ? { ...s, name: trimmed } : s));
-    }
+    if (trimmed) renameScene(renamingId, trimmed);
     setRenamingId(null);
+  };
+
+  const openSceneEditor = (sceneId: number) => {
+    setEditingSceneId(sceneId);
+    navigate("/scenes");
   };
   const [viewers, setViewers] = useState(0);
   const [bitrate, setBitrate] = useState(0);
@@ -289,6 +272,13 @@ export default function Dashboard() {
                           >
                             <Pencil size={11} style={{ color: "#4F9EFF" }} />
                           </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); openSceneEditor(scene.id); }}
+                            title="Edit scene sources"
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "#FF5A2C22", border: "1px solid #FF5A2C60", borderRadius: 4, cursor: "pointer" }}
+                          >
+                            <Edit2 size={11} style={{ color: "#FF5A2C" }} />
+                          </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -300,6 +290,9 @@ export default function Dashboard() {
                             <DropdownMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350", zIndex: 9999 }}>
                               <DropdownMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</DropdownMenuLabel>
                               <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => openSceneEditor(scene.id)} style={{ cursor: "pointer" }}>
+                                <Edit2 size={13} className="mr-2" style={{ color: "#FF5A2C" }} /> Edit Sources
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
                                 <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
                               </DropdownMenuItem>
@@ -339,6 +332,9 @@ export default function Dashboard() {
                   <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
                     <ContextMenuLabel style={{ color: "#50506A", fontSize: 10 }}>{scene.name}</ContextMenuLabel>
                     <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => openSceneEditor(scene.id)} style={{ cursor: "pointer" }}>
+                      <Edit2 size={13} className="mr-2" style={{ color: "#FF5A2C" }} /> Edit Sources
+                    </ContextMenuItem>
                     <ContextMenuItem onClick={() => startRename(scene)} style={{ cursor: "pointer" }}>
                       <Pencil size={13} className="mr-2" style={{ color: "#4F9EFF" }} /> Rename
                     </ContextMenuItem>
