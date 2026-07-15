@@ -64,7 +64,7 @@ const OVERLAY_TEMPLATES = [
         <text x="12" y="12" fill="white" fontSize="7" fontWeight="bold">TEAM A</text>
         <text x="148" y="12" fill="white" fontSize="7" fontWeight="bold" textAnchor="end">TEAM B</text>
         <text x="80" y="13" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle">3 – 1</text>
-        <text x="80" y="8" fill="#8892A4" fontSize="4" textAnchor="middle">LIVE · Q2 08:42</text>
+        <text x="80" y="8" fill="#8892A4" fontSize="4" textAnchor="middle">PREVIEW</text>
       </svg>
     )
   },
@@ -286,8 +286,8 @@ export default function SceneEditor() {
         <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>1920×1080</span>
         <span className="mono" style={{ fontSize: 11, color: "#50506A" }}>60fps</span>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#FF5A2C" }} />
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: "#FF5A2C" }}>LIVE</span>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#50506A" }} />
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: "#50506A" }}>OFFLINE</span>
         </div>
       </div>
 

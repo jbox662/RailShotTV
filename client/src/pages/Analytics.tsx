@@ -42,10 +42,10 @@ export default function Analytics() {
         {/* KPI cards */}
         <div className="grid grid-cols-4 gap-3 mb-4">
           {[
-            { label: "Peak Viewers", value: "3,152", sub: "+18% vs last", color: "#4F9EFF", icon: Users },
-            { label: "Avg Watch Time", value: "18m 42s", sub: "+4m 12s vs last", color: "#A855F7", icon: Clock },
-            { label: "New Followers", value: "+247", sub: "This session", color: "#22C55E", icon: TrendingUp },
-            { label: "Total Revenue", value: "$184.50", sub: "Subs + Donations", color: "#FBBF24", icon: DollarSign },
+            { label: "Peak Viewers", value: "—", sub: "No data yet", color: "#4F9EFF", icon: Users },
+            { label: "Avg Watch Time", value: "—", sub: "No data yet", color: "#A855F7", icon: Clock },
+            { label: "New Followers", value: "—", sub: "No data yet", color: "#22C55E", icon: TrendingUp },
+            { label: "Total Revenue", value: "—", sub: "No data yet", color: "#FBBF24", icon: DollarSign },
           ].map(({ label, value, sub, color, icon: Icon }) => (
             <div key={label} className="rounded p-3" style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
               <div className="flex items-center justify-between mb-1.5">
@@ -63,8 +63,8 @@ export default function Analytics() {
           <div className="flex items-center justify-between px-4 py-2.5 panel-header-cyan rounded-t">
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Viewer Count</span>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ background: "#22D3EE18", border: "1px solid #22D3EE40" }}>
-              <div className="live-dot w-1.5 h-1.5 rounded-full" style={{ background: "#22D3EE" }} />
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#22D3EE", fontWeight: 600 }}>LIVE DATA</span>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#50506A" }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A", fontWeight: 600 }}>NO DATA</span>
             </div>
           </div>
           <div className="px-2 pb-3 pt-1">

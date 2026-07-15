@@ -5,8 +5,8 @@ import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
 import { Wifi, Users, Clock, Activity, Cpu, Monitor, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, Square, Mic, Music, Bell, Volume2 } from "lucide-react";
 
-// Scenes populated from OBS at runtime
-const SCENES: { id: number; name: string; live?: boolean }[] = [];
+// Scene type
+type Scene = { id: number; name: string };
 
 // Audio channels populated from OBS audio manager at runtime
 const CHANNELS: { name: string; sub: string; icon: typeof Mic; color: string; levels: number[]; db: string }[] = [];
@@ -67,7 +67,33 @@ function BitrateSparkline() {
 
 export default function Dashboard() {
   const [activeScene, setActiveScene] = useState<number | null>(null);
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [nextSceneId, setNextSceneId] = useState(1);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [tc, setTc] = useState("00:00:00");
+
+  const addScene = () => {
+    const id = nextSceneId;
+    const name = `Scene ${id}`;
+    setScenes(prev => [...prev, { id, name }]);
+    setNextSceneId(id + 1);
+    setActiveScene(id);
+  };
+
+  const startRename = (scene: Scene) => {
+    setRenamingId(scene.id);
+    setRenameValue(scene.name);
+  };
+
+  const commitRename = () => {
+    if (renamingId === null) return;
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      setScenes(prev => prev.map(s => s.id === renamingId ? { ...s, name: trimmed } : s));
+    }
+    setRenamingId(null);
+  };
   const [viewers, setViewers] = useState(0);
   const [bitrate, setBitrate] = useState(0);
   const [isLive, setIsLive] = useState(false);
@@ -183,7 +209,7 @@ export default function Dashboard() {
                 <span className="mono" style={{ fontSize: 11, color: isLive ? "#22D3EE" : "#50506A" }}>{isLive ? tc : "00:00:00"}</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#F8F8FF" }}>
-                  {SCENES.find(s => s.id === activeScene)?.name ?? (activeScene !== null ? "Unknown" : "—")}
+                  {scenes.find(s => s.id === activeScene)?.name ?? "—"}
                 </span>
                 {isLive && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#22C55E" }}>SRC ACTIVE</span>}
                 <div className="flex-1" />
@@ -212,15 +238,22 @@ export default function Dashboard() {
                   </button>
                 ))}
                 <button className="flex items-center justify-center rounded transition-colors ml-1" style={{ width: 22, height: 22, background: "#FF5A2C18", border: "1px solid #FF5A2C40" }}>
-                  <Plus size={12} style={{ color: "#FF5A2C" }} />
+                  <Plus size={12} style={{ color: "#FF5A2C" }} onClick={addScene} />
                 </button>
               </div>
             </div>
             <div className="flex gap-2 px-3 py-2 overflow-x-auto" style={{ background: "#1A2035" }}>
-              {SCENES.map(scene => (
+              {scenes.length === 0 && (
+                <div className="flex flex-col items-center justify-center w-full py-3 gap-1" style={{ opacity: 0.45 }}>
+                  <Monitor size={18} style={{ color: "#50506A" }} />
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#50506A" }}>No scenes — click + to add one</span>
+                </div>
+              )}
+              {scenes.map(scene => (
                 <button
                   key={scene.id}
                   onClick={() => setActiveScene(scene.id)}
+                  onDoubleClick={() => startRename(scene)}
                   className="flex flex-col items-center gap-1 rounded shrink-0 transition-all duration-150"
                   style={{
                     width: 100, padding: "8px 6px",
@@ -231,7 +264,7 @@ export default function Dashboard() {
                 >
                   <div className="w-full rounded flex items-center justify-center relative" style={{ height: 52, background: "#161B2E", border: "1px solid #2A3350" }}>
                     <Monitor size={16} style={{ color: activeScene === scene.id ? "#4F9EFF" : "#303D5A" }} />
-                    {scene.live && activeScene === scene.id && (
+                    {isLive && activeScene === scene.id && (
                       <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 rounded" style={{ background: "#FF5A2C", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.06em" }}>
                         <div className="live-dot w-1 h-1 rounded-full bg-white" />
                         LIVE
@@ -239,7 +272,17 @@ export default function Dashboard() {
                     )}
                   </div>
                   <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: activeScene === scene.id ? 600 : 400, color: activeScene === scene.id ? "#F8F8FF" : "#606078", whiteSpace: "nowrap" }}>
-                    {scene.name}
+                    {renamingId === scene.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: 80, fontSize: 11, fontFamily: "'DM Sans', sans-serif", background: "#111827", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", padding: "1px 4px", outline: "none" }}
+                      />
+                    ) : scene.name}
                   </span>
                 </button>
               ))}
