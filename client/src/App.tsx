@@ -9,7 +9,7 @@ import SceneEditor from "./pages/SceneEditor";
 import ChatPanel from "./pages/ChatPanel";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
-
+import ScoreboardPage from "./pages/ScoreboardPage";
 function Router() {
   return (
     <Switch>
@@ -18,6 +18,7 @@ function Router() {
       <Route path="/chat" component={ChatPanel} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
+      <Route path="/scoreboard" component={ScoreboardPage} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
