@@ -1,6 +1,7 @@
 // RailShotTV — Chromatic Command — Scene Editor + Overlay Source Browser
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import AppSidebar from "@/components/AppSidebar";
+import { toast } from "sonner";
 import {
   Eye, EyeOff, Lock, Unlock, Move, Crop, RotateCcw, AlignCenter, Layers,
   Plus, Trash2, ChevronUp, ChevronDown, Monitor, Camera, Type, Image, Zap,
@@ -204,6 +205,68 @@ type SourceItem = { id: number; name: string; type: string; icon: React.ElementT
 const INIT_SOURCES: SourceItem[] = [];
 const TRANSITIONS = ["Cut","Fade","Slide","Wipe","Stinger"];
 
+// ── Source type catalogue for the Add Source modal ───────────────────────────
+const SOURCE_TYPES = [
+  { type: "display",    label: "Display Capture", icon: Monitor,   color: "#4F9EFF" },
+  { type: "camera",     label: "Camera / Webcam",  icon: Camera,    color: "#22C55E" },
+  { type: "text",       label: "Text",             icon: Type,      color: "#A855F7" },
+  { type: "image",      label: "Image",            icon: Image,     color: "#FBBF24" },
+  { type: "browser",    label: "Browser Source",   icon: Tv,        color: "#22D3EE" },
+  { type: "alert",      label: "Alert / Stinger",  icon: Bell,      color: "#FF5A2C" },
+  { type: "scoreboard", label: "Scoreboard",       icon: Trophy,    color: "#FF5A2C" },
+  { type: "lowerthird", label: "Lower Third",      icon: AlignLeft, color: "#4F9EFF" },
+];
+
+// ── Add Source Modal ──────────────────────────────────────────────────────────
+function AddSourceModal({ onAdd, onClose }: {
+  onAdd: (type: string, name: string, icon: React.ElementType, color: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(SOURCE_TYPES[0].label);
+  const [selected, setSelected] = useState(SOURCE_TYPES[0]);
+  useEffect(() => { setName(selected.label); }, [selected]);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", zIndex: 9999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "#1E2640", border: "1px solid #2A3350", borderRadius: 10, width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "1px solid #2A3350" }}>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#F8F8FF" }}>Add Source</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex" }}><X size={16} /></button>
+        </div>
+        <div className="grid grid-cols-4 gap-2 p-4">
+          {SOURCE_TYPES.map(st => (
+            <button key={st.type} onClick={() => setSelected(st)}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 6px", borderRadius: 7, cursor: "pointer",
+                border: `1px solid ${selected.type === st.type ? st.color + "80" : "#2A3350"}`,
+                background: selected.type === st.type ? st.color + "18" : "#141928", transition: "all 0.15s" }}>
+              <st.icon size={20} style={{ color: selected.type === st.type ? st.color : "#606078" }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: selected.type === st.type ? "#F8F8FF" : "#606078", textAlign: "center", lineHeight: 1.2 }}>{st.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="px-4 pb-4">
+          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4", display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Source Name</label>
+          <input autoFocus value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
+            style={{ width: "100%", background: "#141928", border: "1px solid #303D5A", borderRadius: 6, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 13, padding: "8px 12px", outline: "none", boxSizing: "border-box" as const }} />
+        </div>
+        <div className="flex justify-end gap-2 px-4 pb-4">
+          <button onClick={onClose} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #303D5A", background: "none", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => { if (name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
+            style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "linear-gradient(135deg, #4F9EFF, #7C3AED)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Add Source
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Dropped overlay indicator on canvas ──────────────────────────────────────
 interface CanvasOverlay { id: string; name: string; color: string; x: number; y: number }
 
@@ -220,6 +283,46 @@ export default function SceneEditor() {
   const [addedToast, setAddedToast]         = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   let nextId = useRef(100);
+  const [showAddSource, setShowAddSource]   = useState(false);
+  const [transforms, setTransforms] = useState<Record<number, { x: number; y: number; w: number; h: number; rot: number; opacity: number; flipH: boolean; flipV: boolean }>>({});
+
+  const getTransform = (id: number) => transforms[id] ?? { x: 640, y: 270, w: 640, h: 360, rot: 0, opacity: 100, flipH: false, flipV: false };
+  const setTransform = (id: number, patch: Partial<ReturnType<typeof getTransform>>) =>
+    setTransforms(prev => ({ ...prev, [id]: { ...getTransform(id), ...patch } }));
+
+  const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
+    const newId = nextId.current++;
+    setSources(prev => [...prev, { id: newId, name, type, icon, color, visible: true, locked: false }]);
+    setSelectedSource(newId);
+    toast.success(`Added "${name}"`);
+  }, []);
+
+  const handleDeleteSource = useCallback(() => {
+    if (selectedSource === null) { toast.info("Select a source first"); return; }
+    setSources(prev => prev.filter(s => s.id !== selectedSource));
+    setCanvasOverlays(prev => prev.filter(o => o.id !== String(selectedSource)));
+    setSelectedSource(null);
+  }, [selectedSource]);
+
+  const handleToggleVisible = useCallback((id: number) => {
+    setSources(prev => prev.map(s => s.id === id ? { ...s, visible: !s.visible } : s));
+  }, []);
+
+  const handleToggleLock = useCallback((id: number) => {
+    setSources(prev => prev.map(s => s.id === id ? { ...s, locked: !s.locked } : s));
+  }, []);
+
+  const handleMoveSource = useCallback((id: number, dir: "up" | "down") => {
+    setSources(prev => {
+      const idx = prev.findIndex(s => s.id === id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const swapIdx = dir === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= next.length) return prev;
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  }, []);
 
   const filteredTemplates = OVERLAY_TEMPLATES.filter(t => {
     const catMatch = activeCategory === "all" || t.cat === activeCategory;
@@ -515,21 +618,28 @@ export default function SceneEditor() {
           <div className="px-3 py-1.5 flex items-center justify-between shrink-0" style={{ borderBottom: "1px solid #2A3350", background: "#141928" }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#A0A0B8", letterSpacing: "0.1em", textTransform: "uppercase" }}>Sources</span>
             <div className="flex gap-1">
-              {[Plus, Trash2].map((Icon, i) => (
-                <button key={i} className="flex items-center justify-center rounded" style={{ width: 20, height: 20, background: "#1A1A24", border: "1px solid #303D5A" }}>
-                  <Icon size={11} style={{ color: i === 0 ? "#4F9EFF" : "#606078" }} />
-                </button>
-              ))}
+              <button onClick={() => setShowAddSource(true)} title="Add Source"
+                className="flex items-center justify-center rounded transition-colors"
+                style={{ width: 20, height: 20, background: "#1A1A24", border: "1px solid #303D5A", cursor: "pointer" }}>
+                <Plus size={11} style={{ color: "#4F9EFF" }} />
+              </button>
+              <button onClick={handleDeleteSource} title="Delete Selected Source"
+                className="flex items-center justify-center rounded transition-colors"
+                style={{ width: 20, height: 20, background: "#1A1A24", border: "1px solid #303D5A", cursor: "pointer" }}>
+                <Trash2 size={11} style={{ color: selectedSource !== null ? "#EF4444" : "#606078" }} />
+              </button>
             </div>
           </div>
           <div className="flex flex-col" style={{ borderBottom: "1px solid #2A3350" }}>
             {sources.map(src => (
               <div key={src.id} onClick={() => setSelectedSource(src.id)} className="flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors" style={{ background: selectedSource === src.id ? `${src.color}12` : "transparent", borderLeft: selectedSource === src.id ? `2px solid ${src.color}` : "2px solid transparent" }}>
                 <div className="flex items-center gap-1">
-                  <button className="opacity-50 hover:opacity-100" onClick={e => e.stopPropagation()}>
+                  <button className="opacity-50 hover:opacity-100" title={src.visible ? "Hide" : "Show"}
+                    onClick={e => { e.stopPropagation(); handleToggleVisible(src.id); }}>
                     {src.visible ? <Eye size={11} style={{ color: "#8892A4" }} /> : <EyeOff size={11} style={{ color: "#3A3A50" }} />}
                   </button>
-                  <button className="opacity-50 hover:opacity-100" onClick={e => e.stopPropagation()}>
+                  <button className="opacity-50 hover:opacity-100" title={src.locked ? "Unlock" : "Lock"}
+                    onClick={e => { e.stopPropagation(); handleToggleLock(src.id); }}>
                     {src.locked ? <Lock size={11} style={{ color: "#FBBF24" }} /> : <Unlock size={11} style={{ color: "#8892A4" }} />}
                   </button>
                 </div>
@@ -537,8 +647,12 @@ export default function SceneEditor() {
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: selectedSource === src.id ? "#F8F8FF" : "#A0A0B8", fontWeight: selectedSource === src.id ? 600 : 400 }}>{src.name}</span>
                 <div className="ml-auto flex gap-0.5">
                   {[ChevronUp, ChevronDown].map((Icon, i) => (
-                    <button key={i} onClick={e => e.stopPropagation()} className="flex items-center justify-center rounded" style={{ width: 16, height: 16 }}>
-                      <Icon size={10} style={{ color: "#3A3A50" }} />
+                    <button key={i}
+                      onClick={e => { e.stopPropagation(); handleMoveSource(src.id, i === 0 ? "up" : "down"); }}
+                      title={i === 0 ? "Move Up" : "Move Down"}
+                      className="flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+                      style={{ width: 16, height: 16, cursor: "pointer" }}>
+                      <Icon size={10} style={{ color: "#606078" }} />
                     </button>
                   ))}
                 </div>
@@ -570,15 +684,25 @@ export default function SceneEditor() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 mt-1">
-              {["Flip H","Flip V","Reset"].map(l => (
-                <button key={l} className="flex-1 py-1 rounded text-xs" style={{ background: "#1E2640", border: "1px solid #303D5A", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10 }}>{l}</button>
-              ))}
-            </div>
+            {selectedSource !== null && (
+              <div className="flex gap-2 mt-1">
+                {[
+                  { label: "Flip H", action: () => setTransform(selectedSource!, { flipH: !getTransform(selectedSource!).flipH }) },
+                  { label: "Flip V", action: () => setTransform(selectedSource!, { flipV: !getTransform(selectedSource!).flipV }) },
+                  { label: "Reset",  action: () => setTransforms(prev => { const n = { ...prev }; delete n[selectedSource!]; return n; }) },
+                ].map(({ label, action }) => (
+                  <button key={label} onClick={action} className="flex-1 py-1 rounded transition-colors hover:bg-white/5"
+                    style={{ background: "#1E2640", border: "1px solid #303D5A", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
       </div>
+      {showAddSource && <AddSourceModal onAdd={handleAddSource} onClose={() => setShowAddSource(false)} />}
     </AppSidebar>
   );
 }
