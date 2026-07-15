@@ -158,12 +158,7 @@ function ProgramCanvas({
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: src.color, opacity: 0.8 }}>{src.name}</span>
               </div>
             )}
-            {/* Label bar */}
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.65)", padding: "1px 4px", display: "flex", alignItems: "center", gap: 3, pointerEvents: "none" }}>
-              <src.icon size={8} style={{ color: src.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
-              {url && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: "#22D3EE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{url}</span>}
-            </div>
+
             {/* Resize handles */}
             {isSelected && !src.locked && HANDLES.map(h => (
               <div
