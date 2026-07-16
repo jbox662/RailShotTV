@@ -209,24 +209,67 @@ const OVERLAY_TEMPLATES = [
   { id: "cam-frame", name: "Camera Frame",         cat: "camera",     icon: Camera,    color: "#22C55E" },
 ];
 
-// ── VU Meter ──────────────────────────────────────────────────────────────────
-function VUMeter({ color, active }: { color: string; active: boolean }) {
-  const [tick, setTick] = useState(0);
+// ── Vertical VU Meter (OBS-style, two channels L/R) ─────────────────────────
+function VUMeterVertical({ color, active, volume }: { color: string; active: boolean; volume: number }) {
+  const [levels, setLevels] = useState([0, 0]);
+  const [peaks, setPeaks]   = useState([0, 0]);
+  const peakHoldRef = useRef([0, 0]);
   useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setTick(p => p + 1), 80);
+    if (!active) { setLevels([0, 0]); setPeaks([0, 0]); peakHoldRef.current = [0, 0]; return; }
+    const t = setInterval(() => {
+      const vol = volume / 100;
+      const newLevels = [0, 1].map(i => {
+        const base = 0.55 + Math.random() * 0.35;
+        return Math.min(1, base * vol + (Math.random() - 0.5) * 0.08);
+      });
+      setLevels(newLevels);
+      setPeaks(prev => prev.map((p, i) => {
+        if (newLevels[i] > p) { peakHoldRef.current[i] = 60; return newLevels[i]; }
+        peakHoldRef.current[i] = Math.max(0, peakHoldRef.current[i] - 1);
+        return peakHoldRef.current[i] > 0 ? p : Math.max(0, p - 0.01);
+      }));
+    }, 60);
     return () => clearInterval(t);
-  }, [active]);
-  const bars = [0.3, 0.5, 0.7, 0.85, 0.6, 0.4, 0.75, 0.55, 0.65, 0.45];
+  }, [active, volume]);
+
+  const DB_MARKS = [0, -6, -12, -18, -24, -30, -42, -54];
+  const meterH = 80;
+  const dbToY = (db: number) => (1 - (db + 60) / 60) * meterH;
+
+  const levelColor = (pct: number) =>
+    pct > 0.9 ? "#EF4444" : pct > 0.75 ? "#FBBF24" : pct > 0.5 ? "#84CC16" : color;
+
   return (
-    <div className="flex items-end gap-px" style={{ height: 20, width: 60 }}>
-      {bars.map((l, i) => {
-        const jitter = active ? (Math.sin(tick * 0.7 + i * 1.3) * 0.15 + Math.cos(tick * 0.4 + i * 0.8) * 0.1) : 0;
-        const h = Math.max(2, Math.round((l + jitter) * 20));
-        const pct = l + jitter;
-        const c = pct > 0.85 ? "#EF4444" : pct > 0.65 ? "#FBBF24" : color;
-        return <div key={i} style={{ width: 4, height: h, background: active ? c : "#303D5A", borderRadius: 1, transition: "height 0.08s" }} />;
-      })}
+    <div className="flex gap-1 items-end" style={{ height: meterH, position: "relative" }}>
+      {[0, 1].map(ch => (
+        <div key={ch} style={{ width: 8, height: meterH, background: "#0A0E1A", borderRadius: 2, position: "relative", overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+          {/* Filled level bar */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            height: `${levels[ch] * 100}%`,
+            background: `linear-gradient(to top, ${color} 0%, #84CC16 60%, #FBBF24 80%, #EF4444 100%)`,
+            transition: "height 0.05s linear",
+            opacity: active ? 1 : 0.15,
+          }} />
+          {/* Peak hold indicator */}
+          {active && peaks[ch] > 0 && (
+            <div style={{
+              position: "absolute", left: 0, right: 0, height: 2,
+              bottom: `${peaks[ch] * 100}%`,
+              background: peaks[ch] > 0.9 ? "#EF4444" : "#fff",
+              opacity: 0.9,
+            }} />
+          )}
+          {/* dB grid lines */}
+          {DB_MARKS.map(db => (
+            <div key={db} style={{
+              position: "absolute", left: 0, right: 0, height: 1,
+              bottom: `${((db + 60) / 60) * 100}%`,
+              background: "rgba(255,255,255,0.08)",
+            }} />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -520,10 +563,18 @@ export default function Dashboard() {
     toast.success(`Duplicated "${src.name}"`);
   }, [activeSceneId, addSource]);
 
-  const audioChannels = useMemo(() =>
-    sources.filter(s => ["camera","display"].includes(s.type)),
+  // Global audio channels always present (like OBS Desktop Audio + Mic/Aux)
+  const GLOBAL_AUDIO_CHANNELS = useMemo(() => [
+    { id: -1, name: "Desktop Audio", type: "desktop", color: "#4F9EFF", icon: "desktop" },
+    { id: -2, name: "Mic/Aux",       type: "mic",     color: "#22C55E", icon: "mic"     },
+  ], []);
+
+  const sceneAudioChannels = useMemo(() =>
+    sources.filter(s => ["camera","display"].includes(s.type)).map(s => ({ id: s.id, name: s.name, type: s.type, color: s.color, icon: s.type })),
     [sources]
   );
+
+  const audioChannels = useMemo(() => [...GLOBAL_AUDIO_CHANNELS, ...sceneAudioChannels], [GLOBAL_AUDIO_CHANNELS, sceneAudioChannels]);
 
   const filteredOverlays = useMemo(() =>
     OVERLAY_TEMPLATES.filter(t => t.name.toLowerCase().includes(overlaySearch.toLowerCase())),
@@ -861,31 +912,49 @@ export default function Dashboard() {
         <div className="flex flex-col shrink-0" style={{ borderTop: "1px solid rgba(168,85,247,0.25)", background: "linear-gradient(90deg, #0A1020 0%, #0D1525 100%)" }}>
           <div className="flex items-center justify-between px-3 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.04) 100%)", borderBottom: "1px solid rgba(168,85,247,0.25)" }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#C084FC", letterSpacing: "0.12em", textTransform: "uppercase" }}>Audio Mixer</span>
-            <Volume2 size={11} style={{ color: "#A855F7" }} />
+            <div className="flex items-center gap-3">
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#50506A" }}>{audioChannels.length} ch</span>
+              <Volume2 size={11} style={{ color: "#A855F7" }} />
+            </div>
           </div>
-          <div className="flex gap-0 overflow-x-auto" style={{ height: 80 }}>
-            {audioChannels.length === 0 ? (
-              <div className="flex items-center justify-center flex-1" style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }}>
-                No audio sources — add a Camera or Display source
-              </div>
-            ) : audioChannels.map(ch => {
+          {/* dB scale + channel strips */}
+          <div className="flex overflow-x-auto" style={{ height: 120 }}>
+            {/* dB scale ruler */}
+            <div className="shrink-0 flex flex-col justify-between py-1 pr-1" style={{ width: 28, paddingTop: 4, paddingBottom: 22 }}>
+              {[0, -6, -12, -18, -24, -30].map(db => (
+                <span key={db} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: db === 0 ? "#EF4444" : db >= -6 ? "#FBBF24" : "#50506A", textAlign: "right", lineHeight: 1 }}>{db}</span>
+              ))}
+            </div>
+            {/* Channel strips */}
+            {audioChannels.map(ch => {
               const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+              const isMic = ch.type === "mic" || ch.type === "camera";
+              const isDesk = ch.type === "desktop";
               return (
-                <div key={ch.id} className="flex items-center gap-2 px-3 shrink-0" style={{ minWidth: 160, borderRight: "1px solid rgba(255,255,255,0.06)", opacity: cs.muted ? 0.35 : 1, transition: "opacity 0.15s", background: "rgba(255,255,255,0.02)" }}>
-                  <VUMeter color={ch.color} active={isLive && !cs.muted} />
-                  <div className="flex flex-col gap-1" style={{ flex: 1 }}>
-                    <div className="flex items-center gap-1">
-                      {ch.type === "camera" ? <Mic size={10} style={{ color: ch.color }} /> : <Music size={10} style={{ color: ch.color }} />}
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 600, color: "#F8F8FF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>{ch.name}</span>
-                    </div>
+                <div key={ch.id} className="flex flex-col items-center gap-1 px-2 py-1 shrink-0"
+                  style={{ minWidth: 72, borderRight: "1px solid rgba(255,255,255,0.05)", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s", background: "rgba(255,255,255,0.015)" }}>
+                  {/* VU meters */}
+                  <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
+                  {/* Volume fader */}
+                  <div className="flex items-center gap-1 w-full">
                     <input type="range" min={0} max={100} value={cs.volume}
                       onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
-                      style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
-                    <div className="flex gap-1">
+                      style={{ flex: 1, accentColor: ch.color, cursor: "pointer", height: 3 }} />
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#606078", width: 22, textAlign: "right" }}>
+                      {cs.volume === 100 ? "0dB" : cs.volume > 0 ? `${Math.round((cs.volume / 100 - 1) * 60)}` : "−∞"}
+                    </span>
+                  </div>
+                  {/* Channel name + controls */}
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-0.5 overflow-hidden">
+                      {isMic ? <Mic size={8} style={{ color: ch.color, flexShrink: 0 }} /> : isDesk ? <Monitor size={8} style={{ color: ch.color, flexShrink: 0 }} /> : <Music size={8} style={{ color: ch.color, flexShrink: 0 }} />}
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 600, color: "#A0A8C0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 42 }}>{ch.name}</span>
+                    </div>
+                    <div className="flex gap-0.5">
                       <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
-                        style={{ flex: 1, padding: "1px 0", borderRadius: 3, border: `1px solid ${cs.solo ? "#FBBF24" : "#303D5A"}`, background: cs.solo ? "#FBBF24" : "#1A1A24", color: cs.solo ? "#1A1A24" : "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>S</button>
+                        style={{ width: 14, height: 14, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#303D5A"}`, background: cs.solo ? "#FBBF24" : "#0F1520", color: cs.solo ? "#0F1520" : "#606078", fontFamily: "'DM Sans', sans-serif", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
                       <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
-                        style={{ flex: 1, padding: "1px 0", borderRadius: 3, border: `1px solid ${cs.muted ? "#EF4444" : "#303D5A"}`, background: cs.muted ? "#EF4444" : "#1A1A24", color: cs.muted ? "#fff" : "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>M</button>
+                        style={{ width: 14, height: 14, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#303D5A"}`, background: cs.muted ? "#EF4444" : "#0F1520", color: cs.muted ? "#fff" : "#606078", fontFamily: "'DM Sans', sans-serif", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
                     </div>
                   </div>
                 </div>
