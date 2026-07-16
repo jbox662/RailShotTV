@@ -101,9 +101,17 @@ function ProgramCanvas({
       onClick={e => { if (e.target === containerRef.current) onSelect(null); }}
     >
       {visibleSources.length === 0 && (
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#303D5A", pointerEvents: "none" }}>
-          <Monitor size={32} />
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Add sources to this scene</span>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, pointerEvents: "none" }}>
+          <svg width="48" height="44" viewBox="0 0 48 44" fill="none" style={{ opacity: 0.18 }}>
+            <circle cx="24" cy="8" r="7" stroke="#4F9EFF" strokeWidth="1.5"/>
+            <circle cx="14" cy="22" r="7" stroke="#4F9EFF" strokeWidth="1.5"/>
+            <circle cx="34" cy="22" r="7" stroke="#4F9EFF" strokeWidth="1.5"/>
+            <circle cx="4" cy="36" r="7" stroke="#4F9EFF" strokeWidth="1.5"/>
+            <circle cx="24" cy="36" r="7" stroke="#FF5A2C" strokeWidth="1.5"/>
+            <circle cx="44" cy="36" r="7" stroke="#4F9EFF" strokeWidth="1.5"/>
+          </svg>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#3A4A6A", letterSpacing: "0.06em", textTransform: "uppercase" }}>Rack this scene</span>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#2A3550" }}>Add sources to build your layout</span>
         </div>
       )}
       {visibleSources.map(src => {
@@ -267,8 +275,8 @@ function AddSourceModal({ onAdd, onClose }: {
     <div className="fixed inset-0 flex items-center justify-center"
       style={{ background: "rgba(0,0,0,0.75)", zIndex: 9999 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#1E2640", border: "1px solid #2A3350", borderRadius: 10, width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
-        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "1px solid #2A3350" }}>
+      <div style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 12, width: 420, boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(79,158,255,0.08), 0 0 60px rgba(79,158,255,0.06)" }}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "1px solid rgba(79,158,255,0.15)", background: "linear-gradient(90deg, rgba(79,158,255,0.06) 0%, transparent 100%)" }}>
           <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#F8F8FF" }}>Add Source</span>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#606078" }}><X size={16} /></button>
         </div>
@@ -276,8 +284,8 @@ function AddSourceModal({ onAdd, onClose }: {
           {SOURCE_TYPES.map(st => (
             <button key={st.type} onClick={() => setSelected(st)}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 6px", borderRadius: 7, cursor: "pointer",
-                border: `1px solid ${selected.type === st.type ? st.color + "80" : "#2A3350"}`,
-                background: selected.type === st.type ? st.color + "18" : "#141928", transition: "all 0.15s" }}>
+                border: `1px solid ${selected.type === st.type ? st.color + "90" : "rgba(255,255,255,0.07)"}`,
+                background: selected.type === st.type ? st.color + "22" : "rgba(255,255,255,0.03)", transition: "all 0.15s", boxShadow: selected.type === st.type ? `0 0 16px ${st.color}30, inset 0 1px 0 rgba(255,255,255,0.1)` : "0 1px 4px rgba(0,0,0,0.3)" }}>
               <st.icon size={20} style={{ color: selected.type === st.type ? st.color : "#606078" }} />
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: selected.type === st.type ? "#F8F8FF" : "#606078", textAlign: "center", lineHeight: 1.2 }}>{st.label}</span>
             </button>
@@ -292,7 +300,7 @@ function AddSourceModal({ onAdd, onClose }: {
         <div className="flex justify-end gap-2 px-4 pb-4">
           <button onClick={onClose} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #303D5A", background: "none", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}>Cancel</button>
           <button onClick={() => { if (name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
-            style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "linear-gradient(135deg, #4F9EFF, #7C3AED)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "linear-gradient(135deg, #4F9EFF 0%, #7C3AED 100%)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(79,158,255,0.4), 0 2px 8px rgba(124,58,237,0.3), inset 0 1px 0 rgba(255,255,255,0.2)" }}>
             Add Source
           </button>
         </div>
@@ -319,19 +327,19 @@ function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransfor
   const setting = (k: string, def: string | number | boolean = "") => (src.settings as Record<string, unknown>)?.[k] ?? def;
   const numIn = (val: number, onChange: (v: number) => void, min?: number, max?: number) => (
     <input type="number" value={val} min={min} max={max} onChange={e => onChange(Number(e.target.value))}
-      style={{ width: 58, height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A855F7", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, padding: "0 5px", outline: "none" }} />
+      style={{ width: 58, height: 20, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 4, color: "#C084FC", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, padding: "0 5px", outline: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)" }} />
   );
   const txtIn = (val: string, onChange: (v: string) => void, placeholder = "", width = 120) => (
     <input type="text" value={val} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      style={{ width, height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 5px", outline: "none" }} />
+      style={{ width, height: 20, background: "rgba(79,158,255,0.06)", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 4, color: "#A8C0E0", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 5px", outline: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)" }} />
   );
   const tog = (val: boolean, onChange: (v: boolean) => void) => (
-    <div onClick={() => onChange(!val)} style={{ width: 28, height: 16, borderRadius: 8, background: val ? "#FF5A2C" : "#1A1A24", border: `1px solid ${val ? "#FF5A2C" : "#303D5A"}`, position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
+    <div onClick={() => onChange(!val)} style={{ width: 28, height: 16, borderRadius: 8, background: val ? "linear-gradient(135deg, #FF5A2C, #FF8C42)" : "rgba(255,255,255,0.05)", border: `1px solid ${val ? "rgba(255,90,44,0.7)" : "rgba(255,255,255,0.1)"}`, boxShadow: val ? "0 0 10px rgba(255,90,44,0.4)" : "none", position: "relative", cursor: "pointer", transition: "background 0.15s" }}>
       <div style={{ position: "absolute", top: 2, left: val ? 12 : 2, width: 10, height: 10, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
     </div>
   );
   const selIn = (val: string, onChange: (v: string) => void, options: string[]) => (
-    <select value={val} onChange={e => onChange(e.target.value)} style={{ height: 20, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 4px", outline: "none" }}>
+    <select value={val} onChange={e => onChange(e.target.value)} style={{ height: 20, background: "rgba(79,158,255,0.06)", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 4, color: "#A8C0E0", fontFamily: "'DM Sans', sans-serif", fontSize: 10, padding: "0 4px", outline: "none" }}>
       {options.map(o => <option key={o}>{o}</option>)}
     </select>
   );
@@ -345,7 +353,7 @@ function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransfor
   return (
     <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
       <div className="px-2 pt-2 pb-1">
-        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Transform</div>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#7B8FBF", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 3 }}>Transform</div>
         {row("X", numIn(t.x as number, v => onUpdateTransform("x", v)))}
         {row("Y", numIn(t.y as number, v => onUpdateTransform("y", v)))}
         {row("W", numIn(t.w as number, v => onUpdateTransform("w", v), 1))}
@@ -355,12 +363,12 @@ function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransfor
         <div className="flex gap-1 mt-1.5 mb-1">
           {["Flip H","Flip V","Reset"].map(l => (
             <button key={l} onClick={() => onUpdateTransform(l === "Reset" ? "__reset" : l === "Flip H" ? "flipH" : "flipV", true)}
-              style={{ flex: 1, padding: "2px 0", borderRadius: 3, border: "1px solid #303D5A", background: "#1E2640", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 9, cursor: "pointer" }}>{l}</button>
+              style={{ flex: 1, padding: "3px 0", borderRadius: 4, border: "1px solid rgba(79,158,255,0.25)", background: "linear-gradient(135deg, #1A2540 0%, #141E30 100%)", color: "#7BAAD0", fontFamily: "'DM Sans', sans-serif", fontSize: 9, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(79,158,255,0.08)" }}>{l}</button>
           ))}
         </div>
       </div>
       <div className="px-2 pb-2" style={{ borderTop: "1px solid #2A3350" }}>
-        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#50506A", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3, marginTop: 6 }}>Settings</div>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: "#7B8FBF", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 3, marginTop: 6 }}>Settings</div>
         {src.type === "camera" && (<>
           {row("Device", selIn(setting("device","Default Camera") as string, v => onUpdateSettings("device", v), ["Default Camera","USB Camera 1","USB Camera 2","IP Camera (RTSP)","NDI Source"]))}
           {row("RTSP URL", txtIn(setting("rtsp","") as string, v => onUpdateSettings("rtsp", v), "rtsp://..."))}
@@ -524,10 +532,10 @@ export default function Dashboard() {
 
   return (
     <AppSidebar>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#0F1520" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#080E1A" }}>
 
         {/* ── Top bar ── */}
-        <div className="flex items-center gap-3 px-3 shrink-0" style={{ height: 44, background: "#1A2035", borderBottom: "1px solid #2A3350" }}>
+        <div className="flex items-center gap-3 px-3 shrink-0" style={{ height: 44, background: "linear-gradient(90deg, #0A1020 0%, #111828 50%, #0A1020 100%)", borderBottom: "1px solid rgba(79,158,255,0.22)", boxShadow: "0 1px 0 rgba(79,158,255,0.12), 0 4px 24px rgba(0,0,0,0.5)" }}>
           <div className="flex items-center gap-1">
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#F8F8FF", letterSpacing: "0.06em" }}>RAILSHOT</span>
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#FF5A2C", letterSpacing: "0.06em" }}>TV</span>
@@ -553,7 +561,7 @@ export default function Dashboard() {
           )}
           {!isLive ? (
             <button onClick={() => setShowGoLive(true)}
-              style={{ height: 30, padding: "0 16px", background: "linear-gradient(135deg, #FF5A2C, #FF6B35)", boxShadow: "0 0 16px rgba(255,90,44,0.4)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", border: "none", borderRadius: 6, cursor: "pointer" }}>
+              style={{ height: 30, padding: "0 16px", background: "linear-gradient(135deg, #FF5A2C 0%, #FF8C42 100%)", boxShadow: "0 0 20px rgba(255,90,44,0.55), 0 2px 8px rgba(255,90,44,0.3), inset 0 1px 0 rgba(255,255,255,0.2)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", border: "none", borderRadius: 6, cursor: "pointer", transition: "transform 0.12s, box-shadow 0.12s" }}>
               ● GO LIVE
             </button>
           ) : (
@@ -568,22 +576,23 @@ export default function Dashboard() {
         <div className="flex flex-1 overflow-hidden">
 
           {/* ── LEFT: Scenes + Sources ── */}
-          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 220, background: "#141928", borderRight: "1px solid #2A3350" }}>
+          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 220, background: "linear-gradient(180deg, #0C1220 0%, #090E1A 100%)", borderRight: "1px solid rgba(79,158,255,0.18)" }}>
 
             {/* Scenes section */}
-            <div className="flex flex-col shrink-0" style={{ height: "40%", borderBottom: "1px solid #2A3350" }}>
-              <div className="flex items-center justify-between px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Scenes</span>
+            <div className="flex flex-col shrink-0" style={{ height: "40%", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex items-center justify-between px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(255,90,44,0.18) 0%, rgba(255,90,44,0.04) 100%)", borderBottom: "1px solid rgba(255,90,44,0.25)" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF8C60", letterSpacing: "0.12em", textTransform: "uppercase" }}>Scenes</span>
                   <button onClick={() => { handleAddScene(); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#4F9EFF", display: "flex" }}>
-                  <Plus size={14} />
+                  style={{ background: "rgba(79,158,255,0.12)", border: "1px solid rgba(79,158,255,0.3)", borderRadius: 4, cursor: "pointer", color: "#4F9EFF", display: "flex", padding: "2px 4px", boxShadow: "0 0 8px rgba(79,158,255,0.2)" }}>
+                  <Plus size={12} />
                 </button>
               </div>
               <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
                 {scenes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
-                    <Monitor size={18} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>No scenes — click + to add</span>
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
+                    <Monitor size={16} style={{ color: "#2A3550" }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A", letterSpacing: "0.04em" }}>No scenes yet</span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, textAlign: "center", color: "#2A3550" }}>Press + to rack your first</span>
                   </div>
                 ) : scenes.map(scene => (
                   <ContextMenu key={scene.id}>
@@ -592,7 +601,7 @@ export default function Dashboard() {
                         onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); }}
                         onDoubleClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }}
                         className="flex items-center gap-2 px-2 py-1.5 cursor-pointer"
-                        style={{ background: scene.id === activeSceneId ? "#1E2640" : "transparent", borderLeft: `2px solid ${scene.id === activeSceneId ? "#FF5A2C" : "transparent"}` }}>
+                        style={{ background: scene.id === activeSceneId ? "linear-gradient(90deg, rgba(255,90,44,0.22) 0%, rgba(255,90,44,0.06) 100%)" : "transparent", borderLeft: `2px solid ${scene.id === activeSceneId ? "#FF6A3C" : "transparent"}`, boxShadow: scene.id === activeSceneId ? "inset 0 0 24px rgba(255,90,44,0.08)" : "none" }}>
                         <Monitor size={12} style={{ color: scene.id === activeSceneId ? "#FF5A2C" : "#606078", flexShrink: 0 }} />
                         {renamingSceneId === scene.id ? (
                           <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
@@ -605,7 +614,7 @@ export default function Dashboard() {
                         )}
                       </div>
                     </ContextMenuTrigger>
-                    <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
+                    <ContextMenuContent style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,158,255,0.06)" }}>
                       <ContextMenuItem onClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
                       <ContextMenuItem onClick={() => duplicateScene(scene)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
                       <ContextMenuSeparator />
@@ -618,16 +627,16 @@ export default function Dashboard() {
 
             {/* Sources section */}
             <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex items-center justify-between px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Sources</span>
+              <div className="flex items-center justify-between px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(79,158,255,0.18) 0%, rgba(79,158,255,0.04) 100%)", borderBottom: "1px solid rgba(79,158,255,0.25)" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#6BAAFF", letterSpacing: "0.12em", textTransform: "uppercase" }}>Sources</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setOverlayBrowserOpen(v => !v)} title="Overlay Library"
                     style={{ background: overlayBrowserOpen ? "#A855F718" : "none", border: overlayBrowserOpen ? "1px solid #A855F740" : "1px solid transparent", borderRadius: 3, cursor: "pointer", color: overlayBrowserOpen ? "#A855F7" : "#606078", display: "flex", padding: 2 }}>
                     <LayoutTemplate size={12} />
                   </button>
                   <button onClick={() => setShowAddSource(true)} disabled={activeSceneId === null}
-                    style={{ background: "none", border: "none", cursor: activeSceneId === null ? "not-allowed" : "pointer", color: activeSceneId === null ? "#303D5A" : "#4F9EFF", display: "flex" }}>
-                    <Plus size={14} />
+                    style={{ background: activeSceneId === null ? "transparent" : "rgba(79,158,255,0.12)", border: `1px solid ${activeSceneId === null ? "transparent" : "rgba(79,158,255,0.3)"}`, borderRadius: 4, cursor: activeSceneId === null ? "not-allowed" : "pointer", color: activeSceneId === null ? "#303D5A" : "#4F9EFF", display: "flex", padding: "2px 4px", boxShadow: activeSceneId === null ? "none" : "0 0 8px rgba(79,158,255,0.2)" }}>
+                    <Plus size={12} />
                   </button>
                   <button onClick={handleDeleteSource} disabled={selectedSourceId === null}
                     style={{ background: "none", border: "none", cursor: selectedSourceId === null ? "not-allowed" : "pointer", color: selectedSourceId === null ? "#303D5A" : "#EF4444", display: "flex" }}>
@@ -660,13 +669,15 @@ export default function Dashboard() {
               {/* Source list */}
               <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
                 {activeSceneId === null ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>Select a scene to view sources</span>
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
+                    <Layers size={14} style={{ color: "#2A3550" }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A" }}>Select a scene</span>
                   </div>
                 ) : sources.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1 p-3" style={{ color: "#50506A" }}>
-                    <Layers size={16} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center" }}>No sources — click + to add</span>
+                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
+                    <Layers size={14} style={{ color: "#2A3550" }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A" }}>Scene is empty</span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, textAlign: "center", color: "#2A3550" }}>Press + to add a source</span>
                   </div>
                 ) : sources.map((src, idx) => {
                   const isSelected = src.id === selectedSourceId;
@@ -676,7 +687,7 @@ export default function Dashboard() {
                         <div
                           onClick={() => setSelectedSourceId(src.id)}
                           className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
-                          style={{ background: isSelected ? "#1E2640" : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}` }}>
+                          style={{ background: isSelected ? `linear-gradient(90deg, ${src.color}28 0%, ${src.color}08 100%)` : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}`, boxShadow: isSelected ? `inset 0 0 20px ${src.color}12` : "none" }}>
                           <src.icon size={11} style={{ color: src.color, flexShrink: 0 }} />
                           {renamingSourceId === src.id ? (
                             <input autoFocus value={renameSourceValue} onChange={e => setRenameSourceValue(e.target.value)}
@@ -707,7 +718,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                       </ContextMenuTrigger>
-                      <ContextMenuContent style={{ background: "#1E2640", border: "1px solid #2A3350" }}>
+                      <ContextMenuContent style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,158,255,0.06)" }}>
                         <ContextMenuItem onClick={() => { setSelectedSourceId(src.id); setRenamingSourceId(src.id); setRenameSourceValue(src.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
                         <ContextMenuItem onClick={() => handleDuplicateSource(src)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
                         <ContextMenuSeparator />
@@ -722,20 +733,26 @@ export default function Dashboard() {
 
           {/* ── CENTER: Program canvas ── */}
           <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350", background: "#141928" }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Program Output</span>
+            <div className="flex items-center px-2 py-1.5 shrink-0" style={{ borderBottom: "1px solid rgba(255,90,44,0.25)", background: "linear-gradient(90deg, rgba(255,90,44,0.12) 0%, #0D1525 60%, #131C30 100%)" }}>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF8C60", letterSpacing: "0.12em", textTransform: "uppercase" }}>Program Output</span>
               <div className="flex-1" />
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: isLive ? "#FF5A2C" : "#50506A" }}>{isLive ? "LIVE" : "OFFLINE"}</span>
               </div>
             </div>
-            <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: "#0A0E1A", position: "relative" }}>
-              <div style={{ position: "relative", width: "100%", maxWidth: "calc((100vh - 44px - 32px - 36px - 80px) * 16/9)", aspectRatio: "16/9", background: "#000", border: "1px solid #2A3350", borderRadius: 4, overflow: "hidden" }}>
+            <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: "radial-gradient(ellipse at center, #0A1018 30%, #040810 100%)", position: "relative" }}>
+              <div style={{ position: "relative", width: "100%", maxWidth: "calc((100vh - 44px - 32px - 36px - 80px) * 16/9)", aspectRatio: "16/9", background: "#000", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 4, overflow: "hidden", boxShadow: "0 0 40px rgba(0,0,0,0.8), 0 0 1px rgba(79,158,255,0.3)" }}>
                 {activeSceneId === null ? (
-                  <div className="flex flex-col items-center justify-center w-full h-full gap-2" style={{ color: "#303D5A", position: "absolute", inset: 0 }}>
-                    <Monitor size={32} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Select or create a scene</span>
+                  <div className="flex flex-col items-center justify-center w-full h-full gap-3" style={{ position: "absolute", inset: 0 }}>
+                    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" style={{ opacity: 0.22 }}>
+                      <circle cx="28" cy="28" r="22" stroke="#4F9EFF" strokeWidth="1.5"/>
+                      <circle cx="28" cy="28" r="14" stroke="#4F9EFF" strokeWidth="1"/>
+                      <line x1="6" y1="28" x2="50" y2="28" stroke="#FF5A2C" strokeWidth="1.5" strokeDasharray="3 2"/>
+                      <circle cx="28" cy="28" r="4" fill="#4F9EFF" opacity="0.5"/>
+                    </svg>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#3A4A6A", letterSpacing: "0.08em", textTransform: "uppercase" }}>Build a rack-ready scene</span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#2A3550" }}>Create a scene in the panel to begin</span>
                   </div>
                 ) : (
                   <ProgramCanvas
@@ -751,25 +768,33 @@ export default function Dashboard() {
                   <div key={pos} style={{ position: "absolute", width: 16, height: 16, pointerEvents: "none",
                     top: pos.includes("top") ? 4 : "auto", bottom: pos.includes("bottom") ? 4 : "auto",
                     left: pos.includes("left") ? 4 : "auto", right: pos.includes("right") ? 4 : "auto",
-                    borderTop: pos.includes("top") ? "2px solid #303D5A" : "none",
-                    borderBottom: pos.includes("bottom") ? "2px solid #303D5A" : "none",
-                    borderLeft: pos.includes("left") ? "2px solid #303D5A" : "none",
-                    borderRight: pos.includes("right") ? "2px solid #303D5A" : "none",
+                    borderTop: pos.includes("top") ? "2px solid rgba(79,158,255,0.4)" : "none",
+                    borderBottom: pos.includes("bottom") ? "2px solid rgba(79,158,255,0.4)" : "none",
+                    borderLeft: pos.includes("left") ? "2px solid rgba(79,158,255,0.4)" : "none",
+                    borderRight: pos.includes("right") ? "2px solid rgba(79,158,255,0.4)" : "none",
                   }} />
                 ))}
+                {/* Title-safe area (80% inset) */}
+                <div style={{ position: "absolute", inset: "10%", border: "1px dashed rgba(79,158,255,0.07)", borderRadius: 2, pointerEvents: "none" }} />
+                {/* Center crosshair */}
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 20, height: 20, pointerEvents: "none" }}>
+                  <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(79,158,255,0.1)", transform: "translateY(-50%)" }} />
+                  <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(79,158,255,0.1)", transform: "translateX(-50%)" }} />
+                </div>
               </div>
             </div>
             {/* Transitions strip */}
-            <div className="flex items-center gap-2 px-3 shrink-0" style={{ height: 36, background: "#141928", borderTop: "1px solid #2A3350" }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", letterSpacing: "0.08em", textTransform: "uppercase" }}>Transition</span>
+            <div className="flex items-center gap-2 px-3 shrink-0" style={{ height: 40, background: "linear-gradient(90deg, #0A1020 0%, #0D1525 100%)", borderTop: "1px solid rgba(79,158,255,0.2)" }}>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#4F6080", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>Transition</span>
               {["Cut","Fade","Slide","Wipe"].map(t => (
                 <button key={t}
                   onClick={() => setActiveTransition(t)}
                   style={{ padding: "2px 10px", borderRadius: 4,
-                    border: `1px solid ${activeTransition === t ? "#4F9EFF40" : "#303D5A"}`,
-                    background: activeTransition === t ? "#4F9EFF18" : "transparent",
-                    color: activeTransition === t ? "#4F9EFF" : "#8892A4",
-                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer",
+                    border: `1px solid ${activeTransition === t ? "rgba(79,158,255,0.6)" : "rgba(255,255,255,0.08)"}`,
+                    background: activeTransition === t ? "linear-gradient(135deg, rgba(79,158,255,0.25) 0%, rgba(79,158,255,0.1) 100%)" : "rgba(255,255,255,0.03)",
+                    color: activeTransition === t ? "#7BBFFF" : "#606880",
+                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer", fontWeight: activeTransition === t ? 700 : 400,
+                    boxShadow: activeTransition === t ? "0 0 12px rgba(79,158,255,0.3), inset 0 1px 0 rgba(79,158,255,0.2)" : "none",
                     transition: "all 0.15s" }}>{t}</button>
               ))}
               <div className="flex-1" />
@@ -779,11 +804,11 @@ export default function Dashboard() {
           </div>
 
           {/* ── RIGHT: Properties + Stream Status ── */}
-          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 240, background: "#141928", borderLeft: "1px solid #2A3350" }}>
+          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 240, background: "linear-gradient(180deg, #0C1220 0%, #090E1A 100%)", borderLeft: "1px solid rgba(79,158,255,0.18)" }}>
             {/* Properties */}
             <div className="flex flex-col overflow-hidden" style={{ flex: 1, borderBottom: "1px solid #2A3350" }}>
-              <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              <div className="flex items-center px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.04) 100%)", borderBottom: "1px solid rgba(168,85,247,0.25)" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#C084FC", letterSpacing: "0.12em", textTransform: "uppercase" }}>
                   {selectedSource ? `Props — ${selectedSource.name}` : "Properties"}
                 </span>
               </div>
@@ -796,8 +821,8 @@ export default function Dashboard() {
             </div>
             {/* Stream Status */}
             <div className="flex flex-col shrink-0">
-              <div className="flex items-center px-2 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Stream Status</span>
+              <div className="flex items-center px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(34,197,94,0.18) 0%, rgba(34,197,94,0.04) 100%)", borderBottom: "1px solid rgba(34,197,94,0.25)" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#4ADE80", letterSpacing: "0.12em", textTransform: "uppercase" }}>Stream Status</span>
               </div>
               <div className="px-3 py-2 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
@@ -818,7 +843,7 @@ export default function Dashboard() {
                     { icon: Cpu,      label: "CPU",     val: isLive ? "12%" : "—",           color: "#A855F7" },
                     { icon: Activity, label: "Health",  val: isLive ? "Good" : "—",          color: "#22C55E" },
                   ].map(({ icon: Icon, label, val, color }) => (
-                    <div key={label} className="flex flex-col gap-0.5 px-2 py-1.5 rounded" style={{ background: "#1A2035", border: "1px solid #2A3350" }}>
+                    <div key={label} className="flex flex-col gap-0.5 px-2 py-1.5 rounded" style={{ background: "linear-gradient(135deg, #131C2C 0%, #0C1420 100%)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
                       <div className="flex items-center gap-1">
                         <Icon size={9} style={{ color }} />
                         <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#606078", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
@@ -833,9 +858,9 @@ export default function Dashboard() {
         </div>
 
         {/* ── BOTTOM: Audio Mixer ── */}
-        <div className="flex flex-col shrink-0" style={{ borderTop: "1px solid #2A3350", background: "#141928" }}>
-          <div className="flex items-center justify-between px-3 py-1 shrink-0" style={{ borderBottom: "1px solid #2A3350" }}>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 10, color: "#606078", letterSpacing: "0.1em", textTransform: "uppercase" }}>Audio Mixer</span>
+        <div className="flex flex-col shrink-0" style={{ borderTop: "1px solid rgba(168,85,247,0.25)", background: "linear-gradient(90deg, #0A1020 0%, #0D1525 100%)" }}>
+          <div className="flex items-center justify-between px-3 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.04) 100%)", borderBottom: "1px solid rgba(168,85,247,0.25)" }}>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#C084FC", letterSpacing: "0.12em", textTransform: "uppercase" }}>Audio Mixer</span>
             <Volume2 size={11} style={{ color: "#A855F7" }} />
           </div>
           <div className="flex gap-0 overflow-x-auto" style={{ height: 80 }}>
@@ -846,7 +871,7 @@ export default function Dashboard() {
             ) : audioChannels.map(ch => {
               const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
               return (
-                <div key={ch.id} className="flex items-center gap-2 px-3 shrink-0" style={{ minWidth: 160, borderRight: "1px solid #2A3350", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                <div key={ch.id} className="flex items-center gap-2 px-3 shrink-0" style={{ minWidth: 160, borderRight: "1px solid rgba(255,255,255,0.06)", opacity: cs.muted ? 0.35 : 1, transition: "opacity 0.15s", background: "rgba(255,255,255,0.02)" }}>
                   <VUMeter color={ch.color} active={isLive && !cs.muted} />
                   <div className="flex flex-col gap-1" style={{ flex: 1 }}>
                     <div className="flex items-center gap-1">

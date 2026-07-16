@@ -186,6 +186,10 @@
     font-family: 'DM Sans', sans-serif;
     background-color: #161B2E;
   }
+  /* Dashboard global button active press */
+  button:active:not(:disabled) {
+    transform: scale(0.96);
+  }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
