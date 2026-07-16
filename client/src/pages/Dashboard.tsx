@@ -117,7 +117,7 @@ function ProgramCanvas({
               position: "absolute",
               left: `${t.x * 100}%`, top: `${t.y * 100}%`,
               width: `${t.w * 100}%`, height: `${t.h * 100}%`,
-              border: isSelected ? `2px solid #4F9EFF` : `1px solid ${src.color}55`,
+              border: isSelected ? `2px solid #4F9EFF` : "none",
               boxSizing: "border-box",
               cursor: src.locked ? "not-allowed" : "move",
               userSelect: "none",
