@@ -949,6 +949,21 @@ export default function Dashboard() {
   // Audio mixer
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
   const [audioMixerOpen, setAudioMixerOpen] = useState(false);
+  const [masterVolume, setMasterVolume] = useState(100);
+  const [masterMuted, setMasterMuted] = useState(false);
+  const [channelPan, setChannelPan] = useState<Record<number, number>>({});    // -50..50
+  const [channelGain, setChannelGain] = useState<Record<number, number>>({});  // -12..+12 dB
+  // Keyboard shortcut overlay
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  // Transition sub-options
+  const [transOpts, setTransOpts] = useState<Record<string, Record<string, string | number>>>({
+    Fade:     { duration: 500, curve: "ease-in-out" },
+    Wipe:     { direction: "left", border: 0 },
+    Merge:    { blend: "normal" },
+    CubeZoom: { axis: "Y", depth: 0.5 },
+    FTB:      { holdMs: 200 },
+    Cut:      {},
+  });
   // Input settings drawer
   // Fullscreen state and handler
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -999,10 +1014,19 @@ export default function Dashboard() {
         handleFullscreen();
         return;
       }
+      // Shift+? → shortcut overlay
+      if (e.key === "?" && e.shiftKey) {
+        setShowShortcuts(v => !v);
+        return;
+      }
+      // Escape → close shortcut overlay
+      if (e.key === "Escape") {
+        setShowShortcuts(false);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [previewSceneId, handleGo, activeTransition, scenes, setActiveSceneId, handleFullscreen]);
+  }, [previewSceneId, handleGo, activeTransition, scenes, setActiveSceneId, handleFullscreen, setShowShortcuts]);
 
   // Active scene — memoize sources so ProgramCanvas React.memo can bail out on timecode ticks
   const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
@@ -1101,7 +1125,7 @@ export default function Dashboard() {
   ], []);
 
   const sceneAudioChannels = useMemo(() =>
-    sources.filter(s => ["camera","display"].includes(s.type)).map(s => ({ id: s.id, name: s.name, type: s.type, color: s.color, icon: s.type })),
+    sources.map(s => ({ id: s.id, name: s.name, type: s.type, color: s.color, icon: s.type })),
     [sources]
   );
 
@@ -1207,6 +1231,10 @@ export default function Dashboard() {
             style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             Settings
           </button>
+          <button onClick={() => setShowShortcuts(v => !v)} title="Keyboard Shortcuts (Shift+?)"
+            style={{ width: 26, height: 26, padding: 0, background: showShortcuts ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${showShortcuts ? "#5A8AFF" : "#3A3D45"}`, borderRadius: 3, color: showShortcuts ? "#fff" : "#808898", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            ?
+          </button>
         </div>
 
         {/* ── MAIN AREA: Preview | Transitions | Program ── */}
@@ -1302,11 +1330,72 @@ export default function Dashboard() {
                  style={{ flex: 1, padding: "7px 0", background: activeTransition === label ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${activeTransition === label ? "#5A8AFF" : "#3A3D45"}`, borderRadius: "3px 0 0 3px", color: activeTransition === label ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: activeTransition === label ? 700 : 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: activeTransition === label ? "0 0 12px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 1px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)", transition: "all 0.12s" }}>
                  {label}
                </button>
-               <button onClick={() => toast.info(`${label} settings`)}
-                  style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #3A3D45", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#606878", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
-                  ▾
-                </button>
-              </div>
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                   <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #3A3D45", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#606878", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>▾</button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent side="right" align="start" style={{ minWidth: 180, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, boxShadow: "0 8px 32px rgba(0,0,0,0.8)", zIndex: 9999 }}>
+                   <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: "#3A6AFF", letterSpacing: "0.08em", padding: "4px 10px" }}>{label.toUpperCase()} OPTIONS</DropdownMenuLabel>
+                   <DropdownMenuSeparator />
+                   {label === "Cut" && (
+                     <DropdownMenuItem style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#A0A8B8" }} onClick={() => toast.info("Cut has no configurable options")}>No options for Cut</DropdownMenuItem>
+                   )}
+                   {label === "Fade" && (<>
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Duration: {transOpts.Fade?.duration ?? 500}ms</DropdownMenuLabel>
+                     {[250, 500, 750, 1000, 1500, 2000].map(d => (
+                       <DropdownMenuItem key={d} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.Fade?.duration === d ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, Fade: { ...p.Fade, duration: d } }))}>{d}ms {transOpts.Fade?.duration === d ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                     <DropdownMenuSeparator />
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Curve</DropdownMenuLabel>
+                     {["ease-in-out","linear","ease-in","ease-out"].map(c => (
+                       <DropdownMenuItem key={c} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.Fade?.curve === c ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, Fade: { ...p.Fade, curve: c } }))}>{c} {transOpts.Fade?.curve === c ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                   </>)}
+                   {label === "Merge" && (<>
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Blend Mode</DropdownMenuLabel>
+                     {["normal","screen","multiply","overlay","hard-light"].map(b => (
+                       <DropdownMenuItem key={b} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.Merge?.blend === b ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, Merge: { ...p.Merge, blend: b } }))}>{b} {transOpts.Merge?.blend === b ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                   </>)}
+                   {label === "Wipe" && (<>
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Direction</DropdownMenuLabel>
+                     {["left","right","up","down","diagonal-tl","diagonal-tr"].map(d => (
+                       <DropdownMenuItem key={d} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.Wipe?.direction === d ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, Wipe: { ...p.Wipe, direction: d } }))}>{d} {transOpts.Wipe?.direction === d ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                     <DropdownMenuSeparator />
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Border Width: {transOpts.Wipe?.border ?? 0}px</DropdownMenuLabel>
+                     {[0, 2, 4, 8].map(b => (
+                       <DropdownMenuItem key={b} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.Wipe?.border === b ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, Wipe: { ...p.Wipe, border: b } }))}>{b}px {transOpts.Wipe?.border === b ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                   </>)}
+                   {label === "CubeZoom" && (<>
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Rotation Axis</DropdownMenuLabel>
+                     {["X","Y","Z"].map(a => (
+                       <DropdownMenuItem key={a} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.CubeZoom?.axis === a ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, CubeZoom: { ...p.CubeZoom, axis: a } }))}>{a}-axis {transOpts.CubeZoom?.axis === a ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                     <DropdownMenuSeparator />
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Depth: {((transOpts.CubeZoom?.depth ?? 0.5) as number * 100).toFixed(0)}%</DropdownMenuLabel>
+                     {[0.25, 0.5, 0.75, 1.0].map(d => (
+                       <DropdownMenuItem key={d} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.CubeZoom?.depth === d ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, CubeZoom: { ...p.CubeZoom, depth: d } }))}>{(d * 100).toFixed(0)}% {transOpts.CubeZoom?.depth === d ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                   </>)}
+                   {label === "FTB" && (<>
+                     <DropdownMenuLabel style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", padding: "2px 10px" }}>Hold at Black: {transOpts.FTB?.holdMs ?? 200}ms</DropdownMenuLabel>
+                     {[0, 100, 200, 500, 1000].map(h => (
+                       <DropdownMenuItem key={h} style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: transOpts.FTB?.holdMs === h ? "#4F9EFF" : "#C0C2C8" }}
+                         onClick={() => setTransOpts(p => ({ ...p, FTB: { ...p.FTB, holdMs: h } }))}>{h}ms {transOpts.FTB?.holdMs === h ? "✓" : ""}</DropdownMenuItem>
+                     ))}
+                   </>)}
+                 </DropdownMenuContent>
+               </DropdownMenu>
+             </div>
             ))}
            {/* Scene number buttons */}
            <div style={{ margin: "6px 6px 2px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 2 }}>
@@ -1553,31 +1642,63 @@ export default function Dashboard() {
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", transform: "rotate(180deg)", textTransform: "uppercase" }}>OUTPUTS</span>
             </div>
             {/* Master fader */}
-            <div style={{ width: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 4px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
-              <div style={{ padding: "1px 6px", background: "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>Master</div>
-              <button style={{ width: 22, height: 22, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Cpu size={9} />
+            <div style={{ width: 68, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 4px", borderRight: "1px solid #2A2D35", flexShrink: 0, background: "#0A0C10" }}>
+              <div style={{ padding: "1px 8px", background: masterMuted ? "linear-gradient(180deg,#7F1D1D,#5A1010)" : "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: masterMuted ? "#FCA5A5" : "#000", letterSpacing: "0.06em", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>MASTER</div>
+              <VUMeterVertical color="#22C55E" active={isLive && !masterMuted} volume={masterVolume} />
+              {/* dB readout */}
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 8, color: "#22C55E", letterSpacing: "0.04em" }}>
+                {masterVolume === 0 ? "-∞" : masterVolume >= 100 ? "0.0" : (20 * Math.log10(masterVolume / 100)).toFixed(1)} dB
+              </span>
+              {/* Volume fader */}
+              <input type="range" min={0} max={100} value={masterVolume}
+                onChange={e => setMasterVolume(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "#22C55E", cursor: "pointer", height: 3 }} />
+              {/* Pan knob (horizontal slider) */}
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: "#505868", letterSpacing: "0.06em" }}>PAN</span>
+                <input type="range" min={-50} max={50} defaultValue={0}
+                  style={{ width: "100%", accentColor: "#4F9EFF", cursor: "pointer", height: 2 }} />
+              </div>
+              {/* Mute button */}
+              <button onClick={() => setMasterMuted(v => !v)}
+                style={{ width: "100%", padding: "2px 0", borderRadius: 2, border: `1px solid ${masterMuted ? "#EF4444" : "#3A3D45"}`, background: masterMuted ? "#EF4444" : "#1E2128", color: masterMuted ? "#fff" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                {masterMuted ? "MUTED" : "M"}
               </button>
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0 }}>
-                <div style={{ width: 6, height: "100%", background: "#1E2128", border: "1px solid #3A3D45", borderRadius: 3, position: "relative" }}>
-                  <div style={{ position: "absolute", bottom: "30%", left: -7, right: -7, height: 12, background: "linear-gradient(180deg,#4A4D55,#2A2D35)", border: "1px solid #5A5D65", borderRadius: 2, cursor: "pointer" }} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                <button style={{ width: 18, height: 18, background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Volume2 size={9} /></button>
-                <button style={{ width: 18, height: 18, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 2, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Mic size={9} /></button>
-              </div>
             </div>
             {/* Channel strips */}
             <div style={{ display: "flex", overflowX: "auto", minWidth: 0 }}>
               {audioChannels.map(ch => {
                 const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+                const pan = channelPan[ch.id] ?? 0;
+                const gain = channelGain[ch.id] ?? 0;
                 return (
-                  <div key={ch.id} style={{ minWidth: 52, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 3px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s", flexShrink: 0 }}>
+                  <div key={ch.id} style={{ minWidth: 58, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 3px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.35 : 1, transition: "opacity 0.15s", flexShrink: 0 }}>
                     <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
+                    {/* dB readout */}
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 7, color: cs.muted ? "#606878" : ch.color, letterSpacing: "0.02em" }}>
+                      {cs.volume === 0 ? "-∞" : cs.volume >= 100 ? "0.0" : (20 * Math.log10(cs.volume / 100)).toFixed(1)}
+                    </span>
+                    {/* Volume fader */}
                     <input type="range" min={0} max={100} value={cs.volume}
                       onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
                       style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
+                    {/* Pan knob */}
+                    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: pan === 0 ? "#505868" : "#4F9EFF", letterSpacing: "0.04em" }}>
+                        {pan === 0 ? "C" : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}
+                      </span>
+                      <input type="range" min={-50} max={50} value={pan}
+                        onChange={e => setChannelPan(p => ({ ...p, [ch.id]: Number(e.target.value) }))}
+                        style={{ width: "100%", accentColor: "#4F9EFF", cursor: "pointer", height: 2 }} />
+                    </div>
+                    {/* Gain trim */}
+                    <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 1 }}>
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: "#505868", flexShrink: 0 }}>G</span>
+                      <input type="number" min={-12} max={12} value={gain}
+                        onChange={e => setChannelGain(p => ({ ...p, [ch.id]: Number(e.target.value) }))}
+                        style={{ width: "100%", background: "#0A0C10", border: "1px solid #2A2D35", borderRadius: 2, color: gain !== 0 ? "#FBBF24" : "#808898", fontSize: 7, fontFamily: "'JetBrains Mono',monospace", padding: "1px 2px", textAlign: "center" }} />
+                    </div>
+                    {/* Channel name */}
                     <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, color: "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 46, textAlign: "center" }}>{ch.name}</span>
                     <div style={{ display: "flex", gap: 2 }}>
                       <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
@@ -1826,6 +1947,45 @@ export default function Dashboard() {
             }} style={{ width: "100%", marginTop: 8, padding: "7px 0", background: "linear-gradient(180deg,#166534,#14532D)", border: "1px solid #22C55E40", borderRadius: 4, color: "#86EFAC", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
               ▶ GO (Preview → Program)
             </button>
+          </div>
+        </div>
+      )}
+      {/* Keyboard Shortcut Overlay */}
+      {showShortcuts && (
+        <div onClick={() => setShowShortcuts(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#141619", border: "1px solid #3A3D45", borderRadius: 6, boxShadow: "0 24px 80px rgba(0,0,0,0.9)", width: 560, maxHeight: "80vh", overflowY: "auto", padding: "20px 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 14, color: "#E0E2E8", letterSpacing: "0.04em" }}>⌨ Keyboard Shortcuts</span>
+              <button onClick={() => setShowShortcuts(false)} style={{ background: "none", border: "none", color: "#606878", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+            </div>
+            {[
+              { section: "Transitions", shortcuts: [
+                { key: "Space / Enter", desc: "GO — push Preview to Program" },
+                { key: "1 – 8", desc: "Load scene N into Preview" },
+                { key: "F", desc: "Toggle fullscreen" },
+                { key: "Shift + ?", desc: "Toggle this shortcut overlay" },
+              ]},
+              { section: "Stream", shortcuts: [
+                { key: "Ctrl + Shift + S", desc: "Start / Stop stream" },
+                { key: "Ctrl + Shift + R", desc: "Start / Stop recording" },
+              ]},
+              { section: "UI", shortcuts: [
+                { key: "Escape", desc: "Close dialogs / overlays" },
+                { key: "Ctrl + S", desc: "Save project" },
+                { key: "Ctrl + O", desc: "Open project" },
+              ]},
+            ].map(({ section, shortcuts }) => (
+              <div key={section} style={{ marginBottom: 16 }}>
+                <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, borderBottom: "1px solid #2A2D35", paddingBottom: 4 }}>{section}</div>
+                {shortcuts.map(({ key, desc }) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #1E2128" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: "#E0E2E8", background: "#1E2128", border: "1px solid #3A3D45", borderRadius: 3, padding: "2px 8px", whiteSpace: "nowrap" }}>{key}</span>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#A0A8B8", marginLeft: 16 }}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: "#404858", marginTop: 8, textAlign: "center" }}>Press Shift+? or click anywhere outside to close</p>
           </div>
         </div>
       )}
