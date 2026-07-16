@@ -588,9 +588,15 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", handler);
   }, [previewSceneId, handleGo, activeTransition, scenes, setActiveSceneId, handleFullscreen]);
 
-  // Active scene
+  // Active scene — memoize sources so ProgramCanvas React.memo can bail out on timecode ticks
   const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
-  const sources      = activeScene?.sources ?? [];
+  const EMPTY_SOURCES: typeof activeScene extends null ? never[] : NonNullable<typeof activeScene>["sources"] = useMemo(() => [] as any, []);
+  const sources      = useMemo(() => activeScene?.sources ?? EMPTY_SOURCES, [activeScene, EMPTY_SOURCES]);
+  // Memoize preview/program sources separately so their canvases don't re-render on timecode ticks
+  const previewScene  = useMemo(() => scenes.find(s => s.id === previewSceneId) ?? null, [scenes, previewSceneId]);
+  const programScene  = useMemo(() => scenes.find(s => s.id === programSceneId) ?? null, [scenes, programSceneId]);
+  const previewSources = useMemo(() => previewScene?.sources ?? EMPTY_SOURCES, [previewScene, EMPTY_SOURCES]);
+  const programSources = useMemo(() => programScene?.sources ?? EMPTY_SOURCES, [programScene, EMPTY_SOURCES]);
   const selectedSource = sources.find(s => s.id === selectedSourceId) ?? null;
 
   // Timecode
@@ -736,19 +742,15 @@ export default function Dashboard() {
                     <Monitor size={32} style={{ color: "#2A3550", opacity: 0.4 }} />
                     <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Preview</span>
                   </div>
-                ) : (() => {
-                  const prevScene = scenes.find(s => s.id === previewSceneId);
-                  const prevSources = prevScene?.sources ?? [];
-                  return (
+                ) : (
                     <ProgramCanvas
-                      sources={prevSources}
+                      sources={previewSources}
                       selectedId={selectedSourceId}
                       transforms={canvasTransforms}
                       onSelect={setSelectedSourceId}
                       onTransformChange={handleCanvasTransformChange}
                     />
-                  );
-                })()}
+                )}
                 {/* PREVIEW badge */}
                 <div style={{ position: "absolute", top: 6, left: 6, padding: "1px 6px", background: "#22C55E", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.08em", pointerEvents: "none" }}>PREVIEW</div>
               </div>
@@ -827,8 +829,6 @@ export default function Dashboard() {
                     <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Output</span>
                   </div>
                 ) : (() => {
-                  const progScene = scenes.find(s => s.id === programSceneId);
-                  const progSources = progScene?.sources ?? [];
                   const transStyle: React.CSSProperties = transitionPhase === "out"
                     ? activeTransition === "Fade" || activeTransition === "FTB"
                       ? { opacity: 0, transition: `opacity ${transitionSpeed/2}ms ease-in-out` }
@@ -853,7 +853,7 @@ export default function Dashboard() {
                   return (
                     <div style={{ position: "absolute", inset: 0, ...transStyle }}>
                       <ProgramCanvas
-                        sources={progSources}
+                        sources={programSources}
                         selectedId={null}
                         transforms={canvasTransforms}
                         onSelect={() => {}}
