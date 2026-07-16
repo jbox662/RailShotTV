@@ -1,7 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-
 @custom-variant dark (&:is(.dark *));
+
+/* Native vertical range slider for audio mixer faders */
+input[type="range"].mixer-fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  width: 20px;
+  height: 100px;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+}
 
 @theme inline {
   --font-display: 'Bebas Neue', sans-serif;
