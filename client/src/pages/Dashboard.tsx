@@ -941,6 +941,12 @@ export default function Dashboard() {
               {icon}
             </button>
           ))}
+          {/* Audio Mixer toggle */}
+          <button onClick={() => setAudioMixerOpen(v => !v)}
+            style={{ marginLeft: 8, padding: "5px 12px", background: audioMixerOpen ? "linear-gradient(180deg,#1A3AFF,#1230CC)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${audioMixerOpen ? "#3A6AFF" : "#3A3D45"}`, borderRadius: 3, color: audioMixerOpen ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: audioMixerOpen ? "0 0 10px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 2px 6px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s" }}>
+            <Volume2 size={12} />
+            Audio Mixer
+          </button>
           {/* Status bar */}
           <div style={{ marginLeft: 8, display: "flex", alignItems: "center", gap: 8, padding: "2px 8px", background: "#0A0C0F", border: "1px solid #2A2D35", borderRadius: 3 }}>
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#22C55E" }}>1080p29.97</span>
