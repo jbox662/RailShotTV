@@ -549,6 +549,44 @@ export default function Dashboard() {
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore if typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      // Enter or Space → GO (trigger transition on previewSceneId)
+      if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+        e.preventDefault();
+        if (previewSceneId !== null) {
+          handleGo(previewSceneId);
+          toast.success(`${activeTransition} → ${scenes.find(s => s.id === previewSceneId)?.name ?? "scene"}`);
+        } else {
+          toast.error("No scene in Preview — click a tile first");
+        }
+        return;
+      }
+      // Number keys 1–8 → set that scene as Preview
+      if (e.key >= "1" && e.key <= "8" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const idx = parseInt(e.key) - 1;
+        const sc = scenes[idx];
+        if (sc) {
+          setPreviewSceneId(sc.id);
+          setActiveSceneId(sc.id);
+          setSelectedSourceId(null);
+          toast.info(`Preview → ${sc.name}`);
+        }
+        return;
+      }
+      // F → fullscreen toggle
+      if (e.key === "f" || e.key === "F") {
+        handleFullscreen();
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [previewSceneId, handleGo, activeTransition, scenes, setActiveSceneId, handleFullscreen]);
 
   // Active scene
   const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
@@ -681,26 +719,30 @@ export default function Dashboard() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 10px", background: "linear-gradient(180deg,#1A1D22,#141619)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 11, color: "#22C55E", letterSpacing: "0.06em" }}>PREVIEW</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{activeScene?.name ?? "No Scene"}</span>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#A0A8B8" }}>{scenes.find(s => s.id === previewSceneId)?.name ?? "No Scene"}</span>
               </div>
             </div>
             {/* Preview canvas */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#080A0D", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "relative", width: "100%", maxWidth: "100%", aspectRatio: "16/9", background: "#000", border: "2px solid #22C55E30", overflow: "hidden" }}>
-                {activeSceneId === null ? (
+                {previewSceneId === null ? (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <Monitor size={32} style={{ color: "#2A3550", opacity: 0.4 }} />
                     <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Preview</span>
                   </div>
-                ) : (
-                  <ProgramCanvas
-                    sources={sources}
-                    selectedId={selectedSourceId}
-                    transforms={canvasTransforms}
-                    onSelect={setSelectedSourceId}
-                    onTransformChange={handleCanvasTransformChange}
-                  />
-                )}
+                ) : (() => {
+                  const prevScene = scenes.find(s => s.id === previewSceneId);
+                  const prevSources = prevScene?.sources ?? [];
+                  return (
+                    <ProgramCanvas
+                      sources={prevSources}
+                      selectedId={selectedSourceId}
+                      transforms={canvasTransforms}
+                      onSelect={setSelectedSourceId}
+                      onTransformChange={handleCanvasTransformChange}
+                    />
+                  );
+                })()}
                 {/* PREVIEW badge */}
                 <div style={{ position: "absolute", top: 6, left: 6, padding: "1px 6px", background: "#22C55E", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.08em", pointerEvents: "none" }}>PREVIEW</div>
               </div>
@@ -842,13 +884,13 @@ export default function Dashboard() {
                 <span style={{ fontSize: 10, color: "#404450", letterSpacing: "0.06em" }}>No inputs — click Add Input to begin</span>
               </div>
             ) : scenes.map((scene, idx) => {
-              const isActive = scene.id === activeSceneId;
-              const isProgram = isActive;
+              const isPreview = scene.id === previewSceneId;
+              const isProgram = scene.id === programSceneId;
               return (
-                <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#0F1A0A" : "#0D0F12" }}>
+                <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#1A0A0A" : isPreview ? "#0A150A" : "#0D0F12", outline: isProgram ? "2px solid #FF5A2C60" : isPreview ? "2px solid #22C55E60" : "none", outlineOffset: -2 }}>
                   {/* Tile header */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
-                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram || isPreview ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
                       {idx + 1} {scene.name}
                     </span>
                     <button onClick={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
@@ -858,7 +900,7 @@ export default function Dashboard() {
                   </div>
                   {/* Tile preview */}
                   <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
-                    onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
+                    onClick={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
                     {scene.sources.length === 0 ? (
                       <span style={{ fontSize: 9, color: "#303540", letterSpacing: "0.04em" }}>Blank</span>
                     ) : (
