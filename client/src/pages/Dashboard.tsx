@@ -720,6 +720,12 @@ export default function Dashboard() {
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 11, color: "#22C55E", letterSpacing: "0.06em" }}>PREVIEW</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#A0A8B8" }}>{scenes.find(s => s.id === previewSceneId)?.name ?? "No Scene"}</span>
+                {previewSceneId !== null && (
+                  <button onClick={() => { setPreviewSceneId(null); setSelectedSourceId(null); }} title="Clear Preview"
+                    style={{ padding: "1px 7px", background: "none", border: "1px solid #22C55E40", borderRadius: 2, color: "#22C55E70", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.06em" }}>
+                    CLEAR
+                  </button>
+                )}
               </div>
             </div>
             {/* Preview canvas */}
@@ -804,6 +810,12 @@ export default function Dashboard() {
                 {isLive && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#FF5A2C" }}>● LIVE</span>}
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#A0A8B8" }}>{scenes.find(s => s.id === programSceneId)?.name ?? "No Scene"}</span>
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{tc}</span>
+                {programSceneId !== null && (
+                  <button onClick={() => setProgramSceneId(null)} title="Clear Program output"
+                    style={{ padding: "1px 7px", background: "none", border: "1px solid #FF5A2C40", borderRadius: 2, color: "#FF5A2C70", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.06em" }}>
+                    CLEAR
+                  </button>
+                )}
               </div>
             </div>
             {/* Program canvas */}
