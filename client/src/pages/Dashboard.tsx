@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
 import { useScenes } from "@/contexts/SceneContext";
+import { useStreaming } from "@/contexts/StreamingContext";
 import { toast } from "sonner";
 import {
   Plus, Trash2, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown,
@@ -769,7 +770,7 @@ export default function Dashboard() {
   }, [addScene]);
 
   // Stream state
-  const [isLive, setIsLive]             = useState(false);
+  const { isLive, setIsLive } = useStreaming();
   const [livePlatform, setLivePlatform] = useState("");
   const [showGoLive, setShowGoLive]     = useState(false);
   const [tc, setTc]                     = useState("00:00:00");

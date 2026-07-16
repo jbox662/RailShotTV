@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { SceneProvider } from "./contexts/SceneContext";
+import { StreamingProvider } from "./contexts/StreamingContext";
 import Dashboard from "./pages/Dashboard";
 import { Redirect } from "wouter";
 import ChatPanel from "./pages/ChatPanel";
@@ -33,10 +34,12 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <SceneProvider>
+        <StreamingProvider>
         <TooltipProvider>
           <Toaster />
           <Router />
         </TooltipProvider>
+        </StreamingProvider>
         </SceneProvider>
       </ThemeProvider>
     </ErrorBoundary>

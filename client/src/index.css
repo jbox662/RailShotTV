@@ -190,6 +190,13 @@
   button:active:not(:disabled) {
     transform: scale(0.96);
   }
+
+  /* Sidebar live indicator ripple */
+  @keyframes liveRipple {
+    0%   { transform: scale(1);   opacity: 0.9; }
+    70%  { transform: scale(2.4); opacity: 0;   }
+    100% { transform: scale(2.4); opacity: 0;   }
+  }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),

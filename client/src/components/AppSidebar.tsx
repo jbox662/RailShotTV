@@ -4,6 +4,7 @@ import React from "react";
 import { useLocation, Link } from "wouter";
 import { Tv2, MessageSquare, BarChart2, Settings, Trophy, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useStreaming } from "@/contexts/StreamingContext";
 
 const NAV_ITEMS = [
   { path: "/",           icon: Tv2,           label: "Dashboard",    glow: "rgba(255,90,44,0.65)",   active: "#FF5A2C" },
@@ -18,6 +19,7 @@ type Props = { children?: React.ReactNode };
 
 export default function AppSidebar({ children }: Props) {
   const [location] = useLocation();
+  const { isLive } = useStreaming();
   return (
     <div style={{ display: "flex", width: "100%", height: "100vh", overflow: "hidden" }}>
       {/* Icon rail */}
@@ -48,6 +50,36 @@ export default function AppSidebar({ children }: Props) {
             </svg>
           </div>
         </div>
+
+        {/* Live indicator — only visible when streaming */}
+        {isLive && (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+            marginBottom: 8, paddingBottom: 8,
+            borderBottom: "1px solid rgba(255,90,44,0.2)",
+            width: "100%",
+          }}>
+            {/* Pulsing red dot */}
+            <div style={{ position: "relative", width: 10, height: 10 }}>
+              <div style={{
+                position: "absolute", inset: 0, borderRadius: "50%",
+                background: "#FF5A2C",
+                animation: "liveRipple 1.4s ease-out infinite",
+              }} />
+              <div style={{
+                position: "absolute", inset: 2, borderRadius: "50%",
+                background: "#FF3A0C",
+              }} />
+            </div>
+            <span style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontWeight: 800, fontSize: 7,
+              color: "#FF5A2C",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+            }}>LIVE</span>
+          </div>
+        )}
 
         {/* Nav items */}
         <nav style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, width: "100%", alignItems: "center", paddingTop: 4 }}>

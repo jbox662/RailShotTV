@@ -7,6 +7,8 @@ import {
   Gift, TrendingUp, Volume2, VolumeX, Pin, X
 } from "lucide-react";
 import { toast } from "sonner";
+import { useState as useDialogState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Platform = "twitch" | "youtube" | "facebook";
@@ -84,6 +86,139 @@ function ConnBadge({ status }: { status: ConnStatus }) {
 }
 
 // ─── Platform Connect Panel ───────────────────────────────────────────────────
+// ─── API Key Setup Dialog ─────────────────────────────────────────────────────
+function ApiKeyDialog({
+  platform, open, onClose, onSave
+}: {
+  platform: Platform | null;
+  open: boolean;
+  onClose: () => void;
+  onSave: (p: Platform, channel: string, apiKey: string) => void;
+}) {
+  const [channel, setChannel] = useDialogState("");
+  const [apiKey, setApiKey] = useDialogState("");
+  const [showKey, setShowKey] = useDialogState(false);
+  if (!platform) return null;
+  const meta = PLATFORM_META[platform];
+
+  const handleSave = () => {
+    if (!channel.trim()) { toast.error("Channel / ID is required"); return; }
+    if (platform !== "twitch" && !apiKey.trim()) { toast.error("API key is required"); return; }
+    onSave(platform, channel.trim(), apiKey.trim());
+    onClose();
+    setChannel(""); setApiKey("");
+  };
+
+  const helpText: Record<Platform, { channelLabel: string; channelHint: string; keyLabel: string; keyHint: string; keyLink: string }> = {
+    twitch: {
+      channelLabel: "Channel Name",
+      channelHint: "e.g. your_channel",
+      keyLabel: "",
+      keyHint: "",
+      keyLink: "",
+    },
+    youtube: {
+      channelLabel: "Live Chat ID or Channel Handle",
+      channelHint: "e.g. UC... or @YourChannel",
+      keyLabel: "YouTube Data API v3 Key",
+      keyHint: "AIza...",
+      keyLink: "https://console.cloud.google.com/apis/library/youtube.googleapis.com",
+    },
+    facebook: {
+      channelLabel: "Page ID",
+      channelHint: "e.g. 123456789012345",
+      keyLabel: "Page Access Token",
+      keyHint: "EAAx...",
+      keyLink: "https://developers.facebook.com/tools/explorer/",
+    },
+  };
+  const h = helpText[platform];
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent style={{ background: "#141619", border: "1px solid #2A2D35", maxWidth: 440 }}>
+        <DialogHeader>
+          <DialogTitle style={{ fontFamily: "'DM Sans', sans-serif", color: meta.color, display: "flex", alignItems: "center", gap: 8 }}>
+            <Wifi size={16} />
+            Connect {meta.label}
+          </DialogTitle>
+          <DialogDescription style={{ fontFamily: "'DM Sans', sans-serif", color: "#8892A4", fontSize: 12 }}>
+            {platform === "twitch"
+              ? "Twitch IRC chat requires only a channel name — no API key needed for read-only access."
+              : `Enter your ${meta.label} credentials to enable live chat aggregation.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 4 }}>
+          {/* Channel / ID */}
+          <div>
+            <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {h.channelLabel}
+            </label>
+            <input
+              value={channel}
+              onChange={e => setChannel(e.target.value)}
+              placeholder={h.channelHint}
+              autoFocus
+              style={{ width: "100%", marginTop: 6, padding: "8px 10px", borderRadius: 6, background: "#080A0D", border: "1px solid #2A2D35", color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, outline: "none" }}
+            />
+          </div>
+
+          {/* API Key (not for Twitch) */}
+          {platform !== "twitch" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  {h.keyLabel}
+                </label>
+                <a href={h.keyLink} target="_blank" rel="noopener noreferrer"
+                  style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: meta.color, textDecoration: "none" }}>
+                  Get API Key ↗
+                </a>
+              </div>
+              <div style={{ position: "relative", marginTop: 6 }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder={h.keyHint}
+                  style={{ width: "100%", padding: "8px 36px 8px 10px", borderRadius: 6, background: "#080A0D", border: "1px solid #2A2D35", color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, outline: "none" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(s => !s)}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#606878", padding: 0 }}
+                >
+                  {showKey ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                </button>
+              </div>
+              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606878", marginTop: 5, lineHeight: 1.5 }}>
+                Your key is stored locally in your browser and never sent to any server.
+              </p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+            <button
+              onClick={onClose}
+              style={{ padding: "7px 16px", borderRadius: 6, background: "transparent", border: "1px solid #2A2D35", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              style={{ padding: "7px 16px", borderRadius: 6, background: meta.bg, border: `1px solid ${meta.color}60`, color: meta.color, fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Wifi size={12} /> Connect
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PlatformConnectPanel({
   platform, conn, onConnect, onDisconnect, onChannelChange
 }: {
@@ -116,8 +251,19 @@ function PlatformConnectPanel({
           </span>
         )}
         <div className="flex-1" />
-        <ConnBadge status={conn.status} />
-        <ChevronDown size={12} style={{ color: "#606878", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+        {isConnected && <ConnBadge status={conn.status} />}
+        {conn.status === "connecting" && <ConnBadge status={conn.status} />}
+        {!isConnected && (
+          <button
+            onClick={e => { e.stopPropagation(); onConnect(platform); }}
+            style={{ marginLeft: 6, padding: "3px 10px", borderRadius: 4, background: meta.bg, border: `1px solid ${meta.color}60`, color: meta.color, fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <Wifi size={10} /> Connect
+          </button>
+        )}
+        {isConnected && (
+          <ChevronDown size={12} style={{ color: "#606878", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", marginLeft: 4 }} />
+        )}
       </div>
 
       {/* Expanded config */}
@@ -284,13 +430,21 @@ export default function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(100);
 
+  // Dialog state for API key setup
+  const [dialogPlatform, setDialogPlatform] = useState<Platform | null>(null);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleConnect = useCallback((platform: Platform) => {
-    setConnections(prev => ({ ...prev, [platform]: { ...prev[platform], status: "connecting" } }));
+    // Open the API key dialog instead of connecting immediately
+    setDialogPlatform(platform);
+  }, []);
+
+  const handleDialogSave = useCallback((platform: Platform, channel: string, apiKey: string) => {
+    setConnections(prev => ({ ...prev, [platform]: { ...prev[platform], channel, apiKey, status: "connecting" } }));
     setTimeout(() => {
       setConnections(prev => ({ ...prev, [platform]: { ...prev[platform], status: "connected", viewers: Math.floor(Math.random() * 500) + 100 } }));
       toast.success(`Connected to ${PLATFORM_META[platform].label} chat`);
@@ -335,6 +489,7 @@ export default function ChatPanel() {
   ];
 
   return (
+    <>
     <AppSidebar>
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#141619", borderBottom: "1px solid #2A2D35" }}>
@@ -635,5 +790,12 @@ export default function ChatPanel() {
         </div>
       </div>
     </AppSidebar>
+    <ApiKeyDialog
+      platform={dialogPlatform}
+      open={dialogPlatform !== null}
+      onClose={() => setDialogPlatform(null)}
+      onSave={handleDialogSave}
+    />
+  </>
   );
 }
