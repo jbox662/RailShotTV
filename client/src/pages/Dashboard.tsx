@@ -31,6 +31,52 @@ const DEFAULT_TRANSFORMS: Record<string, CanvasTransform> = {
   lowerthird: { x: 0.0,  y: 0.72, w: 1.0,  h: 0.2  },
 };
 // ── Program Canvas ────────────────────────────────────────────────────────────
+// ── Double-buffer iframe — loads new URLs invisibly then swaps ────────────────
+function SmoothBrowserFrame({ url, name }: { url: string; name: string }) {
+  const [activeSlot, setActiveSlot] = useState<"a"|"b">("a");
+  const [slotUrl, setSlotUrl] = useState<{ a: string; b: string }>({ a: url, b: "" });
+  const prevUrlRef = useRef(url);
+
+  useEffect(() => {
+    if (url === prevUrlRef.current) return;
+    prevUrlRef.current = url;
+    const nextSlot = activeSlot === "a" ? "b" : "a";
+    setSlotUrl(s => ({ ...s, [nextSlot]: url }));
+  }, [url, activeSlot]);
+
+  const injectNoScroll = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const doc = (e.target as HTMLIFrameElement).contentDocument;
+      if (doc) {
+        const s = doc.createElement("style");
+        s.textContent = "html,body{overflow:hidden!important;scrollbar-width:none!important;-ms-overflow-style:none!important;}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}";
+        doc.head?.appendChild(s);
+      }
+    } catch (_) { /* cross-origin */ }
+  };
+
+  const handleLoad = (slot: "a"|"b") => (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    injectNoScroll(e);
+    if (slot !== activeSlot) setActiveSlot(slot);
+  };
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+      {(["a","b"] as const).map(slot => (
+        <iframe
+          key={slot}
+          src={slotUrl[slot]}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", display: "block", pointerEvents: "none", opacity: slot === activeSlot ? 1 : 0 }}
+          title={`${name}-${slot}`}
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          scrolling="no"
+          onLoad={handleLoad(slot)}
+        />
+      ))}
+    </div>
+  );
+}
+
 const ProgramCanvas = memo(function ProgramCanvas({
   sources, selectedId, transforms, onSelect, onTransformChange,
 }: {
@@ -145,23 +191,7 @@ const ProgramCanvas = memo(function ProgramCanvas({
           >
             {/* Source content */}
             {src.type === "browser" && url ? (
-              <iframe
-                src={url}
-                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: "none" }}
-                title={src.name}
-                sandbox="allow-scripts allow-same-origin allow-forms"
-                scrolling="no"
-                onLoad={(e) => {
-                  try {
-                    const doc = (e.target as HTMLIFrameElement).contentDocument;
-                    if (doc) {
-                      const s = doc.createElement("style");
-                      s.textContent = "html,body{overflow:hidden!important;scrollbar-width:none!important;-ms-overflow-style:none!important;}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}";
-                      doc.head?.appendChild(s);
-                    }
-                  } catch (_) { /* cross-origin — can't inject, scrolling="no" is the fallback */ }
-                }}
-              />
+              <SmoothBrowserFrame url={url} name={src.name} />
             ) : src.type === "camera" ? (
               <div style={{ width: "100%", height: "100%", background: "#0A1A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
                 <src.icon size={24} style={{ color: src.color, opacity: 0.5 }} />
