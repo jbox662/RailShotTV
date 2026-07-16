@@ -485,6 +485,11 @@ export default function Dashboard() {
   const [showAddSource, setShowAddSource]       = useState(false);
   const [sourceTransforms, setSourceTransforms] = useState<Record<number, Record<string, number | boolean>>>({});
   const [activeTransition, setActiveTransition] = useState<string>("Cut");
+  const [transitionSpeed, setTransitionSpeed] = useState(500);
+  const [programSceneId, setProgramSceneId] = useState<number | null>(null);
+  const [previewSceneId, setPreviewSceneId] = useState<number | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionPhase, setTransitionPhase] = useState<"idle"|"out"|"in">("idle");
   const [renamingSourceId, setRenamingSourceId] = useState<number | null>(null);
   const [renameSourceValue, setRenameSourceValue] = useState("");
   const [canvasTransforms, setCanvasTransforms] = useState<Record<number, CanvasTransform>>(() => {
@@ -496,6 +501,30 @@ export default function Dashboard() {
   const handleCanvasTransformChange = useCallback((id: number, t: CanvasTransform) => {
     setCanvasTransforms(p => ({ ...p, [id]: t }));
   }, []);
+  // GO transition handler
+  const handleGo = useCallback((targetSceneId: number) => {
+    if (isTransitioning) return;
+    if (activeTransition === "Cut") {
+      // Instant cut — no animation
+      setProgramSceneId(targetSceneId);
+      setActiveSceneId(targetSceneId);
+      setSelectedSourceId(null);
+      return;
+    }
+    setIsTransitioning(true);
+    setTransitionPhase("out");
+    const halfDuration = activeTransition === "FTB" ? transitionSpeed : transitionSpeed / 2;
+    setTimeout(() => {
+      setProgramSceneId(targetSceneId);
+      setActiveSceneId(targetSceneId);
+      setSelectedSourceId(null);
+      setTransitionPhase("in");
+      setTimeout(() => {
+        setIsTransitioning(false);
+        setTransitionPhase("idle");
+      }, halfDuration);
+    }, halfDuration);
+  }, [isTransitioning, activeTransition, transitionSpeed, setActiveSceneId]);
 
   // Overlay browser
   const [overlayBrowserOpen, setOverlayBrowserOpen] = useState(false);
@@ -719,7 +748,7 @@ export default function Dashboard() {
             {/* Transition speed fader */}
             <div style={{ margin: "4px 6px", display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", textAlign: "center" }}>Speed</span>
-              <input type="range" min={100} max={2000} defaultValue={500}
+              <input type="range" min={100} max={2000} value={transitionSpeed} onChange={e => setTransitionSpeed(Number(e.target.value))}
                 style={{ width: "100%", accentColor: "#3A6AFF", cursor: "pointer", height: 3 }} />
             </div>
           </div>
@@ -731,26 +760,54 @@ export default function Dashboard() {
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 11, color: isLive ? "#FF5A2C" : "#FF5A2C80", letterSpacing: "0.06em" }}>PROGRAM</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {isLive && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#FF5A2C" }}>● LIVE</span>}
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#A0A8B8" }}>{scenes.find(s => s.id === programSceneId)?.name ?? "No Scene"}</span>
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{tc}</span>
               </div>
             </div>
             {/* Program canvas */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#080A0D", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "relative", width: "100%", maxWidth: "100%", aspectRatio: "16/9", background: "#000", border: `2px solid ${isLive ? "#FF5A2C50" : "#FF5A2C20"}`, overflow: "hidden", boxShadow: isLive ? "0 0 30px rgba(255,90,44,0.15)" : "none", transition: "box-shadow 0.3s, border-color 0.3s" }}>
-                {activeSceneId === null ? (
+                {programSceneId === null ? (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <Monitor size={32} style={{ color: "#2A3550", opacity: 0.4 }} />
                     <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Output</span>
                   </div>
-                ) : (
-                  <ProgramCanvas
-                    sources={sources}
-                    selectedId={selectedSourceId}
-                    transforms={canvasTransforms}
-                    onSelect={setSelectedSourceId}
-                    onTransformChange={handleCanvasTransformChange}
-                  />
-                )}
+                ) : (() => {
+                  const progScene = scenes.find(s => s.id === programSceneId);
+                  const progSources = progScene?.sources ?? [];
+                  const transStyle: React.CSSProperties = transitionPhase === "out"
+                    ? activeTransition === "Fade" || activeTransition === "FTB"
+                      ? { opacity: 0, transition: `opacity ${transitionSpeed/2}ms ease-in-out` }
+                      : activeTransition === "Slide"
+                      ? { transform: "translateX(-100%)", transition: `transform ${transitionSpeed/2}ms ease-in-out` }
+                      : activeTransition === "Wipe"
+                      ? { clipPath: "inset(0 100% 0 0)", transition: `clip-path ${transitionSpeed/2}ms ease-in-out` }
+                      : activeTransition === "CubeZoom"
+                      ? { transform: "scale(0.8)", opacity: 0, transition: `all ${transitionSpeed/2}ms ease-in-out` }
+                      : {}
+                    : transitionPhase === "in"
+                    ? activeTransition === "Fade" || activeTransition === "FTB"
+                      ? { opacity: 1, transition: `opacity ${transitionSpeed/2}ms ease-in-out` }
+                      : activeTransition === "Slide"
+                      ? { transform: "translateX(0)", transition: `transform ${transitionSpeed/2}ms ease-in-out`, animation: `slideInRight ${transitionSpeed/2}ms ease-out` }
+                      : activeTransition === "Wipe"
+                      ? { clipPath: "inset(0 0% 0 0)", transition: `clip-path ${transitionSpeed/2}ms ease-in-out` }
+                      : activeTransition === "CubeZoom"
+                      ? { transform: "scale(1)", opacity: 1, transition: `all ${transitionSpeed/2}ms ease-in-out` }
+                      : {}
+                    : {};
+                  return (
+                    <div style={{ position: "absolute", inset: 0, ...transStyle }}>
+                      <ProgramCanvas
+                        sources={progSources}
+                        selectedId={null}
+                        transforms={canvasTransforms}
+                        onSelect={() => {}}
+                        onTransformChange={handleCanvasTransformChange}
+                      />
+                    </div>
+                  );
+                })()}
                 {/* ON AIR badge */}
                 {isLive && <div style={{ position: "absolute", top: 6, left: 6, padding: "1px 6px", background: "#FF5A2C", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#fff", letterSpacing: "0.08em", pointerEvents: "none", animation: "pulse 1.5s infinite" }}>ON AIR</div>}
                 {/* Corner markers */}
@@ -821,11 +878,12 @@ export default function Dashboard() {
                     {[1,2,3,4].map(n => (
                       <button key={n} style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#808898", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>{n}</button>
                     ))}
-                    <button onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`GO: ${scene.name}`); }}
-                      style={{ padding: "2px 6px", background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 0 8px rgba(34,197,94,0.3)", marginLeft: "auto" }}>
-                      GO
+                    <button onClick={() => { handleGo(scene.id); toast.success(`${activeTransition} → ${scene.name}`); }}
+                      disabled={isTransitioning}
+                      style={{ padding: "2px 6px", background: isTransitioning ? "linear-gradient(180deg,#1A3A1A,#122A12)" : "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: isTransitioning ? "#22C55E60" : "#000", fontSize: 9, fontWeight: 700, cursor: isTransitioning ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: isTransitioning ? "none" : "0 0 8px rgba(34,197,94,0.3)", marginLeft: "auto", transition: "all 0.15s" }}>
+                      {isTransitioning ? "..." : "GO"}
                     </button>
-                    <button onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`Cut → ${scene.name}`); }}
+                    <button onClick={() => { setProgramSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`Cut → ${scene.name}`); }}
                       style={{ padding: "2px 6px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#C0C2C8", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                       Cut
                     </button>
