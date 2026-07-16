@@ -9,9 +9,11 @@ import {
   Plus, Trash2, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown,
   Mic, Music, Volume2, Square, Layers, Monitor, Camera, Globe, Type,
   Image as ImageIcon, Bell, Trophy, AlignLeft, X, Search, Sparkles,
-  LayoutTemplate, Activity, Cpu, Users, Clock,
+  LayoutTemplate, Activity, Cpu, Users, Clock, Settings,
 } from "lucide-react";
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from "@/components/ui/context-menu";
+import { InputSettingsDrawer, DEFAULT_INPUT_SETTINGS } from "@/components/InputSettingsDrawer";
+import type { InputSettings } from "@/components/InputSettingsDrawer";
 
 
 // ── Canvas source transform ───────────────────────────────────────────────────
@@ -533,6 +535,24 @@ export default function Dashboard() {
   // Audio mixer
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
   const [audioMixerOpen, setAudioMixerOpen] = useState(false);
+  // Input settings drawer
+  const [inputSettingsSceneId, setInputSettingsSceneId] = useState<number | null>(null);
+  const [inputSettingsMap, setInputSettingsMap] = useState<Record<number, InputSettings>>({});
+  const inputSettingsScene = useMemo(() => scenes.find(s => s.id === inputSettingsSceneId) ?? null, [scenes, inputSettingsSceneId]);
+
+  const handleOpenInputSettings = useCallback((sceneId: number) => {
+    setInputSettingsSceneId(sceneId);
+  }, []);
+
+  const handleSaveInputSettings = useCallback((sceneId: number, settings: InputSettings) => {
+    setInputSettingsMap(prev => ({ ...prev, [sceneId]: settings }));
+    // Apply the name change to the scene itself
+    if (settings.name.trim()) {
+      renameScene(sceneId, settings.name.trim());
+    }
+    toast.success("Input settings saved");
+  }, [renameScene]);
+
   // Fullscreen state and handler
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [inputsPaused, setInputsPaused] = useState(false);
@@ -899,35 +919,95 @@ export default function Dashboard() {
               const isPreview = scene.id === previewSceneId;
               const isProgram = scene.id === programSceneId;
               return (
-                <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#1A0A0A" : isPreview ? "#0A150A" : "#0D0F12", outline: isProgram ? "2px solid #FF5A2C60" : isPreview ? "2px solid #22C55E60" : "none", outlineOffset: -2 }}>
-                  {/* Tile header */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
-                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram || isPreview ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
-                      {idx + 1} {scene.name}
-                    </span>
-                    <button onClick={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
-                      style={{ background: "none", border: "none", color: isProgram ? "#00000080" : "#606878", cursor: "pointer", display: "flex", padding: 1, flexShrink: 0 }}>
-                      <X size={10} />
-                    </button>
-                  </div>
-                  {/* Tile preview */}
-                  <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
-                    onClick={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
-                    {scene.sources.length === 0 ? (
-                      <span style={{ fontSize: 9, color: "#303540", letterSpacing: "0.04em" }}>Blank</span>
-                    ) : (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: 4, alignItems: "center", justifyContent: "center" }}>
-                        {scene.sources.slice(0,3).map(src => (
-                          <div key={src.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                            <src.icon size={10} style={{ color: src.color }} />
-                            <span style={{ fontSize: 8, color: "#808898" }}>{src.name}</span>
+               <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#1A0A0A" : isPreview ? "#0A150A" : "#0D0F12", outline: isProgram ? "2px solid #FF5A2C60" : isPreview ? "2px solid #22C55E60" : "none", outlineOffset: -2 }}>
+                 {/* Tile header */}
+                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+                   <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram || isPreview ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
+                     {idx + 1} {scene.name}
+                   </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                      {/* Gear icon → opens Input Settings drawer */}
+                      <button
+                        onClick={e => { e.stopPropagation(); handleOpenInputSettings(scene.id); }}
+                        title="Input Settings"
+                        style={{ background: "none", border: "none", color: isProgram || isPreview ? "#00000080" : "#4F9EFF80", cursor: "pointer", display: "flex", padding: 1, transition: "color 0.15s" }}
+                        onMouseEnter={e => (e.currentTarget.style.color = isProgram || isPreview ? "#000" : "#4F9EFF")}
+                        onMouseLeave={e => (e.currentTarget.style.color = isProgram || isPreview ? "#00000080" : "#4F9EFF80")}
+                      >
+                        <Settings size={10} />
+                      </button>
+                      {/* Delete button */}
+                      <button onClick={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
+                        style={{ background: "none", border: "none", color: isProgram ? "#00000080" : "#606878", cursor: "pointer", display: "flex", padding: 1 }}>
+                        <X size={10} />
+                      </button>
+                    </div>
+                 </div>
+                 {/* Tile preview — right-click for context menu */}
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
+                        onClick={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
+                        {scene.sources.length === 0 ? (
+                          <span style={{ fontSize: 9, color: "#303540", letterSpacing: "0.04em" }}>Blank</span>
+                        ) : (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: 4, alignItems: "center", justifyContent: "center" }}>
+                            {scene.sources.slice(0,3).map(src => (
+                              <div key={src.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                                <src.icon size={10} style={{ color: src.color }} />
+                                <span style={{ fontSize: 8, color: "#808898" }}>{src.name}</span>
+                              </div>
+                            ))}
+                            {scene.sources.length > 3 && <span style={{ fontSize: 8, color: "#606878" }}>+{scene.sources.length - 3}</span>}
                           </div>
-                        ))}
-                        {scene.sources.length > 3 && <span style={{ fontSize: 8, color: "#606878" }}>+{scene.sources.length - 3}</span>}
+                        )}
                       </div>
-                    )}
-                  </div>
-                  {/* Tile controls */}
+                    </ContextMenuTrigger>
+                    <ContextMenuContent style={{ minWidth: 180, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, padding: "4px 0", boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
+                      <ContextMenuLabel style={{ padding: "3px 10px", fontSize: 9, color: "#606878", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>{scene.name}</ContextMenuLabel>
+                      <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
+                      {/* Preview / Program quick actions */}
+                      <ContextMenuItem onSelect={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#22C55E", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        → Set as Preview
+                      </ContextMenuItem>
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                          Send to Program with…
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent style={{ minWidth: 140, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, padding: "4px 0", boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
+                          {["Cut","Fade","Merge","Wipe","CubeZoom","FTB"].map(t => (
+                            <ContextMenuItem key={t} onSelect={() => {
+                              const prev = activeTransition;
+                              setActiveTransition(t);
+                              handleGo(scene.id);
+                              toast.success(`${t} → ${scene.name}`);
+                              setTimeout(() => setActiveTransition(prev), 100);
+                            }}
+                              style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                              {t}
+                            </ContextMenuItem>
+                          ))}
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                      <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
+                      {/* Settings */}
+                      <ContextMenuItem onSelect={() => handleOpenInputSettings(scene.id)}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#4F9EFF", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        ⚙ Input Settings…
+                      </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => duplicateScene(scene)}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        Duplicate
+                      </ContextMenuItem>
+                      <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
+                      <ContextMenuItem onSelect={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#EF4444", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        Delete Input
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                 {/* Tile controls */}
                   <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "3px 4px", borderTop: "1px solid #2A2D35", background: "#0D0F12", flexShrink: 0 }}>
                     {[1,2,3,4].map(n => (
                       <button key={n} style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#808898", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>{n}</button>
@@ -1095,6 +1175,14 @@ export default function Dashboard() {
       {showAddSource && <AddSourceModal onAdd={handleAddSource} onClose={() => setShowAddSource(false)} />}
       <GoLiveModal open={showGoLive} onClose={() => setShowGoLive(false)}
         onGoLive={(cfg: { platform: string }) => { setIsLive(true); setLivePlatform(cfg.platform); setShowGoLive(false); }} />
+      {/* Input Settings Drawer */}
+      <InputSettingsDrawer
+        scene={inputSettingsScene}
+        open={inputSettingsSceneId !== null}
+        onClose={() => setInputSettingsSceneId(null)}
+        onSave={handleSaveInputSettings}
+        initialSettings={inputSettingsSceneId !== null ? inputSettingsMap[inputSettingsSceneId] : undefined}
+      />
     </AppSidebar>
   );
 }
