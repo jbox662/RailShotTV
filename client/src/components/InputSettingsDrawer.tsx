@@ -399,38 +399,168 @@ function AudioSettingsTab({ s, set }: { s: InputSettings; set: (patch: Partial<I
   );
 }
 
+// ── Source Config Tab — reuses InputConfigPanel-style fields inline ───────────
+function SourceConfigTab({ typeId, name, setName, config, setConfig }: {
+  typeId: string;
+  name: string;
+  setName: (v: string) => void;
+  config: Record<string, string | number | boolean>;
+  setConfig: (k: string, v: string | number | boolean) => void;
+}) {
+  const S = {
+    label: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#8892A4", display: "block" as const, marginBottom: 4, letterSpacing: "0.05em" },
+    input: { width: "100%", background: "#0D1017", border: "1px solid #2A2D35", borderRadius: 3, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, padding: "5px 8px", outline: "none", boxSizing: "border-box" as const },
+    select: { width: "100%", background: "#0D1017", border: "1px solid #2A2D35", borderRadius: 3, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, padding: "5px 8px", outline: "none" },
+    row: { marginBottom: 12 },
+    check: { display: "flex" as const, alignItems: "center" as const, gap: 8, marginBottom: 8, cursor: "pointer" as const },
+    checkLabel: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#C0C2C8" },
+    hint: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#606878", marginTop: 0, marginBottom: 14, lineHeight: 1.5 },
+  };
+  const nameRow = (
+    <div style={S.row}>
+      <label style={S.label}>Input Name</label>
+      <input value={name} onChange={e => setName(e.target.value)} style={S.input} />
+    </div>
+  );
+  const numInput = (label: string, key: string, def: number, min?: number, max?: number) => (
+    <div style={{ ...S.row, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <label style={{ ...S.label, marginBottom: 0 }}>{label}</label>
+      <input type="number" value={(config[key] as number) ?? def} min={min} max={max}
+        onChange={e => setConfig(key, Number(e.target.value))}
+        style={{ ...S.input, width: 100, textAlign: "right" }} />
+    </div>
+  );
+  const selectInput = (label: string, key: string, options: string[], def: string) => (
+    <div style={S.row}>
+      <label style={S.label}>{label}</label>
+      <select value={(config[key] as string) ?? def} onChange={e => setConfig(key, e.target.value)} style={S.select}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  const checkRow = (label: string, key: string) => (
+    <label style={S.check}>
+      <input type="checkbox" checked={!!(config[key])} onChange={e => setConfig(key, e.target.checked)}
+        style={{ width: 14, height: 14, accentColor: "#4F9EFF" }} />
+      <span style={S.checkLabel}>{label}</span>
+    </label>
+  );
+  const urlRow = (label: string, key: string, placeholder: string) => (
+    <div style={S.row}>
+      <label style={S.label}>{label}</label>
+      <input value={(config[key] as string) ?? ""} onChange={e => setConfig(key, e.target.value)}
+        placeholder={placeholder} style={S.input} />
+    </div>
+  );
+  const fileRow = (label: string, key: string, placeholder: string) => (
+    <div style={S.row}>
+      <label style={S.label}>{label}</label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input value={(config[key] as string) ?? ""} onChange={e => setConfig(key, e.target.value)}
+          placeholder={placeholder} style={{ ...S.input, flex: 1 }} />
+        <button style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C0C2C8", fontFamily: "'DM Sans',sans-serif", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>Browse</button>
+      </div>
+    </div>
+  );
+
+  switch (typeId) {
+    case "video": case "dvd":
+      return (<div>{nameRow}{fileRow("File Path", "filePath", "C:\\Videos\\clip.mp4")}{checkRow("Alpha Channel", "alphaChannel")}{checkRow("Interlaced", "interlaced")}</div>);
+    case "list":
+      return (<div>{nameRow}{selectInput("Playback Mode", "playbackMode", ["Sequential","Shuffle","Loop"], "Sequential")}{checkRow("Auto-advance", "autoAdvance")}{checkRow("Loop playlist", "loopList")}</div>);
+    case "camera": case "videocall":
+      return (<div>{nameRow}{selectInput("Device", "device", ["Default Camera","USB Camera 1","USB Camera 2","Capture Card (HDMI)","Virtual Camera"], "Default Camera")}{selectInput("Resolution", "resolution", ["1920x1080","1280x720","3840x2160"], "1920x1080")}{selectInput("Frame Rate", "fps", ["29.97","30","60","25","24"], "29.97")}{checkRow("Deinterlace", "deinterlace")}</div>);
+    case "ndi": case "display":
+      return (<div>{nameRow}{selectInput("Source", "ndiSource", ["NDI Source 1","NDI Source 2","Primary Monitor","Secondary Monitor","Application Window"], "Primary Monitor")}{checkRow("Show Cursor", "showCursor")}{checkRow("Capture Audio", "captureAudio")}</div>);
+    case "stream":
+      return (<div>{nameRow}{selectInput("Protocol", "protocol", ["RTMP","RTSP","SRT","HLS","UDP"], "RTMP")}{urlRow("Stream URL", "url", "rtmp://live.example.com/app/streamkey")}{numInput("Latency (ms)", "latency", 120, 0, 10000)}{checkRow("Auto-reconnect", "autoReconnect")}</div>);
+    case "image": case "photos":
+      return (<div>{nameRow}{fileRow("File Path", "filePath", "C:\\Images\\photo.png")}{checkRow("Alpha Channel", "alphaChannel")}</div>);
+    case "imagseq":
+      return (<div>{nameRow}{fileRow("Folder / First Frame", "folderPath", "C:\\Stingers\\intro_0001.png")}{numInput("Frame Rate", "fps", 30, 1, 120)}{checkRow("Loop", "loop")}</div>);
+    case "videodelay":
+      return (<div>{nameRow}{selectInput("Source Input", "sourceInput", ["Input 1","Input 2","Input 3","Input 4"], "Input 1")}{numInput("Delay (frames)", "delayFrames", 30, 0, 3600)}</div>);
+    case "powerpoint":
+      return (<div>{nameRow}{fileRow("File Path", "filePath", "C:\\Presentations\\slides.pptx")}{checkRow("Auto-advance slides", "autoAdvance")}{numInput("Slide duration (s)", "slideDuration", 5, 1, 300)}</div>);
+    case "colour":
+      return (<div>{nameRow}<div style={S.row}><label style={S.label}>Colour</label><div style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="color" value={(config["colour"] as string) ?? "#000000"} onChange={e => setConfig("colour", e.target.value)} style={{ width: 40, height: 28, border: "1px solid #2A2D35", borderRadius: 3, background: "none", cursor: "pointer" }} /><input value={(config["colour"] as string) ?? "#000000"} onChange={e => setConfig("colour", e.target.value)} style={{ ...S.input, flex: 1 }} /></div></div></div>);
+    case "audio": case "audioinput":
+      return (<div>{nameRow}{typeId === "audio" ? fileRow("Audio File", "filePath", "C:\\Audio\\music.mp3") : selectInput("Audio Device", "device", ["Default Microphone","USB Mic","Line In","Virtual Audio Cable"], "Default Microphone")}{numInput("Volume (%)", "volume", 100, 0, 200)}{checkRow("Loop", "loop")}</div>);
+    case "title": case "lowerthird":
+      return (<div>{nameRow}{urlRow("Title Text", "title", "Enter title...")}{typeId === "lowerthird" && urlRow("Subtitle", "subtitle", "Enter subtitle...")}{selectInput("Font", "font", ["DM Sans","Arial","Impact","Helvetica Neue","Bebas Neue"], "DM Sans")}{numInput("Font Size", "fontSize", 48, 8, 400)}</div>);
+    case "virtualset":
+      return (<div>{nameRow}{fileRow("Set File (.vs)", "filePath", "C:\\VirtualSets\\studio.vs")}{selectInput("Camera Angle", "angle", ["Wide","Medium","Close-up","Over Shoulder"], "Wide")}{checkRow("Enable Chroma Key", "chromaKey")}</div>);
+    case "browser": case "zoom":
+      return (
+        <div>
+          {nameRow}
+          <div style={S.row}>
+            <label style={S.label}>{typeId === "zoom" ? "Meeting ID" : "URL"}</label>
+            <input value={(config[typeId === "zoom" ? "meetingId" : "url"] as string) ?? ""}
+              onChange={e => setConfig(typeId === "zoom" ? "meetingId" : "url", e.target.value)}
+              placeholder={typeId === "zoom" ? "123 456 7890" : "https://example.com"}
+              style={S.input} />
+          </div>
+          {typeId === "browser" && numInput("Width (px)", "width", 1920, 100, 7680)}
+          {typeId === "browser" && numInput("Height (px)", "height", 1080, 100, 4320)}
+          {typeId === "browser" && checkRow("Transparent Background", "transparent")}
+          {typeId === "browser" && checkRow("Capture Audio", "captureAudio")}
+          {typeId === "zoom" && selectInput("Layout", "layout", ["Gallery","Speaker","Side-by-side"], "Gallery")}
+        </div>
+      );
+    case "scoreboard":
+      return (<div>{nameRow}{selectInput("Sport", "sport", ["Billiards","Basketball","Soccer","Tennis","Baseball","Hockey","Football"], "Billiards")}{selectInput("Template", "template", ["Classic","Modern","Minimal","Broadcast"], "Classic")}{checkRow("Show Clock", "showClock")}{checkRow("Auto-update", "autoUpdate")}</div>);
+    case "lowerthird":
+      return (<div>{nameRow}{urlRow("Text Line 1", "line1", "Name / Title...")}{urlRow("Text Line 2", "line2", "Subtitle / Info...")}</div>);
+    case "overlay":
+      return (<div>{nameRow}{urlRow("Overlay URL / File", "url", "https://overlays.example.com/lower-third")}{checkRow("Transparent Background", "transparent")}</div>);
+    case "alert":
+      return (<div>{nameRow}{urlRow("Alert URL", "url", "https://alerts.example.com/widget")}{numInput("Display Duration (s)", "duration", 5, 1, 60)}</div>);
+    default:
+      return (<div>{nameRow}<p style={S.hint}>No additional configuration required for this input type.</p></div>);
+  }
+}
+
 // ── Main Drawer ───────────────────────────────────────────────────────────────
-const TABS = ["General", "Position", "Colour Adjust", "Effects", "Layers", "Audio Settings"] as const;
+const TABS = ["Source Config", "General", "Position", "Colour Adjust", "Effects", "Layers", "Audio Settings"] as const;
 type Tab = typeof TABS[number];
 
 interface InputSettingsDrawerProps {
   scene: SceneItem | null;
+  source: SceneItem["sources"][0] | null;
   open: boolean;
   onClose: () => void;
-  onSave: (sceneId: number, settings: InputSettings) => void;
+  onSave: (sourceId: number, settings: InputSettings, sourceConfig: Record<string, string | number | boolean>) => void;
   initialSettings?: InputSettings;
 }
 
-export function InputSettingsDrawer({ scene, open, onClose, onSave, initialSettings }: InputSettingsDrawerProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("General");
+export function InputSettingsDrawer({ scene, source, open, onClose, onSave, initialSettings }: InputSettingsDrawerProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("Source Config");
   const [settings, setSettings] = useState<InputSettings>(() => ({
     ...DEFAULT_INPUT_SETTINGS,
-    name: scene?.name ?? "",
+    name: source?.name ?? "",
     ...initialSettings,
   }));
+  // Source-specific config state (URL, file path, device, etc.) — seeded from source.settings
+  const [sourceConfig, setSourceConfigState] = useState<Record<string, string | number | boolean>>(
+    () => (source?.settings ?? {}) as Record<string, string | number | boolean>
+  );
+  const setSourceConfig = (k: string, v: string | number | boolean) =>
+    setSourceConfigState(prev => ({ ...prev, [k]: v }));
 
   // Sync name when scene changes
   useEffect(() => {
-    if (scene) {
-      setSettings(prev => ({ ...prev, name: scene.name, ...initialSettings }));
+    if (source) {
+      setSettings(prev => ({ ...prev, name: source.name, ...initialSettings }));
+      setSourceConfigState((source.settings ?? {}) as Record<string, string | number | boolean>);
     }
-  }, [scene?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [source?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (patch: Partial<InputSettings>) => setSettings(prev => ({ ...prev, ...patch }));
 
   const handleSave = () => {
-    if (scene) {
-      onSave(scene.id, settings);
+    if (source) {
+      onSave(source.id, settings, sourceConfig);
       onClose();
     }
   };
@@ -453,7 +583,7 @@ export function InputSettingsDrawer({ scene, open, onClose, onSave, initialSetti
     fontFamily: "'DM Sans', sans-serif",
   };
 
-  if (!scene) return null;
+  if (!scene || !source) return null;
 
   return (
     <>
@@ -471,9 +601,11 @@ export function InputSettingsDrawer({ scene, open, onClose, onSave, initialSetti
           <Settings size={14} style={{ color: "#4F9EFF" }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#E0E2E8", letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Input: {scene.id} {settings.name || scene.name}
+              Input: {source.id} {settings.name || source.name}
             </div>
-            <div style={{ fontSize: 9, color: "#606878", letterSpacing: "0.04em", marginTop: 1 }}>Scene Settings</div>
+            <div style={{ fontSize: 9, color: "#606878", letterSpacing: "0.04em", marginTop: 1 }}>
+              <span style={{ color: source.color }}>{source.type}</span> · {scene.name}
+            </div>
           </div>
           {/* Category dot */}
           <div style={{ width: 12, height: 12, borderRadius: 2, background: settings.category, border: "1px solid #3A3D45", flexShrink: 0 }} />
@@ -509,6 +641,15 @@ export function InputSettingsDrawer({ scene, open, onClose, onSave, initialSetti
 
         {/* Tab content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
+          {activeTab === "Source Config"  && (
+            <SourceConfigTab
+              typeId={source.type}
+              name={settings.name}
+              setName={v => set({ name: v })}
+              config={sourceConfig}
+              setConfig={setSourceConfig}
+            />
+          )}
           {activeTab === "General"       && <GeneralTab s={settings} set={set} />}
           {activeTab === "Position"      && <PositionTab s={settings} set={set} />}
           {activeTab === "Colour Adjust" && <ColourAdjustTab s={settings} set={set} />}

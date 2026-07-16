@@ -582,7 +582,7 @@ function InputConfigPanel({ typeId, name, setName, config, setConfig }: {
 
 // ── Add Source Modal (vMix-style Input Select) ────────────────────────────────
 function AddSourceModal({ onAdd, onClose }: {
-  onAdd: (type: string, name: string, icon: React.ElementType, color: string) => void;
+  onAdd: (type: string, name: string, icon: React.ElementType, color: string, config: Record<string, string | number | boolean>) => void;
   onClose: () => void;
 }) {
   const [selectedType, setSelectedType] = useState(VMIX_INPUT_TYPES[0]);
@@ -598,7 +598,7 @@ function AddSourceModal({ onAdd, onClose }: {
   const handleOk = () => {
     if (!name.trim()) return;
     const { icon, color } = vmixTypeToSource(selectedType.id);
-    onAdd(selectedType.id, name.trim(), icon, color);
+    onAdd(selectedType.id, name.trim(), icon, color, config);
     onClose();
   };
   return (
@@ -834,23 +834,6 @@ export default function Dashboard() {
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
   const [audioMixerOpen, setAudioMixerOpen] = useState(false);
   // Input settings drawer
-  const [inputSettingsSceneId, setInputSettingsSceneId] = useState<number | null>(null);
-  const [inputSettingsMap, setInputSettingsMap] = useState<Record<number, InputSettings>>({});
-  const inputSettingsScene = useMemo(() => scenes.find(s => s.id === inputSettingsSceneId) ?? null, [scenes, inputSettingsSceneId]);
-
-  const handleOpenInputSettings = useCallback((sceneId: number) => {
-    setInputSettingsSceneId(sceneId);
-  }, []);
-
-  const handleSaveInputSettings = useCallback((sceneId: number, settings: InputSettings) => {
-    setInputSettingsMap(prev => ({ ...prev, [sceneId]: settings }));
-    // Apply the name change to the scene itself
-    if (settings.name.trim()) {
-      renameScene(sceneId, settings.name.trim());
-    }
-    toast.success("Input settings saved");
-  }, [renameScene]);
-
   // Fullscreen state and handler
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [inputsPaused, setInputsPaused] = useState(false);
@@ -916,6 +899,31 @@ export default function Dashboard() {
   const previewSources = useMemo(() => previewScene?.sources ?? EMPTY_SOURCES, [previewScene, EMPTY_SOURCES]);
   const programSources = useMemo(() => programScene?.sources ?? EMPTY_SOURCES, [programScene, EMPTY_SOURCES]);
   const selectedSource = sources.find(s => s.id === selectedSourceId) ?? null;
+  // Input Settings drawer — keyed by source id
+  const [inputSettingsSourceId, setInputSettingsSourceId] = useState<number | null>(null);
+  const [inputSettingsMap, setInputSettingsMap] = useState<Record<number, InputSettings>>({});
+  const inputSettingsSource = useMemo(() => sources.find(s => s.id === inputSettingsSourceId) ?? null, [sources, inputSettingsSourceId]);
+  const inputSettingsScene  = activeScene;
+
+  const handleOpenInputSettings = useCallback((sourceId: number) => {
+    setInputSettingsSourceId(sourceId);
+  }, []);
+
+  const handleSaveInputSettings = useCallback((sourceId: number, settings: InputSettings, sourceConfig: Record<string, string | number | boolean>) => {
+    setInputSettingsMap(prev => ({ ...prev, [sourceId]: settings }));
+    // Apply the name change to the source
+    if (activeSceneId && settings.name.trim()) {
+      updateSource(activeSceneId, sourceId, { name: settings.name.trim() });
+    }
+    // Persist the source-specific config (URL, file path, device, etc.)
+    if (activeSceneId) {
+      Object.entries(sourceConfig).forEach(([k, v]) => {
+        updateSourceSettings(activeSceneId, sourceId, k, v);
+      });
+    }
+    toast.success("Input settings saved");
+  }, [activeSceneId, updateSource, updateSourceSettings]);
+
 
   // Timecode
   useEffect(() => {
@@ -1252,7 +1260,7 @@ export default function Dashboard() {
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                       {/* Gear icon → opens Input Settings drawer */}
                       <button
-                        onClick={e => { e.stopPropagation(); handleOpenInputSettings(activeSceneId!); }}
+                        onClick={e => { e.stopPropagation(); handleOpenInputSettings(src.id); }}
                         title="Input Settings"
                         style={{ background: "none", border: "none", color: isInProgram || isInPreview ? "#00000080" : "#4F9EFF80", cursor: "pointer", display: "flex", padding: 1, transition: "color 0.15s" }}
                         onMouseEnter={e => (e.currentTarget.style.color = isInProgram || isInPreview ? "#000" : "#4F9EFF")}
@@ -1303,7 +1311,7 @@ export default function Dashboard() {
                         style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                         Duplicate
                       </ContextMenuItem>
-                      <ContextMenuItem onSelect={() => handleOpenInputSettings(activeSceneId!)}
+                      <ContextMenuItem onSelect={() => handleOpenInputSettings(src.id)}
                         style={{ padding: "5px 10px", fontSize: 11, color: "#4F9EFF", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                         ⚙ Input Settings…
                       </ContextMenuItem>
@@ -1486,10 +1494,11 @@ export default function Dashboard() {
       {/* Input Settings Drawer */}
       <InputSettingsDrawer
         scene={inputSettingsScene}
-        open={inputSettingsSceneId !== null}
-        onClose={() => setInputSettingsSceneId(null)}
+        source={inputSettingsSource}
+        open={inputSettingsSourceId !== null}
+        onClose={() => setInputSettingsSourceId(null)}
         onSave={handleSaveInputSettings}
-        initialSettings={inputSettingsSceneId !== null ? inputSettingsMap[inputSettingsSceneId] : undefined}
+        initialSettings={inputSettingsSourceId !== null ? inputSettingsMap[inputSettingsSourceId] : undefined}
       />
     </AppSidebar>
   );
