@@ -504,6 +504,22 @@ export default function Dashboard() {
   // Audio mixer
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
   const [audioMixerOpen, setAudioMixerOpen] = useState(false);
+  // Fullscreen state and handler
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [inputsPaused, setInputsPaused] = useState(false);
+  const [activeColorFilter, setActiveColorFilter] = useState<string | null>(null);
+  const handleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => toast.error("Fullscreen not available"));
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   // Active scene
   const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
@@ -970,23 +986,3 @@ export default function Dashboard() {
     </AppSidebar>
   );
 }
-  // Fullscreen handler
-  const handleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => toast.error("Fullscreen not available"));
-    } else {
-      document.exitFullscreen();
-    }
-  }, []);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
-
-  // Pause inputs handler
-  const [inputsPaused, setInputsPaused] = useState(false);
-
-  // Color filter state
-  const [activeColorFilter, setActiveColorFilter] = useState<string | null>(null);
