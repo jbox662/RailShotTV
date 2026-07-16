@@ -145,16 +145,23 @@ const ProgramCanvas = memo(function ProgramCanvas({
           >
             {/* Source content */}
             {src.type === "browser" && url ? (
-              <div style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}>
-                {/* iframe is sized 20px wider/taller so native scrollbars are clipped by the parent overflow:hidden */}
-                <iframe
-                  src={url}
-                  style={{ width: "calc(100% + 20px)", height: "calc(100% + 20px)", border: "none", display: "block", pointerEvents: "none", position: "absolute", top: 0, left: 0 }}
-                  title={src.name}
-                  sandbox="allow-scripts allow-same-origin allow-forms"
-                  scrolling="no"
-                />
-              </div>
+              <iframe
+                src={url}
+                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: "none" }}
+                title={src.name}
+                sandbox="allow-scripts allow-same-origin allow-forms"
+                scrolling="no"
+                onLoad={(e) => {
+                  try {
+                    const doc = (e.target as HTMLIFrameElement).contentDocument;
+                    if (doc) {
+                      const s = doc.createElement("style");
+                      s.textContent = "html,body{overflow:hidden!important;scrollbar-width:none!important;-ms-overflow-style:none!important;}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}";
+                      doc.head?.appendChild(s);
+                    }
+                  } catch (_) { /* cross-origin — can't inject, scrolling="no" is the fallback */ }
+                }}
+              />
             ) : src.type === "camera" ? (
               <div style={{ width: "100%", height: "100%", background: "#0A1A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
                 <src.icon size={24} style={{ color: src.color, opacity: 0.5 }} />
