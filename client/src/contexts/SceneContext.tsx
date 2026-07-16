@@ -87,6 +87,7 @@ type SceneContextType = {
   duplicateScene: (scene: SceneItem) => void;
   deleteScene: (id: number) => void;
   renameScene: (id: number, name: string) => void;
+  reorderScenes: (fromIdx: number, toIdx: number) => void;
 
   addSource: (sceneId: number, source: Omit<SourceItem, "id">) => number;
   removeSource: (sceneId: number, sourceId: number) => void;
@@ -153,6 +154,15 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     setScenes(prev => prev.map(s => s.id === id ? { ...s, name } : s));
   }, []);
 
+  const reorderScenes = useCallback((fromIdx: number, toIdx: number) => {
+    setScenes(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }, []);
+
   // ── Source CRUD (per scene) ─────────────────────────────────────────────────
   const addSource = useCallback((sceneId: number, source: Omit<SourceItem, "id">) => {
     const id = freshId();
@@ -201,7 +211,7 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     <SceneContext.Provider value={{
       scenes, activeSceneId, editingSceneId, nextSceneId,
       setActiveSceneId, setEditingSceneId,
-      addScene, duplicateScene, deleteScene, renameScene,
+      addScene, duplicateScene, deleteScene, renameScene, reorderScenes,
       addSource, removeSource, updateSource, moveSource, updateSourceSettings,
     }}>
       {children}

@@ -14,6 +14,7 @@ import {
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from "@/components/ui/context-menu";
 import { InputSettingsDrawer, DEFAULT_INPUT_SETTINGS } from "@/components/InputSettingsDrawer";
 import type { InputSettings } from "@/components/InputSettingsDrawer";
+import SceneManagerPanel from "@/components/SceneManagerPanel";
 
 
 // ── Canvas source transform ───────────────────────────────────────────────────
@@ -757,6 +758,7 @@ export default function Dashboard() {
   const {
     scenes, activeSceneId, setActiveSceneId,
     addScene, renameScene, deleteScene, duplicateScene,
+    reorderScenes,
     addSource, removeSource, updateSource, moveSource, updateSourceSettings,
   } = useScenes();
   // SceneContext addScene returns void and auto-activates; we track the new id via scenes length change
@@ -1198,6 +1200,21 @@ export default function Dashboard() {
 
         {/* ── INPUT TILES ROW ── */}
         <div style={{ display: "flex", alignItems: "stretch", background: "#0D0F12", borderTop: "1px solid #2A2D35", flexShrink: 0, minHeight: 0, overflow: "hidden" }}>
+          {/* Scene Manager Panel */}
+          <SceneManagerPanel
+            scenes={scenes}
+            activeSceneId={activeSceneId}
+            previewSceneId={previewSceneId}
+            programSceneId={programSceneId}
+            onSelect={id => { setActiveSceneId(id); setPreviewSceneId(id); setSelectedSourceId(null); }}
+            onAdd={handleAddScene}
+            onDuplicate={duplicateScene}
+            onDelete={id => { const sc = scenes.find(s => s.id !== id); deleteScene(id); if (sc) setActiveSceneId(sc.id); }}
+            onRename={renameScene}
+            onReorder={reorderScenes}
+            onMoveUp={idx => { if (idx > 0) reorderScenes(idx, idx - 1); }}
+            onMoveDown={idx => { if (idx < scenes.length - 1) reorderScenes(idx, idx + 1); }}
+          />
           {/* Color filter dots (vMix-style) */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
             {["#EF4444","#F97316","#EAB308","#22C55E","#3B82F6","#A855F7"].map(c => (
