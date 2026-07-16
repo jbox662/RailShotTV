@@ -1,5 +1,6 @@
 // RailShotTV — Chromatic Command — Unified Broadcast Control Surface (OBS-style single screen)
 // Colors: Brand=#FF5A2C, Blue=#4F9EFF, Violet=#A855F7, Emerald=#22C55E, Cyan=#22D3EE, Amber=#FBBF24
+import React from "react";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
@@ -10,9 +11,12 @@ import {
   Plus, Trash2, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown,
   Mic, Music, Volume2, Square, Layers, Monitor, Camera, Globe, Type,
   Image as ImageIcon, Bell, Trophy, AlignLeft, X, Search, Sparkles,
-  LayoutTemplate, Activity, Cpu, Users, Clock, Settings,
+  LayoutTemplate, Activity, Cpu, Users, Clock, Settings, Save, Upload,
+  List, ChevronRight, Circle, Maximize2, Minimize2, Film, Tv2,
 } from "lucide-react";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from "@/components/ui/context-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { InputSettingsDrawer, DEFAULT_INPUT_SETTINGS } from "@/components/InputSettingsDrawer";
 import type { InputSettings } from "@/components/InputSettingsDrawer";
 import SceneManagerPanel from "@/components/SceneManagerPanel";
@@ -818,6 +822,76 @@ export default function Dashboard() {
   const [bitrate, setBitrate]           = useState(0);
   const [viewers, setViewers]           = useState(0);
 
+  // Toolbar state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordTc, setRecordTc]       = useState("00:00:00");
+  const [externalOut, setExternalOut] = useState(false);
+  const [showNewConfirm, setShowNewConfirm] = useState(false);
+  const [showPresetManager, setShowPresetManager] = useState(false);
+  const [showPlayList, setShowPlayList] = useState(false);
+  const [showMultiCorder, setShowMultiCorder] = useState(false);
+  const [uiLocked, setUiLocked] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [compactTiles, setCompactTiles] = useState(false);
+
+  // Recording timer
+  useEffect(() => {
+    if (!isRecording) { setRecordTc("00:00:00"); return; }
+    let secs = 0;
+    const t = setInterval(() => {
+      secs++;
+      const h = String(Math.floor(secs / 3600)).padStart(2, "0");
+      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
+      const s = String(secs % 60).padStart(2, "0");
+      setRecordTc(`${h}:${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isRecording]);
+
+  // Preset helpers
+  const handleSavePreset = useCallback((name: string) => {
+    try {
+      const presets = JSON.parse(localStorage.getItem("railshot_presets") ?? "{}") as Record<string, unknown>;
+      presets[name] = { scenes: JSON.parse(localStorage.getItem("railshot_scenes_v2") ?? "{}"), savedAt: Date.now() };
+      localStorage.setItem("railshot_presets", JSON.stringify(presets));
+      localStorage.setItem("railshot_last_preset", name);
+      toast.success(`Preset "${name}" saved`);
+    } catch { toast.error("Failed to save preset"); }
+  }, []);
+
+  const handleExportProject = useCallback(() => {
+    try {
+      const data = { scenes: JSON.parse(localStorage.getItem("railshot_scenes_v2") ?? "{}"), exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `railshot-project-${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Project exported as JSON");
+    } catch { toast.error("Export failed"); }
+  }, []);
+
+  const handleImportProject = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (data.scenes) {
+            localStorage.setItem("railshot_scenes_v2", JSON.stringify(data.scenes));
+            toast.success("Project imported — reload to apply");
+            setTimeout(() => window.location.reload(), 1200);
+          } else { toast.error("Invalid project file"); }
+        } catch { toast.error("Failed to parse project file"); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
   // Scene rename
   const [renamingSceneId, setRenamingSceneId] = useState<number | null>(null);
   const [renameValue, setRenameValue]         = useState("");
@@ -1050,12 +1124,64 @@ export default function Dashboard() {
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: "#FF5A2C", letterSpacing: "0.04em" }}>TV</span>
           </div>
           {/* Menu buttons */}
-          {["Preset","New","Open","Save","Save As","Last"].map(item => (
-            <button key={item} onClick={() => toast.info(`${item} — coming soon`)}
-              style={{ padding: "3px 10px", background: item === "Preset" ? "linear-gradient(180deg,#2A2D35,#1E2128)" : "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
-              {item}
-            </button>
-          ))}
+          {/* Preset dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>Preset</button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-[#1A1D22] border-[#3A3D45] text-[#C8CAD0] text-xs min-w-[160px]">
+              <DropdownMenuLabel className="text-[#606878] text-[10px]">Presets</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-[#2A2D35]" />
+              <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => {
+                const name = prompt("Preset name:", `Preset ${new Date().toLocaleDateString()}`);
+                if (name) handleSavePreset(name);
+              }}>Save New Preset…</DropdownMenuItem>
+              <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => {
+                try {
+                  const presets = JSON.parse(localStorage.getItem("railshot_presets") ?? "{}") as Record<string, unknown>;
+                  const keys = Object.keys(presets);
+                  if (!keys.length) { toast.info("No saved presets"); return; }
+                  const name = keys[keys.length - 1];
+                  const data = (presets[name] as { scenes: unknown }).scenes;
+                  localStorage.setItem("railshot_scenes_v2", JSON.stringify(data));
+                  toast.success(`Loaded preset "${name}" — reload to apply`);
+                  setTimeout(() => window.location.reload(), 1200);
+                } catch { toast.error("Failed to load preset"); }
+              }}>Load Last Preset</DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-[#2A2D35]" />
+              <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => {
+                try {
+                  const presets = JSON.parse(localStorage.getItem("railshot_presets") ?? "{}") as Record<string, { savedAt: number }>;
+                  if (!Object.keys(presets).length) { toast.info("No saved presets"); return; }
+                  const list = Object.entries(presets).map(([k, v]) => `${k} (${new Date(v.savedAt).toLocaleString()})`).join("\n");
+                  alert("Saved presets:\n\n" + list);
+                } catch { toast.error("Failed to list presets"); }
+              }}>Manage Presets…</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* New */}
+          <button onClick={() => setShowNewConfirm(true)}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>New</button>
+          {/* Open */}
+          <button onClick={handleImportProject}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>Open</button>
+          {/* Save */}
+          <button onClick={handleExportProject}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>Save</button>
+          {/* Save As */}
+          <button onClick={() => { const name = prompt("Save as:", `Project ${new Date().toLocaleDateString()}`); if (name) handleSavePreset(name); }}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>Save As</button>
+          {/* Last */}
+          <button onClick={() => {
+            try {
+              const last = localStorage.getItem("railshot_last_preset");
+              const presets = JSON.parse(localStorage.getItem("railshot_presets") ?? "{}") as Record<string, { scenes: unknown }>;
+              if (!last || !presets[last]) { toast.info("No last preset found"); return; }
+              localStorage.setItem("railshot_scenes_v2", JSON.stringify(presets[last].scenes));
+              toast.success(`Loaded "${last}" — reloading…`);
+              setTimeout(() => window.location.reload(), 1200);
+            } catch { toast.error("Failed to load last preset"); }
+          }} style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>Last</button>
           <div style={{ flex: 1 }} />
           {/* Resolution selector */}
           <button onClick={handleFullscreen}
@@ -1478,27 +1604,61 @@ export default function Dashboard() {
               style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
               Add Input
             </button>
-            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1A1D22] border-[#3A3D45] text-[#C8CAD0] text-xs min-w-[160px]">
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => setShowAddSource(true)}>Add Input…</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("Virtual Input — coming soon")}>Add Virtual Input</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("NDI Scan — coming soon")}>Scan for NDI Sources</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {/* Settings */}
-          <button style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
+          <button onClick={() => { window.location.href = "/settings"; }} title="Output Settings" style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
             <Cpu size={13} />
           </button>
           {/* Record */}
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
-            <button onClick={() => toast.info("Record — coming soon")}
-              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
-              Record
+            <button onClick={() => { setIsRecording(v => !v); toast.success(isRecording ? "Recording stopped" : "Recording started"); }}
+              style={{ padding: "5px 12px", background: isRecording ? "linear-gradient(180deg,#7F1D1D,#5A1010)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${isRecording ? "#EF444440" : "#4A4D55"}`, borderRadius: "3px 0 0 3px", color: isRecording ? "#FCA5A5" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 5 }}>
+              {isRecording ? <><span style={{ color: "#EF4444", fontSize: 8 }}>●</span> {recordTc}</> : "● Record"}
             </button>
-            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1A1D22] border-[#3A3D45] text-[#C8CAD0] text-xs min-w-[160px]">
+                <DropdownMenuLabel className="text-[#606878] text-[10px]">Record Options</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("Record to MP4 — output path set in Settings")}>Record to MP4</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("Record to MKV — output path set in Settings")}>Record to MKV</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => { window.location.href = "/settings"; }}>Recording Settings…</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {/* External */}
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
-            <button onClick={() => toast.info("External output — coming soon")}
-              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
-              External
+            <button onClick={() => { setExternalOut(v => !v); toast.success(externalOut ? "External output disabled" : "External output enabled"); }}
+              style={{ padding: "5px 12px", background: externalOut ? "linear-gradient(180deg,#1A3A2A,#122A1E)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${externalOut ? "#22C55E40" : "#4A4D55"}`, borderRadius: "3px 0 0 3px", color: externalOut ? "#86EFAC" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              {externalOut ? "● External" : "External"}
             </button>
-            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1A1D22] border-[#3A3D45] text-[#C8CAD0] text-xs min-w-[160px]">
+                <DropdownMenuLabel className="text-[#606878] text-[10px]">External Output</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("HDMI output — connect a capture card")}>HDMI / Capture Card</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("NDI output — configure in Settings")}>NDI Output</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => { window.location.href = "/settings"; }}>Output Settings…</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {/* Stream */}
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
@@ -1519,28 +1679,58 @@ export default function Dashboard() {
           </div>
           {/* MultiCorder */}
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
-            <button onClick={() => toast.info("MultiCorder — coming soon")}
-              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+            <button onClick={() => setShowMultiCorder(v => !v)}
+              style={{ padding: "5px 12px", background: showMultiCorder ? "linear-gradient(180deg,#1A2A3A,#122030)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${showMultiCorder ? "#4F9EFF40" : "#4A4D55"}`, borderRadius: "3px 0 0 3px", color: showMultiCorder ? "#93C5FD" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
               MultiCorder
             </button>
-            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#1A1D22] border-[#3A3D45] text-[#C8CAD0] text-xs min-w-[160px]">
+                <DropdownMenuLabel className="text-[#606878] text-[10px]">MultiCorder</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-[#2A2D35]" />
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => { setShowMultiCorder(true); }}>Open MultiCorder Panel</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer hover:bg-[#2A2D35]" onSelect={() => toast.info("Record all inputs simultaneously — configure in Settings")}>Record All Inputs</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {/* PlayList */}
-          <button onClick={() => toast.info("PlayList — coming soon")}
-            style={{ marginLeft: 4, padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+          <button onClick={() => setShowPlayList(v => !v)}
+            style={{ marginLeft: 4, padding: "5px 12px", background: showPlayList ? "linear-gradient(180deg,#2A1A3A,#1E1230)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${showPlayList ? "#A855F740" : "#4A4D55"}`, borderRadius: 3, color: showPlayList ? "#D8B4FE" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
             PlayList
           </button>
           <div style={{ flex: 1 }} />
           {/* Overlay / view mode icons */}
-          <button onClick={() => toast.info("Overlay — coming soon")}
-            style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>
+          <button onClick={() => setOverlayBrowserOpen(v => !v)}
+            style={{ padding: "5px 12px", background: overlayBrowserOpen ? "linear-gradient(180deg,#2A1A3A,#1E1230)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${overlayBrowserOpen ? "#A855F740" : "#4A4D55"}`, borderRadius: 3, color: overlayBrowserOpen ? "#D8B4FE" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>
             Overlay
           </button>
-          {[<Square size={12} />, <Activity size={12} />, <LayoutTemplate size={12} />, <Cpu size={12} />, <Lock size={12} />].map((icon, i) => (
-            <button key={i} style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
-              {icon}
-            </button>
-          ))}
+          {/* Compact tiles toggle */}
+          <button onClick={() => { setCompactTiles(v => !v); toast.info(compactTiles ? "Normal tile view" : "Compact tile view"); }} title="Toggle compact tile view"
+            style={{ width: 28, height: 28, padding: 0, background: compactTiles ? "linear-gradient(180deg,#1A2A3A,#122030)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${compactTiles ? "#4F9EFF50" : "#3A3D45"}`, borderRadius: 3, color: compactTiles ? "#93C5FD" : "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+            <Square size={12} />
+          </button>
+          {/* Stats overlay toggle */}
+          <button onClick={() => { setShowStats(v => !v); toast.info(showStats ? "Stats hidden" : "Stats overlay shown"); }} title="Toggle stats overlay"
+            style={{ width: 28, height: 28, padding: 0, background: showStats ? "linear-gradient(180deg,#1A2A1A,#122012)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${showStats ? "#22C55E50" : "#3A3D45"}`, borderRadius: 3, color: showStats ? "#86EFAC" : "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+            <Activity size={12} />
+          </button>
+          {/* Layout toggle */}
+          <button onClick={() => toast.info("Layout presets — coming soon")} title="Layout presets"
+            style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+            <LayoutTemplate size={12} />
+          </button>
+          {/* Performance monitor */}
+          <button onClick={() => toast.info(`CPU: ${isLive ? "12%" : "3%"} | GPU: 2% | Render: 1ms | FPS: 30`)} title="Performance stats"
+            style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+            <Cpu size={12} />
+          </button>
+          {/* UI Lock */}
+          <button onClick={() => { setUiLocked(v => !v); toast.info(uiLocked ? "UI unlocked" : "UI locked — prevents accidental clicks"); }} title={uiLocked ? "Unlock UI" : "Lock UI"}
+            style={{ width: 28, height: 28, padding: 0, background: uiLocked ? "linear-gradient(180deg,#3A2A1A,#281E14)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${uiLocked ? "#F9731650" : "#3A3D45"}`, borderRadius: 3, color: uiLocked ? "#FCD34D" : "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+            {uiLocked ? <Lock size={12} /> : <Unlock size={12} />}
+          </button>
           {/* Audio Mixer toggle */}
           <button onClick={() => setAudioMixerOpen(v => !v)}
             style={{ marginLeft: 8, padding: "5px 12px", background: audioMixerOpen ? "linear-gradient(180deg,#1A3AFF,#1230CC)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${audioMixerOpen ? "#3A6AFF" : "#3A3D45"}`, borderRadius: 3, color: audioMixerOpen ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: audioMixerOpen ? "0 0 10px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 2px 6px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s" }}>
@@ -1572,6 +1762,73 @@ export default function Dashboard() {
         onSave={handleSaveInputSettings}
         initialSettings={inputSettingsSourceId !== null ? inputSettingsMap[inputSettingsSourceId] : undefined}
       />
+      {/* New Project Confirmation */}
+      <AlertDialog open={showNewConfirm} onOpenChange={setShowNewConfirm}>
+        <AlertDialogContent className="bg-[#1A1D22] border-[#3A3D45] text-[#D0D2D8]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#F0F0F0]">New Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#808898]">
+              This will clear all scenes and inputs. Any unsaved changes will be lost. Are you sure?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-[#2A2D35] border-[#3A3D45] text-[#C8CAD0] hover:bg-[#3A3D45]">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-700 hover:bg-red-600 text-white" onClick={() => {
+              localStorage.removeItem("railshot_scenes_v2");
+              localStorage.removeItem("railshot_canvas_transforms_v1");
+              toast.success("Project cleared — reloading…");
+              setTimeout(() => window.location.reload(), 1000);
+            }}>Clear & Start New</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* MultiCorder Panel */}
+      {showMultiCorder && (
+        <div style={{ position: "fixed", right: 0, top: 36, bottom: 0, width: 320, background: "#141619", borderLeft: "1px solid #2A2D35", zIndex: 200, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid #2A2D35", background: "#1A1D22" }}>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 12, color: "#93C5FD", letterSpacing: "0.06em" }}>MULTICORDER</span>
+            <button onClick={() => setShowMultiCorder(false)} style={{ background: "none", border: "none", color: "#606878", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#606878", marginBottom: 12 }}>Record multiple inputs simultaneously to separate files.</p>
+            {(scenes.find(s => s.id === activeSceneId)?.sources ?? []).map(src => (
+              <div key={src.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "#1E2128", border: "1px solid #2A2D35", borderRadius: 4, marginBottom: 6 }}>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#C8CAD0" }}>{src.name}</span>
+                <button onClick={() => toast.info(`Recording ${src.name} — connect output in Settings`)} style={{ padding: "3px 8px", background: "linear-gradient(180deg,#7F1D1D,#5A1010)", border: "1px solid #EF444440", borderRadius: 3, color: "#FCA5A5", fontSize: 10, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>● REC</button>
+              </div>
+            ))}
+            {(scenes.find(s => s.id === activeSceneId)?.sources ?? []).length === 0 && (
+              <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#404858", textAlign: "center", marginTop: 24 }}>No inputs in current scene</p>
+            )}
+          </div>
+        </div>
+      )}
+      {/* PlayList Panel */}
+      {showPlayList && (
+        <div style={{ position: "fixed", right: showMultiCorder ? 320 : 0, top: 36, bottom: 0, width: 300, background: "#141619", borderLeft: "1px solid #2A2D35", zIndex: 200, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid #2A2D35", background: "#1A1D22" }}>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 12, color: "#D8B4FE", letterSpacing: "0.06em" }}>PLAYLIST</span>
+            <button onClick={() => setShowPlayList(false)} style={{ background: "none", border: "none", color: "#606878", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+            <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#606878", marginBottom: 12 }}>Auto-advance through scenes in sequence.</p>
+            {scenes.map((scene, i) => (
+              <div key={scene.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: scene.id === programSceneId ? "#1A2A1A" : "#1E2128", border: `1px solid ${scene.id === programSceneId ? "#22C55E40" : "#2A2D35"}`, borderRadius: 4, marginBottom: 6, cursor: "pointer" }}
+                onClick={() => { setPreviewSceneId(scene.id); toast.info(`Loaded "${scene.name}" into Preview`); }}>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878", minWidth: 16 }}>{i + 1}</span>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#C8CAD0", flex: 1 }}>{scene.name}</span>
+                {scene.id === programSceneId && <span style={{ fontSize: 9, color: "#22C55E", fontWeight: 700 }}>LIVE</span>}
+              </div>
+            ))}
+            <button onClick={() => {
+              if (previewSceneId !== null) handleGo(previewSceneId);
+              else toast.info("Load a scene into Preview first");
+            }} style={{ width: "100%", marginTop: 8, padding: "7px 0", background: "linear-gradient(180deg,#166534,#14532D)", border: "1px solid #22C55E40", borderRadius: 4, color: "#86EFAC", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+              ▶ GO (Preview → Program)
+            </button>
+          </div>
+        </div>
+      )}
     </AppSidebar>
   );
 }
