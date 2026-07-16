@@ -82,7 +82,7 @@ function OverlayPreview({ state }: { state: ScoreboardState }) {
     return (
       <div style={{
         width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-        background: "repeating-linear-gradient(45deg, #0D1117 0px, #0D1117 10px, #111827 10px, #111827 20px)",
+        background: "repeating-linear-gradient(45deg, #0D1117 0px, #0D1117 10px, #0F1114 10px, #0F1114 20px)",
       }}>
         <div style={{ textAlign: "center", color: "#374151" }}>
           <EyeOff size={32} style={{ margin: "0 auto 8px" }} />
@@ -428,7 +428,7 @@ export default function ScoreboardPage() {
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const panelStyle: React.CSSProperties = {
-    background: "#161B2E", border: "1px solid rgba(255,255,255,0.08)",
+    background: "#0F1114", border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 8, padding: "14px 16px",
   };
 
@@ -445,7 +445,7 @@ export default function ScoreboardPage() {
         {/* Top bar */}
         <div style={{
           height: 46, minHeight: 46, display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0 16px", background: "#111827",
+          padding: "0 16px", background: "#0F1114",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           borderTop: "2px solid #22C55E",
         }}>
@@ -609,7 +609,7 @@ export default function ScoreboardPage() {
             {/* Preview label */}
             <div style={{
               height: 32, display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "0 14px", background: "#111827", borderBottom: "1px solid rgba(255,255,255,0.07)",
+              padding: "0 14px", background: "#0F1114", borderBottom: "1px solid rgba(255,255,255,0.07)",
             }}>
               <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 11, color: "#6B7280", letterSpacing: "0.12em" }}>
                 OVERLAY PREVIEW — {LAYOUT_OPTIONS.find(l => l.id === state.layout)?.label.toUpperCase()}
@@ -632,7 +632,7 @@ export default function ScoreboardPage() {
             {/* Timer controls */}
             <div style={{
               height: 56, borderTop: "1px solid rgba(255,255,255,0.07)",
-              background: "#111827", display: "flex", alignItems: "center",
+              background: "#0F1114", display: "flex", alignItems: "center",
               padding: "0 20px", gap: 12,
             }}>
               <Timer size={14} color="#22D3EE" />

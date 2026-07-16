@@ -189,7 +189,7 @@ function EventModal({ event, onSave, onClose }: EventModalProps) {
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
       <div style={{
-        background: "#1A2035", border: "1px solid rgba(255,255,255,0.12)",
+        background: "#141619", border: "1px solid rgba(255,255,255,0.12)",
         borderRadius: 12, padding: 28, width: 520, maxHeight: "90vh", overflowY: "auto",
         boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
       }} onClick={e => e.stopPropagation()}>
@@ -639,7 +639,7 @@ export default function SchedulePage() {
         <div style={{
           height: 46, flexShrink: 0, display: "flex", alignItems: "center",
           justifyContent: "space-between", padding: "0 16px",
-          background: "#111827", borderBottom: "1px solid rgba(255,255,255,0.07)",
+          background: "#0F1114", borderBottom: "1px solid rgba(255,255,255,0.07)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: "0.12em", color: "#F1F5F9" }}>

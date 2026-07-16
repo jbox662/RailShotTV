@@ -7,10 +7,10 @@ import { Settings as SettingsIcon, Radio, Video, Volume2, Keyboard, Sliders, Puz
 // ─── Shared sub-components ────────────────────────────────────────────────────
 function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
-    <div className="flex items-center justify-between py-2.5" style={{ borderBottom: "1px solid #1A1A24" }}>
+    <div className="flex items-center justify-between py-2.5" style={{ borderBottom: "1px solid #141619" }}>
       <div>
-        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#A0A0B8" }}>{label}</span>
-        {hint && <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A", marginTop: 1 }}>{hint}</div>}
+        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#C0C2C8" }}>{label}</span>
+        {hint && <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606878", marginTop: 1 }}>{hint}</div>}
       </div>
       <div className="flex items-center gap-2">{children}</div>
     </div>
@@ -20,38 +20,38 @@ function SectionHeader({ title }: { title: string }) {
   return <h3 className="mb-3 mt-1" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>{title}</h3>;
 }
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded p-4 mb-6" style={{ background: "#1E2640", border: "1px solid #2A3350" }}>{children}</div>;
+  return <div className="rounded p-4 mb-6" style={{ background: "#1A1D22", border: "1px solid #2A2D35" }}>{children}</div>;
 }
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="relative cursor-pointer" style={{ width: 36, height: 20 }} onClick={() => onChange(!on)}>
-      <div className="w-full h-full rounded-full" style={{ background: on ? "#FF5A2C" : "#1A1A24", border: `1px solid ${on ? "#FF5A2C" : "#303D5A"}`, transition: "background 0.2s" }} />
+      <div className="w-full h-full rounded-full" style={{ background: on ? "#FF5A2C" : "#141619", border: `1px solid ${on ? "#FF5A2C" : "#3A3D45"}`, transition: "background 0.2s" }} />
       <div className="absolute top-0.5 rounded-full bg-white" style={{ width: 16, height: 16, left: on ? 18 : 2, boxShadow: "0 1px 3px rgba(0,0,0,0.4)", transition: "left 0.15s" }} />
     </div>
   );
 }
 function Seg({ options, active, onChange, color = "#FF5A2C" }: { options: string[]; active: string; onChange: (v: string) => void; color?: string }) {
   return (
-    <div className="flex rounded overflow-hidden" style={{ border: "1px solid #303D5A" }}>
+    <div className="flex rounded overflow-hidden" style={{ border: "1px solid #3A3D45" }}>
       {options.map(o => (
-        <button key={o} onClick={() => onChange(o)} className="px-3 py-1 transition-all" style={{ background: o === active ? `${color}18` : "#1E2640", color: o === active ? color : "#606078", fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: o === active ? 600 : 400, borderRight: "1px solid #303D5A", cursor: "pointer" }}>{o}</button>
+        <button key={o} onClick={() => onChange(o)} className="px-3 py-1 transition-all" style={{ background: o === active ? `${color}18` : "#1A1D22", color: o === active ? color : "#606878", fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: o === active ? 600 : 400, borderRight: "1px solid #3A3D45", cursor: "pointer" }}>{o}</button>
       ))}
     </div>
   );
 }
 function TxtInput({ value, onChange, width = 160, mono = false, type = "text", placeholder = "" }: { value: string; onChange: (v: string) => void; width?: number; mono?: boolean; type?: string; placeholder?: string }) {
-  return <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ height: 30, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, minWidth: width, color: "#A0A0B8", fontFamily: mono ? "'JetBrains Mono', monospace" : "'DM Sans', sans-serif", fontSize: 12, padding: "0 10px", outline: "none" }} />;
+  return <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ height: 30, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, minWidth: width, color: "#C0C2C8", fontFamily: mono ? "'JetBrains Mono', monospace" : "'DM Sans', sans-serif", fontSize: 12, padding: "0 10px", outline: "none" }} />;
 }
 function NumInput({ value, onChange, min, max, step = 1, width = 80, suffix }: { value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; width?: number; suffix?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="number" value={value} min={min} max={max} step={step} onChange={e => onChange(Number(e.target.value))} style={{ height: 30, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, width, color: "#A0A0B8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, padding: "0 8px", outline: "none" }} />
+      <input type="number" value={value} min={min} max={max} step={step} onChange={e => onChange(Number(e.target.value))} style={{ height: 30, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, width, color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, padding: "0 8px", outline: "none" }} />
       {suffix && <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4" }}>{suffix}</span>}
     </div>
   );
 }
 function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
-  return <select value={value} onChange={e => onChange(e.target.value)} style={{ height: 30, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 12, padding: "0 8px", outline: "none" }}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>;
+  return <select value={value} onChange={e => onChange(e.target.value)} style={{ height: 30, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif", fontSize: 12, padding: "0 8px", outline: "none" }}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>;
 }
 
 // ─── Default settings ─────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ function OutputTab({ s, set }: { s: S; set: (k: string, v: unknown) => void }) {
       <Row label="Recording Path">
         <div className="flex items-center gap-2">
           <TxtInput value={s.recordingPath} onChange={v => set("recordingPath", v)} width={220} mono />
-          <button onClick={() => toast.info("File browser requires the desktop app")} style={{ height: 30, padding: "0 10px", background: "#1A1A24", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><FolderOpen size={11} /> Browse</button>
+          <button onClick={() => toast.info("File browser requires the desktop app")} style={{ height: 30, padding: "0 10px", background: "#141619", border: "1px solid #3A3D45", borderRadius: 4, color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><FolderOpen size={11} /> Browse</button>
         </div>
       </Row>
       <Row label="Container Format"><Seg options={["MKV","MP4","MOV","FLV"]} active={s.recordingFormat} onChange={v => set("recordingFormat", v)} color="#FF5A2C" /></Row>
@@ -191,11 +191,11 @@ function HotkeysTab({ s, set }: { s: S; set: (k: string, v: unknown) => void }) 
     <Card>
       {KEYS.map(({ key, label }) => (
         <Row key={key} label={label}>
-          <input value={s[key] as string} onChange={e => set(key, e.target.value)} placeholder="e.g. Ctrl+Alt+S" style={{ height: 30, width: 160, background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, padding: "0 8px", outline: "none" }} />
+          <input value={s[key] as string} onChange={e => set(key, e.target.value)} placeholder="e.g. Ctrl+Alt+S" style={{ height: 30, width: 160, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, padding: "0 8px", outline: "none" }} />
         </Row>
       ))}
     </Card>
-    <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#50506A" }}>Type your desired key combination directly into the field. Global hotkeys require the desktop app.</p>
+    <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#606878" }}>Type your desired key combination directly into the field. Global hotkeys require the desktop app.</p>
   </>;
 }
 
@@ -219,12 +219,12 @@ function PluginsTab({ s, set }: { s: S; set: (k: string, v: unknown) => void }) 
   return <>
     <SectionHeader title="Installed Plugins" />
     <Card>
-      {plugins.length === 0 && <div className="py-6 text-center" style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>No plugins installed</div>}
+      {plugins.length === 0 && <div className="py-6 text-center" style={{ color: "#606878", fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>No plugins installed</div>}
       {plugins.map(p => (
-        <div key={p.id} className="flex items-center justify-between py-2.5" style={{ borderBottom: "1px solid #1A1A24" }}>
+        <div key={p.id} className="flex items-center justify-between py-2.5" style={{ borderBottom: "1px solid #141619" }}>
           <div>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#A0A0B8", fontWeight: 600 }}>{p.name}</span>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A", marginLeft: 8 }}>v{p.version}</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#C0C2C8", fontWeight: 600 }}>{p.name}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#606878", marginLeft: 8 }}>v{p.version}</span>
           </div>
           <div className="flex items-center gap-3">
             <Toggle on={p.enabled} onChange={() => set("plugins", plugins.map(x => x.id === p.id ? { ...x, enabled: !x.enabled } : x))} />
@@ -233,7 +233,7 @@ function PluginsTab({ s, set }: { s: S; set: (k: string, v: unknown) => void }) 
         </div>
       ))}
     </Card>
-    <button onClick={() => toast.info("Plugin installation requires the desktop app")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#1E2640", border: "1px solid #303D5A", borderRadius: 4, color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}><Plus size={13} /> Install Plugin</button>
+    <button onClick={() => toast.info("Plugin installation requires the desktop app")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}><Plus size={13} /> Install Plugin</button>
   </>;
 }
 
@@ -273,29 +273,29 @@ export default function Settings() {
 
   return (
     <AppSidebar>
-      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#1A2035", borderBottom: "1px solid #2A3350" }}>
+      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#141619", borderBottom: "1px solid #2A2D35" }}>
         <div className="flex items-center gap-1 mr-1">
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#F8F8FF", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#E0E2E8", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#FF5A2C", letterSpacing: "0.06em", lineHeight: 1 }}>TV</span>
         </div>
-        <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
+        <div className="w-px h-4 mx-1" style={{ background: "#3A3D45" }} />
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Settings</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>/ {activeTab}</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#606878" }}>/ {activeTab}</span>
         <div className="flex-1" />
         {dirty && <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#FBBF24" }}>● Unsaved changes</span>}
-        <button onClick={() => { setSettings({ ...DEFAULTS }); setDirty(true); toast.info("Reset to defaults"); }} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "transparent", border: "1px solid #303D5A", borderRadius: 4, color: "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer" }}><RefreshCw size={11} /> Reset</button>
+        <button onClick={() => { setSettings({ ...DEFAULTS }); setDirty(true); toast.info("Reset to defaults"); }} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "transparent", border: "1px solid #3A3D45", borderRadius: 4, color: "#606878", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer" }}><RefreshCw size={11} /> Reset</button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-col shrink-0 py-2" style={{ width: 168, background: "#1A2035", borderRight: "1px solid #2A3350" }}>
+        <div className="flex flex-col shrink-0 py-2" style={{ width: 168, background: "#141619", borderRight: "1px solid #2A2D35" }}>
           {SETTINGS_TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setActiveTab(id)} className="flex items-center gap-2.5 px-3 py-2.5 text-left transition-all" style={{ background: activeTab === id ? "#FF5A2C0F" : "transparent", borderLeft: activeTab === id ? "2px solid #FF5A2C" : "2px solid transparent", cursor: "pointer" }}>
-              <Icon size={14} style={{ color: activeTab === id ? "#FF5A2C" : "#50506A" }} />
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: activeTab === id ? 600 : 400, color: activeTab === id ? "#F8F8FF" : "#606078" }}>{label}</span>
+              <Icon size={14} style={{ color: activeTab === id ? "#FF5A2C" : "#606878" }} />
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: activeTab === id ? 600 : 400, color: activeTab === id ? "#E0E2E8" : "#606878" }}>{label}</span>
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ background: "#141928" }}>
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ background: "#0F1114" }}>
           <div style={{ maxWidth: 640 }}>
             {activeTab === "general"  && <GeneralTab  s={settings} set={set} />}
             {activeTab === "stream"   && <StreamTab   s={settings} set={set} />}
@@ -309,9 +309,9 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 px-6 py-3 shrink-0" style={{ background: "#1A2035", borderTop: "1px solid #2A3350" }}>
-        <button onClick={handleCancel} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#1A1A24", border: "1px solid #303D5A", borderRadius: 4, color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}><X size={13} /> Cancel</button>
-        <button onClick={handleSave} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: dirty ? "linear-gradient(135deg, #FF5A2C, #FF6B35)" : "#1E2640", boxShadow: dirty ? "0 0 14px rgba(255,77,28,0.3)" : "none", border: dirty ? "none" : "1px solid #303D5A", borderRadius: 4, color: dirty ? "#fff" : "#50506A", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Save size={13} /> SAVE SETTINGS</button>
+      <div className="flex items-center justify-end gap-2 px-6 py-3 shrink-0" style={{ background: "#141619", borderTop: "1px solid #2A2D35" }}>
+        <button onClick={handleCancel} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#141619", border: "1px solid #3A3D45", borderRadius: 4, color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}><X size={13} /> Cancel</button>
+        <button onClick={handleSave} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: dirty ? "linear-gradient(135deg, #FF5A2C, #FF6B35)" : "#1A1D22", boxShadow: dirty ? "0 0 14px rgba(255,77,28,0.3)" : "none", border: dirty ? "none" : "1px solid #3A3D45", borderRadius: 4, color: dirty ? "#fff" : "#606878", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Save size={13} /> SAVE SETTINGS</button>
       </div>
     </AppSidebar>
   );

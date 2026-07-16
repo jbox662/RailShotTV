@@ -70,7 +70,7 @@ function ConnBadge({ status }: { status: ConnStatus }) {
   const map = {
     connected:    { color: "#22C55E", label: "Connected",    icon: CheckCircle2 },
     connecting:   { color: "#FBBF24", label: "Connecting…",  icon: RefreshCw },
-    disconnected: { color: "#50506A", label: "Disconnected", icon: WifiOff },
+    disconnected: { color: "#606878", label: "Disconnected", icon: WifiOff },
     error:        { color: "#FF5A2C", label: "Error",        icon: AlertCircle },
   };
   const m = map[status];
@@ -98,7 +98,7 @@ function PlatformConnectPanel({
   const isConnected = conn.status === "connected";
 
   return (
-    <div className="rounded overflow-hidden" style={{ border: `1px solid ${isConnected ? meta.color + "40" : "#2A3350"}`, background: "#111827" }}>
+    <div className="rounded overflow-hidden" style={{ border: `1px solid ${isConnected ? meta.color + "40" : "#2A2D35"}`, background: "#0F1114" }}>
       {/* Header row */}
       <div
         className="flex items-center gap-2 px-3 py-2 cursor-pointer"
@@ -108,7 +108,7 @@ function PlatformConnectPanel({
         <span className="font-bold text-xs" style={{ color: meta.color, fontFamily: "'DM Sans', sans-serif", minWidth: 28 }}>
           {platform === "youtube" ? "YT" : platform === "facebook" ? "FB" : "TW"}
         </span>
-        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#C0C8D8", fontWeight: 600 }}>{meta.label}</span>
+        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#C0C2C8", fontWeight: 600 }}>{meta.label}</span>
         {isConnected && (
           <span className="flex items-center gap-1 ml-1">
             <Users size={10} style={{ color: meta.color }} />
@@ -117,12 +117,12 @@ function PlatformConnectPanel({
         )}
         <div className="flex-1" />
         <ConnBadge status={conn.status} />
-        <ChevronDown size={12} style={{ color: "#50506A", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+        <ChevronDown size={12} style={{ color: "#606878", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
       </div>
 
       {/* Expanded config */}
       {expanded && (
-        <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #2A3350" }}>
+        <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #2A2D35" }}>
           <div className="flex flex-col gap-2">
             <div>
               <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#8892A4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -133,7 +133,7 @@ function PlatformConnectPanel({
                 onChange={e => onChannelChange(platform, e.target.value)}
                 placeholder={platform === "twitch" ? "your_channel" : platform === "youtube" ? "UC... or @handle" : "page_id"}
                 className="w-full mt-1 px-2 py-1.5 rounded text-xs"
-                style={{ background: "#0D1220", border: "1px solid #2A3350", color: "#C0C8D8", fontFamily: "'JetBrains Mono', monospace", outline: "none" }}
+                style={{ background: "#080A0D", border: "1px solid #2A2D35", color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", outline: "none" }}
               />
             </div>
             {platform !== "twitch" && (
@@ -145,7 +145,7 @@ function PlatformConnectPanel({
                   type="password"
                   placeholder="••••••••••••••••"
                   className="w-full mt-1 px-2 py-1.5 rounded text-xs"
-                  style={{ background: "#0D1220", border: "1px solid #2A3350", color: "#C0C8D8", fontFamily: "'JetBrains Mono', monospace", outline: "none" }}
+                  style={{ background: "#080A0D", border: "1px solid #2A2D35", color: "#C0C2C8", fontFamily: "'JetBrains Mono', monospace", outline: "none" }}
                 />
               </div>
             )}
@@ -169,7 +169,7 @@ function PlatformConnectPanel({
               )}
             </div>
             {platform === "twitch" && (
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A", lineHeight: 1.4 }}>
+              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606878", lineHeight: 1.4 }}>
                 Connects via Twitch IRC over WSS. No API key required for read-only chat.
               </p>
             )}
@@ -193,7 +193,7 @@ function MessageRow({ msg, onPin }: { msg: ChatMessage; onPin: (id: number) => v
           ? (msg.isDonation ? "#FBBF2410" : "#A855F710")
           : msg.isPinned ? "#4F9EFF10" : "transparent",
         borderLeft: isSpecial ? `2px solid ${msg.isDonation ? "#FBBF24" : "#A855F7"}` : "2px solid transparent",
-        borderBottom: "1px solid #1A2035",
+        borderBottom: "1px solid #141619",
       }}
     >
       {msg.isPinned && (
@@ -224,14 +224,14 @@ function MessageRow({ msg, onPin }: { msg: ChatMessage; onPin: (id: number) => v
           {msg.donationAmount && (
             <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: "#FBBF2420", color: "#FBBF24", fontFamily: "'DM Sans', sans-serif", fontSize: 10 }}>{msg.donationAmount}</span>
           )}
-          <span className="ml-1.5 text-xs" style={{ color: "#C0C8D8", fontFamily: "'DM Sans', sans-serif", wordBreak: "break-word" }}>{msg.msg}</span>
+          <span className="ml-1.5 text-xs" style={{ color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif", wordBreak: "break-word" }}>{msg.msg}</span>
         </div>
-        <span className="mono shrink-0 mt-0.5" style={{ fontSize: 9, color: "#50506A" }}>{msg.time}</span>
+        <span className="mono shrink-0 mt-0.5" style={{ fontSize: 9, color: "#606878" }}>{msg.time}</span>
         {/* Pin button on hover */}
         <button
           onClick={() => onPin(msg.id)}
           className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
-          style={{ transition: "opacity 0.15s", color: "#50506A" }}
+          style={{ transition: "opacity 0.15s", color: "#606878" }}
           title="Pin message"
         >
           <Pin size={10} />
@@ -246,12 +246,12 @@ function ActivityRow({ ev }: { ev: ActivityEvent }) {
   const Icon = ACTIVITY_ICONS[ev.type] || Heart;
   const meta = PLATFORM_META[ev.platform];
   return (
-    <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid #1A2035" }}>
+    <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid #141619" }}>
       <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ background: `${ev.color}20` }}>
         <Icon size={12} style={{ color: ev.color }} />
       </div>
       <div className="flex-1 min-w-0">
-        <span className="font-bold text-xs" style={{ color: "#C0C8D8", fontFamily: "'DM Sans', sans-serif" }}>{ev.user}</span>
+        <span className="font-bold text-xs" style={{ color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif" }}>{ev.user}</span>
         <span className="ml-1 text-xs" style={{ color: "#8892A4", fontFamily: "'DM Sans', sans-serif" }}>{ev.detail}</span>
         {ev.amount && (
           <span className="ml-1 font-bold text-xs" style={{ color: ev.color, fontFamily: "'DM Sans', sans-serif" }}>{ev.amount}</span>
@@ -260,7 +260,7 @@ function ActivityRow({ ev }: { ev: ActivityEvent }) {
       <span className="px-1 rounded text-xs font-bold shrink-0" style={{ background: meta.bg, color: meta.color, fontFamily: "'DM Sans', sans-serif", fontSize: 9 }}>
         {ev.platform === "youtube" ? "YT" : ev.platform === "facebook" ? "FB" : "TW"}
       </span>
-      <span className="mono shrink-0" style={{ fontSize: 9, color: "#50506A" }}>{ev.time}</span>
+      <span className="mono shrink-0" style={{ fontSize: 9, color: "#606878" }}>{ev.time}</span>
     </div>
   );
 }
@@ -337,12 +337,12 @@ export default function ChatPanel() {
   return (
     <AppSidebar>
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#1A2035", borderBottom: "1px solid #2A3350" }}>
+      <div className="flex items-center gap-3 px-4 shrink-0" style={{ height: 46, background: "#141619", borderBottom: "1px solid #2A2D35" }}>
         <div className="flex items-center gap-1 mr-1">
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#F8F8FF", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#E0E2E8", letterSpacing: "0.06em", lineHeight: 1 }}>RAILSHOT</span>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: "#FF5A2C", letterSpacing: "0.06em", lineHeight: 1 }}>TV</span>
         </div>
-        <div className="w-px h-4 mx-1" style={{ background: "#303D5A" }} />
+        <div className="w-px h-4 mx-1" style={{ background: "#3A3D45" }} />
         <MessageSquare size={13} style={{ color: "#4F9EFF" }} />
         <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 11, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Chat & Audience</span>
         {/* Platform status pills */}
@@ -350,9 +350,9 @@ export default function ChatPanel() {
           {(Object.entries(connections) as [Platform, PlatformConn][]).map(([p, c]) => {
             const meta = PLATFORM_META[p];
             return (
-              <span key={p} className="flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: c.status === "connected" ? meta.bg : "#1A2035", border: `1px solid ${c.status === "connected" ? meta.color + "50" : "#2A3350"}` }}>
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: c.status === "connected" ? meta.color : "#50506A" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: c.status === "connected" ? meta.color : "#50506A" }}>
+              <span key={p} className="flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: c.status === "connected" ? meta.bg : "#141619", border: `1px solid ${c.status === "connected" ? meta.color + "50" : "#2A2D35"}` }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: c.status === "connected" ? meta.color : "#606878" }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 700, color: c.status === "connected" ? meta.color : "#606878" }}>
                   {p === "youtube" ? "YT" : p === "facebook" ? "FB" : "TW"}
                 </span>
               </span>
@@ -365,8 +365,8 @@ export default function ChatPanel() {
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: connectedCount > 0 ? "#22C55E" : "#50506A" }} />
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: connectedCount > 0 ? "#22C55E" : "#50506A" }}>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: connectedCount > 0 ? "#22C55E" : "#606878" }} />
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: connectedCount > 0 ? "#22C55E" : "#606878" }}>
             {connectedCount > 0 ? `${connectedCount} CONNECTED` : "OFFLINE"}
           </span>
         </div>
@@ -374,7 +374,7 @@ export default function ChatPanel() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left sidebar: connections + moderation ─────────────────────────── */}
-        <div className="flex flex-col shrink-0" style={{ width: 220, background: "#111827", borderRight: "1px solid #2A3350", overflowY: "auto" }}>
+        <div className="flex flex-col shrink-0" style={{ width: 220, background: "#0F1114", borderRight: "1px solid #2A2D35", overflowY: "auto" }}>
           {/* Platform connections */}
           <div className="px-3 pt-3 pb-2">
             <div className="flex items-center gap-1.5 mb-2">
@@ -396,7 +396,7 @@ export default function ChatPanel() {
           </div>
 
           {/* Filter by platform */}
-          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A3350" }}>
+          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A2D35" }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Filter</span>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {(["all", "twitch", "youtube", "facebook"] as const).map(p => {
@@ -408,8 +408,8 @@ export default function ChatPanel() {
                     onClick={() => setFilterPlatform(p)}
                     className="px-2 py-0.5 rounded text-xs font-bold"
                     style={{
-                      background: active ? (meta ? meta.bg : "#4F9EFF20") : "#0D1220",
-                      border: `1px solid ${active ? (meta ? meta.color + "60" : "#4F9EFF60") : "#2A3350"}`,
+                      background: active ? (meta ? meta.bg : "#4F9EFF20") : "#080A0D",
+                      border: `1px solid ${active ? (meta ? meta.color + "60" : "#4F9EFF60") : "#2A2D35"}`,
                       color: active ? (meta ? meta.color : "#4F9EFF") : "#8892A4",
                       fontFamily: "'DM Sans', sans-serif",
                     }}
@@ -422,7 +422,7 @@ export default function ChatPanel() {
           </div>
 
           {/* Quick stats */}
-          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A3350" }}>
+          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A2D35" }}>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Session Stats</span>
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
@@ -431,9 +431,9 @@ export default function ChatPanel() {
                 { label: "Subs", value: messages.filter(m => m.isSub).length, color: "#A855F7" },
                 { label: "Donations", value: messages.filter(m => m.isDonation).length, color: "#22C55E" },
               ].map(s => (
-                <div key={s.label} className="rounded p-2" style={{ background: "#0D1220", border: "1px solid #2A3350" }}>
+                <div key={s.label} className="rounded p-2" style={{ background: "#080A0D", border: "1px solid #2A2D35" }}>
                   <div className="mono font-bold" style={{ fontSize: 16, color: s.color }}>{s.value}</div>
-                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#50506A", textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</div>
+                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#606878", textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -443,7 +443,7 @@ export default function ChatPanel() {
         {/* ── Main chat area ─────────────────────────────────────────────────── */}
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Tabs */}
-          <div className="flex items-center gap-0 shrink-0 px-3" style={{ background: "#111827", borderBottom: "1px solid #2A3350", height: 38 }}>
+          <div className="flex items-center gap-0 shrink-0 px-3" style={{ background: "#0F1114", borderBottom: "1px solid #2A2D35", height: 38 }}>
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -451,14 +451,14 @@ export default function ChatPanel() {
                 className="flex items-center gap-1.5 px-3 h-full text-xs font-bold relative"
                 style={{
                   fontFamily: "'DM Sans', sans-serif",
-                  color: activeTab === tab.id ? "#F8F8FF" : "#8892A4",
+                  color: activeTab === tab.id ? "#E0E2E8" : "#8892A4",
                   borderBottom: activeTab === tab.id ? "2px solid #4F9EFF" : "2px solid transparent",
                   background: "transparent",
                 }}
               >
                 {tab.label}
                 {tab.count !== null && (
-                  <span className="px-1.5 py-0.5 rounded-full" style={{ background: activeTab === tab.id ? "#4F9EFF20" : "#2A3350", color: activeTab === tab.id ? "#4F9EFF" : "#50506A", fontSize: 9 }}>
+                  <span className="px-1.5 py-0.5 rounded-full" style={{ background: activeTab === tab.id ? "#4F9EFF20" : "#2A2D35", color: activeTab === tab.id ? "#4F9EFF" : "#606878", fontSize: 9 }}>
                     {tab.count}
                   </span>
                 )}
@@ -469,7 +469,7 @@ export default function ChatPanel() {
             <button
               onClick={handleClearChat}
               className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-              style={{ color: "#50506A", fontFamily: "'DM Sans', sans-serif" }}
+              style={{ color: "#606878", fontFamily: "'DM Sans', sans-serif" }}
               title="Clear chat"
             >
               <Trash2 size={11} />
@@ -479,11 +479,11 @@ export default function ChatPanel() {
           {/* Chat tab */}
           {activeTab === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto" style={{ background: "#0D1220" }}>
+              <div className="flex-1 overflow-y-auto" style={{ background: "#080A0D" }}>
                 {filteredMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3">
-                    <MessageSquare size={32} style={{ color: "#2A3350" }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#50506A" }}>No messages yet</span>
+                    <MessageSquare size={32} style={{ color: "#2A2D35" }} />
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#606878" }}>No messages yet</span>
                   </div>
                 ) : (
                   filteredMessages.map(msg => (
@@ -493,14 +493,14 @@ export default function ChatPanel() {
                 <div ref={bottomRef} />
               </div>
               {/* Chat input */}
-              <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: "#111827", borderTop: "1px solid #2A3350" }}>
+              <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ background: "#0F1114", borderTop: "1px solid #2A2D35" }}>
                 <input
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleSend()}
                   placeholder="Send a message to all connected chats…"
                   className="flex-1 px-3 py-1.5 rounded text-xs"
-                  style={{ background: "#0D1220", border: "1px solid #2A3350", color: "#C0C8D8", fontFamily: "'DM Sans', sans-serif", outline: "none" }}
+                  style={{ background: "#080A0D", border: "1px solid #2A2D35", color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif", outline: "none" }}
                 />
                 <button
                   onClick={handleSend}
@@ -515,18 +515,18 @@ export default function ChatPanel() {
 
           {/* Activity tab */}
           {activeTab === "activity" && (
-            <div className="flex-1 overflow-y-auto" style={{ background: "#0D1220" }}>
+            <div className="flex-1 overflow-y-auto" style={{ background: "#080A0D" }}>
               {activity.map(ev => <ActivityRow key={ev.id} ev={ev} />)}
             </div>
           )}
 
           {/* Moderation tab */}
           {activeTab === "moderation" && (
-            <div className="flex-1 overflow-y-auto p-4" style={{ background: "#0D1220" }}>
+            <div className="flex-1 overflow-y-auto p-4" style={{ background: "#080A0D" }}>
               <div className="flex flex-col gap-3 max-w-sm">
                 <div className="flex items-center gap-2 mb-1">
                   <Shield size={14} style={{ color: "#4F9EFF" }} />
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#C0C8D8" }}>Chat Moderation</span>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13, color: "#C0C2C8" }}>Chat Moderation</span>
                 </div>
                 {[
                   { label: "Slow Mode", desc: "Limit messages to 1 per 30 seconds", icon: Clock, state: slowMode, set: setSlowMode, color: "#FBBF24" },
@@ -536,20 +536,20 @@ export default function ChatPanel() {
                 ].map(item => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.label} className="flex items-center gap-3 p-3 rounded" style={{ background: "#111827", border: `1px solid ${item.state ? item.color + "40" : "#2A3350"}` }}>
-                      <div className="w-8 h-8 rounded flex items-center justify-center shrink-0" style={{ background: item.state ? `${item.color}20` : "#1A2035" }}>
-                        <Icon size={15} style={{ color: item.state ? item.color : "#50506A" }} />
+                    <div key={item.label} className="flex items-center gap-3 p-3 rounded" style={{ background: "#0F1114", border: `1px solid ${item.state ? item.color + "40" : "#2A2D35"}` }}>
+                      <div className="w-8 h-8 rounded flex items-center justify-center shrink-0" style={{ background: item.state ? `${item.color}20` : "#141619" }}>
+                        <Icon size={15} style={{ color: item.state ? item.color : "#606878" }} />
                       </div>
                       <div className="flex-1">
-                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, color: "#C0C8D8" }}>{item.label}</div>
-                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A" }}>{item.desc}</div>
+                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, color: "#C0C2C8" }}>{item.label}</div>
+                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606878" }}>{item.desc}</div>
                       </div>
                       <button
                         onClick={() => { item.set(!item.state); toast.info(`${item.label} ${!item.state ? "enabled" : "disabled"}`); }}
                         className="w-10 h-5 rounded-full relative shrink-0"
-                        style={{ background: item.state ? item.color : "#2A3350", transition: "background 0.2s" }}
+                        style={{ background: item.state ? item.color : "#2A2D35", transition: "background 0.2s" }}
                       >
-                        <div className="w-4 h-4 rounded-full absolute top-0.5" style={{ background: "#F8F8FF", left: item.state ? "calc(100% - 18px)" : "2px", transition: "left 0.2s" }} />
+                        <div className="w-4 h-4 rounded-full absolute top-0.5" style={{ background: "#E0E2E8", left: item.state ? "calc(100% - 18px)" : "2px", transition: "left 0.2s" }} />
                       </button>
                     </div>
                   );
@@ -567,7 +567,7 @@ export default function ChatPanel() {
         </div>
 
         {/* ── Right sidebar: highlights + activity feed ──────────────────────── */}
-        <div className="flex flex-col shrink-0" style={{ width: 220, background: "#111827", borderLeft: "1px solid #2A3350", overflowY: "auto" }}>
+        <div className="flex flex-col shrink-0" style={{ width: 220, background: "#0F1114", borderLeft: "1px solid #2A2D35", overflowY: "auto" }}>
           {/* Pinned messages */}
           <div className="px-3 pt-3 pb-2">
             <div className="flex items-center gap-1.5 mb-2">
@@ -575,21 +575,21 @@ export default function ChatPanel() {
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Pinned</span>
             </div>
             {messages.filter(m => m.isPinned).length === 0 ? (
-              <div className="rounded p-3 text-center" style={{ background: "#0D1220", border: "1px solid #2A3350" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#50506A" }}>No pinned messages</span>
+              <div className="rounded p-3 text-center" style={{ background: "#080A0D", border: "1px solid #2A2D35" }}>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606878" }}>No pinned messages</span>
               </div>
             ) : (
               messages.filter(m => m.isPinned).map(m => (
                 <div key={m.id} className="rounded p-2 mb-1.5" style={{ background: "#4F9EFF10", border: "1px solid #4F9EFF30" }}>
                   <span className="font-bold text-xs" style={{ color: m.color, fontFamily: "'DM Sans', sans-serif" }}>{m.user}: </span>
-                  <span className="text-xs" style={{ color: "#C0C8D8", fontFamily: "'DM Sans', sans-serif" }}>{m.msg}</span>
+                  <span className="text-xs" style={{ color: "#C0C2C8", fontFamily: "'DM Sans', sans-serif" }}>{m.msg}</span>
                 </div>
               ))
             )}
           </div>
 
           {/* Highlights */}
-          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A3350" }}>
+          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A2D35" }}>
             <div className="flex items-center gap-1.5 mb-2">
               <TrendingUp size={11} style={{ color: "#FBBF24" }} />
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Highlights</span>
@@ -602,7 +602,7 @@ export default function ChatPanel() {
                     <span className="font-bold" style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: m.isDonation ? "#FBBF24" : "#A855F7" }}>
                       {m.isDonation ? m.donationAmount : "Sub"}
                     </span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#50506A" }}>· {m.time}</span>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#606878" }}>· {m.time}</span>
                   </div>
                   <span className="font-bold text-xs" style={{ color: m.color, fontFamily: "'DM Sans', sans-serif" }}>{m.user}</span>
                   <p className="text-xs mt-0.5" style={{ color: "#8892A4", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3 }}>{m.msg}</p>
@@ -612,7 +612,7 @@ export default function ChatPanel() {
           </div>
 
           {/* Recent activity */}
-          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A3350" }}>
+          <div className="px-3 py-2" style={{ borderTop: "1px solid #2A2D35" }}>
             <div className="flex items-center gap-1.5 mb-2">
               <Zap size={11} style={{ color: "#22C55E" }} />
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#8892A4", letterSpacing: "0.1em", textTransform: "uppercase" }}>Recent Activity</span>
@@ -624,9 +624,9 @@ export default function ChatPanel() {
                   <div key={ev.id} className="flex items-center gap-2 py-1">
                     <Icon size={10} style={{ color: ev.color }} className="shrink-0" />
                     <span className="text-xs truncate" style={{ color: "#8892A4", fontFamily: "'DM Sans', sans-serif" }}>
-                      <span style={{ color: "#C0C8D8", fontWeight: 600 }}>{ev.user}</span> {ev.detail}
+                      <span style={{ color: "#C0C2C8", fontWeight: 600 }}>{ev.user}</span> {ev.detail}
                     </span>
-                    <span className="mono shrink-0" style={{ fontSize: 9, color: "#50506A" }}>{ev.time}</span>
+                    <span className="mono shrink-0" style={{ fontSize: 9, color: "#606878" }}>{ev.time}</span>
                   </div>
                 );
               })}

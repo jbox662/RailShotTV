@@ -49,13 +49,13 @@
 :root {
   --radius: 0.4rem;
   /* Surfaces — lifted from near-black to deep-navy/slate */
-  --background: oklch(0.13 0.018 265);
-  --panel:      oklch(0.17 0.018 265);
-  --card:       oklch(0.21 0.020 265);
-  --control:    oklch(0.26 0.022 265);
+  --background: oklch(0.09 0.004 260);
+  --panel:      oklch(0.11 0.004 260);
+  --card:       oklch(0.14 0.005 260);
+  --control:    oklch(0.18 0.006 260);
   /* Borders — more visible */
-  --border:         oklch(0.30 0.022 265);
-  --border-elevated:oklch(0.38 0.025 265);
+  --border:         oklch(0.22 0.006 260);
+  --border-elevated:oklch(0.28 0.008 260);
   --border-active:  oklch(0.46 0.030 265);
   /* Text */
   --foreground:           oklch(0.97 0.003 270);
@@ -120,13 +120,13 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.018 265);
-  --panel:      oklch(0.17 0.018 265);
-  --card:       oklch(0.21 0.020 265);
-  --control:    oklch(0.26 0.022 265);
-  --border:         oklch(0.30 0.022 265);
-  --border-elevated:oklch(0.38 0.025 265);
-  --border-active:  oklch(0.46 0.030 265);
+  --background: oklch(0.09 0.004 260);
+  --panel:      oklch(0.11 0.004 260);
+  --card:       oklch(0.14 0.005 260);
+  --control:    oklch(0.18 0.006 260);
+  --border:         oklch(0.22 0.006 260);
+  --border-elevated:oklch(0.28 0.008 260);
+  --border-active:  oklch(0.36 0.010 260);
   --foreground:           oklch(0.97 0.003 270);
   --foreground-secondary: oklch(0.75 0.012 270);
   --foreground-muted:     oklch(0.52 0.012 270);
@@ -184,7 +184,7 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'DM Sans', sans-serif;
-    background-color: #161B2E;
+    background-color: #0F1114;
   }
   /* Dashboard global button active press */
   button:active:not(:disabled) {

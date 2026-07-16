@@ -23,7 +23,7 @@ export default function AppSidebar({ children }: Props) {
       {/* Icon rail */}
       <aside style={{
         width: 56, minWidth: 56, height: "100vh", flexShrink: 0,
-        background: "#111827",
+        background: "#0F1114",
         borderRight: "1px solid rgba(255,255,255,0.08)",
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingTop: 0, paddingBottom: 12, zIndex: 50,
@@ -84,7 +84,7 @@ export default function AppSidebar({ children }: Props) {
                     </div>
                   </Link>
                 </TooltipTrigger>
-                <TooltipContent side="right" style={{ background: "#1E2A3A", border: "1px solid rgba(255,255,255,0.12)", color: "#E2E8F0", fontSize: 12 }}>
+                <TooltipContent side="right" style={{ background: "#1A1D22", border: "1px solid rgba(255,255,255,0.12)", color: "#E2E8F0", fontSize: 12 }}>
                   {label}
                 </TooltipContent>
               </Tooltip>
