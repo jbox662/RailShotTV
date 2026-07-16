@@ -1097,12 +1097,12 @@ export default function Dashboard() {
           {/* ── CENTER: Transition controls ── */}
           <div style={{ width: 120, display: "flex", flexDirection: "column", alignItems: "stretch", background: "linear-gradient(180deg,#141619 0%,#0F1114 100%)", borderLeft: "1px solid #2A2D35", borderRight: "1px solid #2A2D35", flexShrink: 0, overflow: "hidden" }}>
             {/* ── BIG GO / TAKE button ── */}
-            <button
-              onClick={() => {
-                if (!previewSceneId) { toast.error("Nothing in Preview — select a scene first"); return; }
-                setProgramSceneId(previewSceneId);
-                toast.success(`${activeTransition} → Program: ${scenes.find(s => s.id === previewSceneId)?.name ?? "scene"}`);
-              }}
+           <button
+             onClick={() => {
+              if (!previewSceneId) { toast.error("Nothing in Preview — select a scene first"); return; }
+               handleGo(previewSceneId);
+               toast.success(`${activeTransition} → ${scenes.find(s => s.id === previewSceneId)?.name ?? "scene"}`);
+            }}
               style={{
                 margin: "8px 6px 4px",
                 padding: "10px 0",
@@ -1131,37 +1131,45 @@ export default function Dashboard() {
             <div style={{ textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", letterSpacing: "0.08em", marginBottom: 2 }}>
               {activeTransition.toUpperCase()}
             </div>
-            {/* Transition buttons */}
-            {[
-              { label: "Cut",      color: "#E0E2E8" },
-              { label: "Fade",     color: "#E0E2E8" },
-              { label: "Merge",    color: "#E0E2E8" },
-              { label: "Wipe",     color: "#E0E2E8" },
-              { label: "CubeZoom",color: "#E0E2E8" },
-              { label: "FTB",      color: "#E0E2E8" },
-            ].map(({ label, color }) => (
-              <div key={label} style={{ display: "flex", alignItems: "stretch", margin: "2px 6px", gap: 2 }}>
-                <button
-                  onClick={() => { setActiveTransition(label); toast.success(`Transition: ${label}`); }}
-                  style={{ flex: 1, padding: "7px 0", background: activeTransition === label ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${activeTransition === label ? "#5A8AFF" : "#3A3D45"}`, borderRadius: "3px 0 0 3px", color: activeTransition === label ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: activeTransition === label ? 700 : 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: activeTransition === label ? "0 0 12px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 1px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)", transition: "all 0.12s" }}>
-                  {label}
-                </button>
-                <button onClick={() => toast.info(`${label} settings`)}
+           {/* Transition buttons */}
+           {[
+             { label: "Cut",      color: "#E0E2E8" },
+             { label: "Fade",     color: "#E0E2E8" },
+             { label: "Merge",    color: "#E0E2E8" },
+             { label: "Wipe",     color: "#E0E2E8" },
+             { label: "CubeZoom",color: "#E0E2E8" },
+             { label: "FTB",      color: "#E0E2E8" },
+           ].map(({ label, color }) => (
+             <div key={label} style={{ display: "flex", alignItems: "stretch", margin: "2px 6px", gap: 2 }}>
+               <button
+                  onClick={() => { setActiveTransition(label); }}
+                 style={{ flex: 1, padding: "7px 0", background: activeTransition === label ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${activeTransition === label ? "#5A8AFF" : "#3A3D45"}`, borderRadius: "3px 0 0 3px", color: activeTransition === label ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: activeTransition === label ? 700 : 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: activeTransition === label ? "0 0 12px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 1px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)", transition: "all 0.12s" }}>
+                 {label}
+               </button>
+               <button onClick={() => toast.info(`${label} settings`)}
                   style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #3A3D45", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#606878", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
                   ▾
                 </button>
               </div>
             ))}
-            {/* Scene number buttons */}
-            <div style={{ margin: "6px 6px 2px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 2 }}>
-              {[1,2,3,4,5,6,7,8].map(n => (
-                <button key={n}
-                  onClick={() => { const sc = scenes[n-1]; if (sc) { setActiveSceneId(sc.id); setSelectedSourceId(null); } }}
-                  style={{ padding: "4px 0", background: scenes[n-1]?.id === activeSceneId ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${scenes[n-1]?.id === activeSceneId ? "#5A8AFF" : "#3A3D45"}`, borderRadius: 3, color: scenes[n-1]?.id === activeSceneId ? "#fff" : scenes[n-1] ? "#C0C2C8" : "#404450", fontSize: 11, fontWeight: 700, cursor: scenes[n-1] ? "pointer" : "default", fontFamily: "'JetBrains Mono',monospace", boxShadow: scenes[n-1]?.id === activeSceneId ? "0 0 8px rgba(58,106,255,0.5)" : "0 1px 3px rgba(0,0,0,0.4)" }}>
-                  {n}
-                </button>
-              ))}
-            </div>
+           {/* Scene number buttons */}
+           <div style={{ margin: "6px 6px 2px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 2 }}>
+             {[1,2,3,4,5,6,7,8].map(n => (
+               <button key={n}
+                  onClick={() => {
+                    const sc = scenes[n-1];
+                    if (sc) {
+                      setPreviewSceneId(sc.id);
+                      setActiveSceneId(sc.id);
+                      setSelectedSourceId(null);
+                      toast.info(`Preview → ${sc.name}`);
+                    }
+                  }}
+                  style={{ padding: "4px 0", background: scenes[n-1]?.id === previewSceneId ? "linear-gradient(180deg,#22C55E,#16A34A)" : scenes[n-1]?.id === programSceneId ? "linear-gradient(180deg,#FF5A2C,#CC3A14)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${scenes[n-1]?.id === previewSceneId ? "#22C55E" : scenes[n-1]?.id === programSceneId ? "#FF5A2C" : "#3A3D45"}`, borderRadius: 3, color: scenes[n-1]?.id === previewSceneId ? "#000" : scenes[n-1]?.id === programSceneId ? "#fff" : scenes[n-1] ? "#C0C2C8" : "#404450", fontSize: 11, fontWeight: 700, cursor: scenes[n-1] ? "pointer" : "default", fontFamily: "'JetBrains Mono',monospace", boxShadow: scenes[n-1]?.id === previewSceneId ? "0 0 8px rgba(34,197,94,0.5)" : scenes[n-1]?.id === programSceneId ? "0 0 8px rgba(255,90,44,0.5)" : "0 1px 3px rgba(0,0,0,0.4)", transition: "all 0.12s" }}>
+                 {n}
+               </button>
+             ))}
+           </div>
             {/* Transition speed fader */}
             <div style={{ margin: "4px 6px", display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", textAlign: "center" }}>Speed</span>
