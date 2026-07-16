@@ -626,7 +626,6 @@ function InputConfigPanel({ typeId, name, setName, config, setConfig }: {
         {numInput("Width (px)", "width", 1920, 100, 7680)}
         {numInput("Height (px)", "height", 1080, 100, 4320)}
         {checkRow("Transparent Background", "transparent")}
-        {checkRow("Capture Audio", "captureAudio")}
         {numInput("Number", "number", 1, 1, 1000)}</>);
     case "zoom":
       return (<><p style={S.hint}>Connect a Zoom meeting as a video input.</p>
