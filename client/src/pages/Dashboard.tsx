@@ -145,12 +145,16 @@ const ProgramCanvas = memo(function ProgramCanvas({
           >
             {/* Source content */}
             {src.type === "browser" && url ? (
-              <iframe
-                src={url}
-                style={{ width: "100%", height: "100%", border: "none", display: "block", pointerEvents: "none" }}
-                title={src.name}
-                sandbox="allow-scripts allow-same-origin allow-forms"
-              />
+              <div style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}>
+                {/* iframe is sized 20px wider/taller so native scrollbars are clipped by the parent overflow:hidden */}
+                <iframe
+                  src={url}
+                  style={{ width: "calc(100% + 20px)", height: "calc(100% + 20px)", border: "none", display: "block", pointerEvents: "none", position: "absolute", top: 0, left: 0 }}
+                  title={src.name}
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  scrolling="no"
+                />
+              </div>
             ) : src.type === "camera" ? (
               <div style={{ width: "100%", height: "100%", background: "#0A1A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
                 <src.icon size={24} style={{ color: src.color, opacity: 0.5 }} />
