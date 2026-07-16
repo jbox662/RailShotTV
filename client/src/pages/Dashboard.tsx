@@ -40,6 +40,8 @@ const SmoothBrowserFrame = memo(function SmoothBrowserFrame({ url, name }: { url
   const [activeSlot, setActiveSlot] = useState<"a"|"b">("a");
   const [slotUrl, setSlotUrl] = useState<{ a: string; b: string }>({ a: url, b: "" });
   const prevUrlRef = useRef(url);
+  const activeSlotRef = useRef<"a"|"b">("a");
+  useEffect(() => { activeSlotRef.current = activeSlot; }, [activeSlot]);
 
   useEffect(() => {
     if (url === prevUrlRef.current) return;
@@ -59,10 +61,14 @@ const SmoothBrowserFrame = memo(function SmoothBrowserFrame({ url, name }: { url
     } catch (_) { /* cross-origin */ }
   };
 
-  const handleLoad = (slot: "a"|"b") => (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+  const handleLoadA = useCallback((e: React.SyntheticEvent<HTMLIFrameElement>) => {
     injectNoScroll(e);
-    if (slot !== activeSlot) setActiveSlot(slot);
-  };
+    if ("a" !== activeSlotRef.current) setActiveSlot("a");
+  }, []);
+  const handleLoadB = useCallback((e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    injectNoScroll(e);
+    if ("b" !== activeSlotRef.current) setActiveSlot("b");
+  }, []);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
@@ -74,11 +80,46 @@ const SmoothBrowserFrame = memo(function SmoothBrowserFrame({ url, name }: { url
           title={`${name}-${slot}`}
           sandbox="allow-scripts allow-same-origin allow-forms"
           scrolling="no"
-          onLoad={handleLoad(slot)}
+          onLoad={slot === "a" ? handleLoadA : handleLoadB}
         />
       ))}
     </div>
   );
+});
+
+// ── Memoized live timecode — owns its own state so Dashboard doesn't re-render ─
+const LiveTimecode = memo(function LiveTimecode({ isLive }: { isLive: boolean }) {
+  const [tc, setTc] = useState("00:00:00");
+  useEffect(() => {
+    if (!isLive) { setTc("00:00:00"); return; }
+    let secs = 0;
+    const t = setInterval(() => {
+      secs++;
+      const h = String(Math.floor(secs / 3600)).padStart(2, "0");
+      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
+      const s = String(secs % 60).padStart(2, "0");
+      setTc(`${h}:${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isLive]);
+  return <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{tc}</span>;
+});
+// ── Memoized record timecode — owns its own state so Dashboard doesn't re-render ─
+const RecordTimecode = memo(function RecordTimecode({ isRecording }: { isRecording: boolean }) {
+  const [recordTc, setRecordTc] = useState("00:00:00");
+  useEffect(() => {
+    if (!isRecording) { setRecordTc("00:00:00"); return; }
+    let secs = 0;
+    const t = setInterval(() => {
+      secs++;
+      const h = String(Math.floor(secs / 3600)).padStart(2, "0");
+      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
+      const s = String(secs % 60).padStart(2, "0");
+      setRecordTc(`${h}:${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isRecording]);
+  return isRecording ? <><span style={{ color: "#EF4444", fontSize: 8 }}>●</span> {recordTc}</> : <>● Record</>;
 });
 
 const ProgramCanvas = memo(function ProgramCanvas({
@@ -259,7 +300,7 @@ const OVERLAY_TEMPLATES = [
 ];
 
 // ── Vertical VU Meter (OBS-style, two channels L/R) ─────────────────────────
-function VUMeterVertical({ color, active, volume }: { color: string; active: boolean; volume: number }) {
+const VUMeterVertical = memo(function VUMeterVertical({ color, active, volume }: { color: string; active: boolean; volume: number }) {
   const [levels, setLevels] = useState([0, 0]);
   const [peaks, setPeaks]   = useState([0, 0]);
   const peakHoldRef = useRef([0, 0]);
@@ -321,10 +362,10 @@ function VUMeterVertical({ color, active, volume }: { color: string; active: boo
       ))}
     </div>
   );
-}
+});
 
 // ── Bitrate sparkline ─────────────────────────────────────────────────────────
-function BitrateSparkline({ active }: { active: boolean }) {
+const BitrateSparkline = memo(function BitrateSparkline({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataRef   = useRef<number[]>(Array(40).fill(0));
   useEffect(() => {
@@ -348,7 +389,7 @@ function BitrateSparkline({ active }: { active: boolean }) {
     return () => clearInterval(interval);
   }, [active]);
   return <canvas ref={canvasRef} width={180} height={36} style={{ width: "100%", height: 36 }} />;
-}
+});
 
 // ── vMix-style Input Select Modal ─────────────────────────────────────────────
 const VMIX_INPUT_TYPES = [
@@ -818,13 +859,8 @@ export default function Dashboard() {
   const { isLive, setIsLive } = useStreaming();
   const [livePlatform, setLivePlatform] = useState("");
   const [showGoLive, setShowGoLive]     = useState(false);
-  const [tc, setTc]                     = useState("00:00:00");
-  const [bitrate, setBitrate]           = useState(0);
-  const [viewers, setViewers]           = useState(0);
-
   // Toolbar state
   const [isRecording, setIsRecording] = useState(false);
-  const [recordTc, setRecordTc]       = useState("00:00:00");
   const [externalOut, setExternalOut] = useState(false);
   const [showNewConfirm, setShowNewConfirm] = useState(false);
   const [showPresetManager, setShowPresetManager] = useState(false);
@@ -833,20 +869,6 @@ export default function Dashboard() {
   const [uiLocked, setUiLocked] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [compactTiles, setCompactTiles] = useState(false);
-
-  // Recording timer
-  useEffect(() => {
-    if (!isRecording) { setRecordTc("00:00:00"); return; }
-    let secs = 0;
-    const t = setInterval(() => {
-      secs++;
-      const h = String(Math.floor(secs / 3600)).padStart(2, "0");
-      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
-      const s = String(secs % 60).padStart(2, "0");
-      setRecordTc(`${h}:${m}:${s}`);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [isRecording]);
 
   // Preset helpers
   const handleSavePreset = useCallback((name: string) => {
@@ -917,6 +939,7 @@ export default function Dashboard() {
   const handleCanvasTransformChange = useCallback((id: number, t: CanvasTransform) => {
     setCanvasTransforms(p => ({ ...p, [id]: t }));
   }, []);
+  const noop = useCallback(() => {}, []);
   // GO transition handler
   const handleGo = useCallback((targetSceneId: number) => {
     if (isTransitioning) return;
@@ -1063,22 +1086,6 @@ export default function Dashboard() {
     toast.success("Input settings saved");
   }, [activeSceneId, updateSource, updateSourceSettings]);
 
-
-  // Timecode
-  useEffect(() => {
-    if (!isLive) return;
-    let secs = 0;
-    const t = setInterval(() => {
-      secs++;
-      const h = String(Math.floor(secs / 3600)).padStart(2, "0");
-      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
-      const s = String(secs % 60).padStart(2, "0");
-      setTc(`${h}:${m}:${s}`);
-      setBitrate(prev => Math.max(7000, Math.min(10000, prev + (Math.random() - 0.48) * 300)));
-      if (Math.random() < 0.05) setViewers(v => v + Math.floor(Math.random() * 3));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [isLive]);
 
   // Handlers
   const handleAddSource = useCallback((type: string, name: string, icon: React.ElementType, color: string) => {
@@ -1431,7 +1438,7 @@ export default function Dashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {isLive && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#FF5A2C" }}>● LIVE</span>}
                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#A0A8B8" }}>{scenes.find(s => s.id === programSceneId)?.name ?? "No Scene"}</span>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{tc}</span>
+                <LiveTimecode isLive={isLive} />
                 {programSceneId !== null && (
                   <button onClick={() => setProgramSceneId(null)} title="Clear Program output"
                     style={{ padding: "1px 7px", background: "none", border: "1px solid #FF5A2C40", borderRadius: 2, color: "#FF5A2C70", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.06em" }}>
@@ -1476,7 +1483,7 @@ export default function Dashboard() {
                         sources={programSources}
                         selectedId={null}
                         transforms={canvasTransforms}
-                        onSelect={() => {}}
+                        onSelect={noop}
                         onTransformChange={handleCanvasTransformChange}
                       />
                     </div>
@@ -1745,7 +1752,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
             <button onClick={() => { setIsRecording(v => !v); toast.success(isRecording ? "Recording stopped" : "Recording started"); }}
               style={{ padding: "5px 12px", background: isRecording ? "linear-gradient(180deg,#7F1D1D,#5A1010)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${isRecording ? "#EF444440" : "#4A4D55"}`, borderRadius: "3px 0 0 3px", color: isRecording ? "#FCA5A5" : "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 5 }}>
-              {isRecording ? <><span style={{ color: "#EF4444", fontSize: 8 }}>●</span> {recordTc}</> : "● Record"}
+              <RecordTimecode isRecording={isRecording} />
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1792,7 +1799,7 @@ export default function Dashboard() {
                 <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#CC3A18,#AA2A10)", border: "1px solid #FF5A2C80", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
               </>
             ) : (
-              <button onClick={() => { setIsLive(false); setLivePlatform(""); setTc("00:00:00"); setViewers(0); setBitrate(0); }}
+              <button onClick={() => { setIsLive(false); setLivePlatform(""); }}
                 style={{ padding: "5px 12px", background: "linear-gradient(180deg,#7F1D1D,#5A1010)", border: "1px solid #EF444440", borderRadius: 3, color: "#FCA5A5", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                 ■ End Stream
               </button>
