@@ -323,16 +323,16 @@ const VUMeterVertical = memo(function VUMeterVertical({ color, active, volume }:
   }, [active, volume]);
 
   const DB_MARKS = [0, -6, -12, -18, -24, -30, -42, -54];
-  const meterH = 80;
+  const meterH = 120;
   const dbToY = (db: number) => (1 - (db + 60) / 60) * meterH;
 
   const levelColor = (pct: number) =>
     pct > 0.9 ? "#EF4444" : pct > 0.75 ? "#FBBF24" : pct > 0.5 ? "#84CC16" : color;
 
   return (
-    <div className="flex gap-1 items-end" style={{ height: meterH, position: "relative" }}>
+    <div className="flex gap-[2px] items-end" style={{ height: meterH, position: "relative" }}>
       {[0, 1].map(ch => (
-        <div key={ch} style={{ width: 8, height: meterH, background: "#0A0E1A", borderRadius: 2, position: "relative", overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div key={ch} style={{ width: 6, height: meterH, background: "#060810", borderRadius: 1, position: "relative", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
           {/* Filled level bar */}
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0,
@@ -1507,7 +1507,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── INPUT TILES ROW ── */}
-        <div style={{ display: "flex", alignItems: "stretch", background: "#0D0F12", borderTop: "1px solid #2A2D35", flexShrink: 0, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "stretch", background: "#0A0C10", borderTop: "1px solid #1A1D24", flexShrink: 0, minHeight: 0, overflow: "hidden", maxHeight: 140 }}>
           {/* Scene Manager Panel */}
           <SceneManagerPanel
             scenes={scenes}
@@ -1541,7 +1541,7 @@ export default function Dashboard() {
               const headerBg      = isInProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isInPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : isSelectedSrc ? "linear-gradient(180deg,#1A2A3A,#141E2A)" : "linear-gradient(180deg,#1E2128,#181B22)";
               const headerColor   = isInProgram || isInPreview ? "#000" : isSelectedSrc ? "#C8DAFF" : "#C0C2C8";
               return (
-                <div key={src.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isInProgram ? "#1A0A0A" : isInPreview ? "#0A150A" : isSelectedSrc ? "#0A1220" : "#0D0F12", outline: tileOutline, outlineOffset: -2 }}>
+                <div key={src.id} style={{ display: "flex", flexDirection: "column", minWidth: 110, maxWidth: 150, flex: "1 1 110px", borderRight: "1px solid #1A1D24", position: "relative", background: isInProgram ? "#180A0A" : isInPreview ? "#0A1408" : isSelectedSrc ? "#080E1A" : "#0A0C10", outline: tileOutline, outlineOffset: -2 }}>
                   {/* Tile header */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: headerBg, borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
@@ -1576,11 +1576,11 @@ export default function Dashboard() {
                   {/* Tile preview — right-click for context menu */}
                   <ContextMenu>
                     <ContextMenuTrigger asChild>
-                      <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
+                      <div style={{ flex: 1, background: "#000", minHeight: 44, maxHeight: 56, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
                         onClick={() => { setSelectedSourceId(src.id); }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                          <src.icon size={20} style={{ color: src.color, opacity: src.visible ? 1 : 0.3 }} />
-                          <span style={{ fontSize: 8, color: "#606878", fontFamily: "'DM Sans',sans-serif" }}>{src.type}</span>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                          <src.icon size={16} style={{ color: src.color, opacity: src.visible ? 1 : 0.3 }} />
+                          <span style={{ fontSize: 7, color: "#505868", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.04em" }}>{src.type}</span>
                         </div>
                         {!src.visible && (
                           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1616,7 +1616,7 @@ export default function Dashboard() {
                     </ContextMenuContent>
                   </ContextMenu>
                   {/* Tile controls */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "3px 4px", borderTop: "1px solid #2A2D35", background: "#0D0F12", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "2px 3px", borderTop: "1px solid #1E2028", background: "#080A0E", flexShrink: 0 }}>
                     <button onClick={() => moveSource(activeSceneId!, src.id, "up")} disabled={idx === 0}
                       style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: idx === 0 ? "#303540" : "#808898", fontSize: 9, cursor: idx === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>◀</button>
                     <button onClick={() => moveSource(activeSceneId!, src.id, "down")} disabled={idx === sources.length - 1}
@@ -1638,7 +1638,7 @@ export default function Dashboard() {
           {/* Audio Mixer — slides in horizontally from the right inside the tiles row */}
           <div style={{
             display: "flex", overflow: "hidden", flexShrink: 0,
-            maxWidth: audioMixerOpen ? 320 : 0,
+            maxWidth: audioMixerOpen ? 480 : 0,
             transition: "max-width 0.25s cubic-bezier(0.23,1,0.32,1)",
             borderLeft: audioMixerOpen ? "1px solid #2A2D35" : "none",
             background: "#0D0F12",
@@ -1648,17 +1648,19 @@ export default function Dashboard() {
               <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", transform: "rotate(180deg)", textTransform: "uppercase" }}>OUTPUTS</span>
             </div>
             {/* Master fader */}
-            <div style={{ width: 68, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 4px", borderRight: "1px solid #2A2D35", flexShrink: 0, background: "#0A0C10" }}>
-              <div style={{ padding: "1px 8px", background: masterMuted ? "linear-gradient(180deg,#7F1D1D,#5A1010)" : "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: masterMuted ? "#FCA5A5" : "#000", letterSpacing: "0.06em", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>MASTER</div>
+            <div style={{ width: 48, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 4px 4px", borderRight: "1px solid #2A2D35", flexShrink: 0, background: "#080A0E" }}>
+              <div style={{ padding: "1px 4px", background: masterMuted ? "linear-gradient(180deg,#7F1D1D,#5A1010)" : "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 8, color: masterMuted ? "#FCA5A5" : "#000", letterSpacing: "0.06em", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>MASTER</div>
               <VUMeterVertical color="#22C55E" active={isLive && !masterMuted} volume={masterVolume} />
               {/* dB readout */}
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 8, color: "#22C55E", letterSpacing: "0.04em" }}>
-                {masterVolume === 0 ? "-∞" : masterVolume >= 100 ? "0.0" : (20 * Math.log10(masterVolume / 100)).toFixed(1)} dB
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 7, color: "#22C55E", letterSpacing: "0.02em" }}>
+                {masterVolume === 0 ? "-∞" : masterVolume >= 100 ? "0.0" : (20 * Math.log10(masterVolume / 100)).toFixed(1)}dB
               </span>
-              {/* Volume fader */}
-              <input type="range" min={0} max={100} value={masterVolume}
-                onChange={e => setMasterVolume(Number(e.target.value))}
-                style={{ width: "100%", accentColor: "#22C55E", cursor: "pointer", height: 3 }} />
+              {/* Vertical fader */}
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0 }}>
+                <input type="range" min={0} max={100} value={masterVolume}
+                  onChange={e => setMasterVolume(Number(e.target.value))}
+                  style={{ width: 80, accentColor: "#22C55E", cursor: "pointer", height: 3, transform: "rotate(-90deg)", transformOrigin: "center" }} />
+              </div>
               {/* Pan knob (horizontal slider) */}
               <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                 <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: "#505868", letterSpacing: "0.06em" }}>PAN</span>
@@ -1678,39 +1680,26 @@ export default function Dashboard() {
                 const pan = channelPan[ch.id] ?? 0;
                 const gain = channelGain[ch.id] ?? 0;
                 return (
-                  <div key={ch.id} style={{ minWidth: 58, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 3px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.35 : 1, transition: "opacity 0.15s", flexShrink: 0 }}>
+                  <div key={ch.id} style={{ width: 36, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 3px 4px", borderRight: "1px solid #1A1D24", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s", flexShrink: 0, background: cs.solo ? "#1A1400" : "transparent" }}>
                     <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
                     {/* dB readout */}
-                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 7, color: cs.muted ? "#606878" : ch.color, letterSpacing: "0.02em" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 7, color: cs.muted ? "#404450" : ch.color, letterSpacing: "0.01em", lineHeight: 1 }}>
                       {cs.volume === 0 ? "-∞" : cs.volume >= 100 ? "0.0" : (20 * Math.log10(cs.volume / 100)).toFixed(1)}
                     </span>
-                    {/* Volume fader */}
-                    <input type="range" min={0} max={100} value={cs.volume}
-                      onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
-                      style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
-                    {/* Pan knob */}
-                    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: pan === 0 ? "#505868" : "#4F9EFF", letterSpacing: "0.04em" }}>
-                        {pan === 0 ? "C" : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}
-                      </span>
-                      <input type="range" min={-50} max={50} value={pan}
-                        onChange={e => setChannelPan(p => ({ ...p, [ch.id]: Number(e.target.value) }))}
-                        style={{ width: "100%", accentColor: "#4F9EFF", cursor: "pointer", height: 2 }} />
-                    </div>
-                    {/* Gain trim */}
-                    <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 1 }}>
-                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: "#505868", flexShrink: 0 }}>G</span>
-                      <input type="number" min={-12} max={12} value={gain}
-                        onChange={e => setChannelGain(p => ({ ...p, [ch.id]: Number(e.target.value) }))}
-                        style={{ width: "100%", background: "#0A0C10", border: "1px solid #2A2D35", borderRadius: 2, color: gain !== 0 ? "#FBBF24" : "#808898", fontSize: 7, fontFamily: "'JetBrains Mono',monospace", padding: "1px 2px", textAlign: "center" }} />
+                    {/* Vertical fader */}
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0 }}>
+                      <input type="range" min={0} max={100} value={cs.volume}
+                        onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
+                        style={{ width: 72, accentColor: ch.color, cursor: "pointer", height: 3, transform: "rotate(-90deg)", transformOrigin: "center" }} />
                     </div>
                     {/* Channel name */}
-                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, color: "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 46, textAlign: "center" }}>{ch.name}</span>
-                    <div style={{ display: "flex", gap: 2 }}>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 7, color: cs.muted ? "#404450" : "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", textAlign: "center", letterSpacing: "0.03em" }}>{ch.name}</span>
+                    {/* S / M buttons */}
+                    <div style={{ display: "flex", gap: 1, width: "100%" }}>
                       <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
-                        style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#3A3D45"}`, background: cs.solo ? "#FBBF24" : "#1E2128", color: cs.solo ? "#000" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
+                        style={{ flex: 1, height: 13, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#2A2D35"}`, background: cs.solo ? "#FBBF24" : "#141619", color: cs.solo ? "#000" : "#505868", fontSize: 7, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
                       <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
-                        style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#3A3D45"}`, background: cs.muted ? "#EF4444" : "#1E2128", color: cs.muted ? "#fff" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
+                        style={{ flex: 1, height: 13, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#2A2D35"}`, background: cs.muted ? "#EF4444" : "#141619", color: cs.muted ? "#fff" : "#505868", fontSize: 7, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
                     </div>
                   </div>
                 );
