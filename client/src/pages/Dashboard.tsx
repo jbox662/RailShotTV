@@ -36,7 +36,7 @@ const DEFAULT_TRANSFORMS: Record<string, CanvasTransform> = {
 };
 // ── Program Canvas ────────────────────────────────────────────────────────────
 // ── Double-buffer iframe — loads new URLs invisibly then swaps ────────────────
-function SmoothBrowserFrame({ url, name }: { url: string; name: string }) {
+const SmoothBrowserFrame = memo(function SmoothBrowserFrame({ url, name }: { url: string; name: string }) {
   const [activeSlot, setActiveSlot] = useState<"a"|"b">("a");
   const [slotUrl, setSlotUrl] = useState<{ a: string; b: string }>({ a: url, b: "" });
   const prevUrlRef = useRef(url);
@@ -79,7 +79,7 @@ function SmoothBrowserFrame({ url, name }: { url: string; name: string }) {
       ))}
     </div>
   );
-}
+});
 
 const ProgramCanvas = memo(function ProgramCanvas({
   sources, selectedId, transforms, onSelect, onTransformChange,
