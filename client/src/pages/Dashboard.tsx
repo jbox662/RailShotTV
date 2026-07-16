@@ -1206,7 +1206,7 @@ export default function Dashboard() {
             activeSceneId={activeSceneId}
             previewSceneId={previewSceneId}
             programSceneId={programSceneId}
-            onSelect={id => { setActiveSceneId(id); setPreviewSceneId(id); setSelectedSourceId(null); }}
+            onSelect={id => { setActiveSceneId(id); setPreviewSceneId(id); setSelectedSourceId(null); toast.info(`Preview: ${scenes.find(s => s.id === id)?.name ?? "scene"}`); }}
             onAdd={handleAddScene}
             onDuplicate={duplicateScene}
             onDelete={id => { const sc = scenes.find(s => s.id !== id); deleteScene(id); if (sc) setActiveSceneId(sc.id); }}
@@ -1222,115 +1222,110 @@ export default function Dashboard() {
             ))}
             <Search size={12} style={{ color: "#606878", cursor: "pointer", marginLeft: 2 }} />
           </div>
-          {/* Input tiles */}
+          {/* Input tiles — sources of the ACTIVE scene */}
           <div style={{ display: "flex", flex: 1, overflow: "hidden", gap: 0 }}>
-            {scenes.length === 0 ? (
+            {activeSceneId === null ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, padding: "12px 20px" }}>
+                <span style={{ fontSize: 10, color: "#404450", letterSpacing: "0.06em" }}>No scene selected — click + in the Scenes panel to create one</span>
+              </div>
+            ) : sources.length === 0 ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, padding: "12px 20px" }}>
                 <span style={{ fontSize: 10, color: "#404450", letterSpacing: "0.06em" }}>No inputs — click Add Input to begin</span>
               </div>
-            ) : scenes.map((scene, idx) => {
-              const isPreview = scene.id === previewSceneId;
-              const isProgram = scene.id === programSceneId;
+            ) : sources.map((src, idx) => {
+              const isSelectedSrc = src.id === selectedSourceId;
+              const isInPreview   = previewSceneId === activeSceneId;
+              const isInProgram   = programSceneId === activeSceneId;
+              const tileOutline   = isInProgram ? "2px solid #FF5A2C60" : isInPreview ? "2px solid #22C55E60" : isSelectedSrc ? "2px solid #4F9EFF60" : "none";
+              const headerBg      = isInProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isInPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : isSelectedSrc ? "linear-gradient(180deg,#1A2A3A,#141E2A)" : "linear-gradient(180deg,#1E2128,#181B22)";
+              const headerColor   = isInProgram || isInPreview ? "#000" : isSelectedSrc ? "#C8DAFF" : "#C0C2C8";
               return (
-               <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#1A0A0A" : isPreview ? "#0A150A" : "#0D0F12", outline: isProgram ? "2px solid #FF5A2C60" : isPreview ? "2px solid #22C55E60" : "none", outlineOffset: -2 }}>
-                 {/* Tile header */}
-                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#FF5A2C,#CC3A14)" : isPreview ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
-                   <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram || isPreview ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
-                     {idx + 1} {scene.name}
-                   </span>
+                <div key={src.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isInProgram ? "#1A0A0A" : isInPreview ? "#0A150A" : isSelectedSrc ? "#0A1220" : "#0D0F12", outline: tileOutline, outlineOffset: -2 }}>
+                  {/* Tile header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: headerBg, borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+                      <src.icon size={9} style={{ color: isInProgram || isInPreview ? "#00000080" : src.color, flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: headerColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
+                        {idx + 1} {src.name}
+                      </span>
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                       {/* Gear icon → opens Input Settings drawer */}
                       <button
-                        onClick={e => { e.stopPropagation(); handleOpenInputSettings(scene.id); }}
+                        onClick={e => { e.stopPropagation(); handleOpenInputSettings(activeSceneId!); }}
                         title="Input Settings"
-                        style={{ background: "none", border: "none", color: isProgram || isPreview ? "#00000080" : "#4F9EFF80", cursor: "pointer", display: "flex", padding: 1, transition: "color 0.15s" }}
-                        onMouseEnter={e => (e.currentTarget.style.color = isProgram || isPreview ? "#000" : "#4F9EFF")}
-                        onMouseLeave={e => (e.currentTarget.style.color = isProgram || isPreview ? "#00000080" : "#4F9EFF80")}
+                        style={{ background: "none", border: "none", color: isInProgram || isInPreview ? "#00000080" : "#4F9EFF80", cursor: "pointer", display: "flex", padding: 1, transition: "color 0.15s" }}
+                        onMouseEnter={e => (e.currentTarget.style.color = isInProgram || isInPreview ? "#000" : "#4F9EFF")}
+                        onMouseLeave={e => (e.currentTarget.style.color = isInProgram || isInPreview ? "#00000080" : "#4F9EFF80")}
                       >
                         <Settings size={10} />
                       </button>
+                      {/* Visibility toggle */}
+                      <button onClick={e => { e.stopPropagation(); updateSource(activeSceneId!, src.id, { visible: !src.visible }); }}
+                        style={{ background: "none", border: "none", color: src.visible ? (isInProgram || isInPreview ? "#00000080" : "#4F9EFF80") : "#606878", cursor: "pointer", display: "flex", padding: 1 }}>
+                        {src.visible ? <Eye size={10} /> : <EyeOff size={10} />}
+                      </button>
                       {/* Delete button */}
-                      <button onClick={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
-                        style={{ background: "none", border: "none", color: isProgram ? "#00000080" : "#606878", cursor: "pointer", display: "flex", padding: 1 }}>
+                      <button onClick={e => { e.stopPropagation(); removeSource(activeSceneId!, src.id); if (selectedSourceId === src.id) setSelectedSourceId(null); }}
+                        style={{ background: "none", border: "none", color: isInProgram ? "#00000080" : "#606878", cursor: "pointer", display: "flex", padding: 1 }}>
                         <X size={10} />
                       </button>
                     </div>
-                 </div>
-                 {/* Tile preview — right-click for context menu */}
+                  </div>
+                  {/* Tile preview — right-click for context menu */}
                   <ContextMenu>
                     <ContextMenuTrigger asChild>
                       <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
-                        onClick={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
-                        {scene.sources.length === 0 ? (
-                          <span style={{ fontSize: 9, color: "#303540", letterSpacing: "0.04em" }}>Blank</span>
-                        ) : (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: 4, alignItems: "center", justifyContent: "center" }}>
-                            {scene.sources.slice(0,3).map(src => (
-                              <div key={src.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                                <src.icon size={10} style={{ color: src.color }} />
-                                <span style={{ fontSize: 8, color: "#808898" }}>{src.name}</span>
-                              </div>
-                            ))}
-                            {scene.sources.length > 3 && <span style={{ fontSize: 8, color: "#606878" }}>+{scene.sources.length - 3}</span>}
+                        onClick={() => { setSelectedSourceId(src.id); }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          <src.icon size={20} style={{ color: src.color, opacity: src.visible ? 1 : 0.3 }} />
+                          <span style={{ fontSize: 8, color: "#606878", fontFamily: "'DM Sans',sans-serif" }}>{src.type}</span>
+                        </div>
+                        {!src.visible && (
+                          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <EyeOff size={14} style={{ color: "#606878" }} />
                           </div>
                         )}
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent style={{ minWidth: 180, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, padding: "4px 0", boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
-                      <ContextMenuLabel style={{ padding: "3px 10px", fontSize: 9, color: "#606878", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>{scene.name}</ContextMenuLabel>
+                      <ContextMenuLabel style={{ padding: "3px 10px", fontSize: 9, color: "#606878", fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>{src.name}</ContextMenuLabel>
                       <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
-                      {/* Preview / Program quick actions */}
-                      <ContextMenuItem onSelect={() => { setPreviewSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); }}
-                        style={{ padding: "5px 10px", fontSize: 11, color: "#22C55E", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                        → Set as Preview
-                      </ContextMenuItem>
-                      <ContextMenuSub>
-                        <ContextMenuSubTrigger style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                          Send to Program with…
-                        </ContextMenuSubTrigger>
-                        <ContextMenuSubContent style={{ minWidth: 140, background: "#1A1D22", border: "1px solid #3A3D45", borderRadius: 4, padding: "4px 0", boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
-                          {["Cut","Fade","Merge","Wipe","CubeZoom","FTB"].map(t => (
-                            <ContextMenuItem key={t} onSelect={() => {
-                              const prev = activeTransition;
-                              setActiveTransition(t);
-                              handleGo(scene.id);
-                              toast.success(`${t} → ${scene.name}`);
-                              setTimeout(() => setActiveTransition(prev), 100);
-                            }}
-                              style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                              {t}
-                            </ContextMenuItem>
-                          ))}
-                        </ContextMenuSubContent>
-                      </ContextMenuSub>
-                      <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
-                      {/* Settings */}
-                      <ContextMenuItem onSelect={() => handleOpenInputSettings(scene.id)}
+                      <ContextMenuItem onSelect={() => setSelectedSourceId(src.id)}
                         style={{ padding: "5px 10px", fontSize: 11, color: "#4F9EFF", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                        ⚙ Input Settings…
+                        Select
                       </ContextMenuItem>
-                      <ContextMenuItem onSelect={() => duplicateScene(scene)}
+                      <ContextMenuItem onSelect={() => updateSource(activeSceneId!, src.id, { visible: !src.visible })}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        {src.visible ? "Hide" : "Show"}
+                      </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => handleDuplicateSource(src)}
                         style={{ padding: "5px 10px", fontSize: 11, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                         Duplicate
                       </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => handleOpenInputSettings(activeSceneId!)}
+                        style={{ padding: "5px 10px", fontSize: 11, color: "#4F9EFF", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                        ⚙ Input Settings…
+                      </ContextMenuItem>
                       <ContextMenuSeparator style={{ height: 1, background: "#2A2D35", margin: "2px 0" }} />
-                      <ContextMenuItem onSelect={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
+                      <ContextMenuItem onSelect={() => { removeSource(activeSceneId!, src.id); if (selectedSourceId === src.id) setSelectedSourceId(null); }}
                         style={{ padding: "5px 10px", fontSize: 11, color: "#EF4444", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                         Delete Input
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
-                 {/* Tile controls */}
+                  {/* Tile controls */}
                   <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "3px 4px", borderTop: "1px solid #2A2D35", background: "#0D0F12", flexShrink: 0 }}>
-                    {[1,2,3,4].map(n => (
-                      <button key={n} style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#808898", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>{n}</button>
-                    ))}
-                    <button onClick={() => { handleGo(scene.id); toast.success(`${activeTransition} → ${scene.name}`); }}
+                    <button onClick={() => moveSource(activeSceneId!, src.id, "up")} disabled={idx === 0}
+                      style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: idx === 0 ? "#303540" : "#808898", fontSize: 9, cursor: idx === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>◀</button>
+                    <button onClick={() => moveSource(activeSceneId!, src.id, "down")} disabled={idx === sources.length - 1}
+                      style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: idx === sources.length - 1 ? "#303540" : "#808898", fontSize: 9, cursor: idx === sources.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▶</button>
+                    <button onClick={() => { if (activeSceneId) { handleGo(activeSceneId); toast.success(`${activeTransition} → ${activeScene?.name ?? "scene"}`); } }}
                       disabled={isTransitioning}
                       style={{ padding: "2px 6px", background: isTransitioning ? "linear-gradient(180deg,#1A3A1A,#122A12)" : "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: isTransitioning ? "#22C55E60" : "#000", fontSize: 9, fontWeight: 700, cursor: isTransitioning ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: isTransitioning ? "none" : "0 0 8px rgba(34,197,94,0.3)", marginLeft: "auto", transition: "all 0.15s" }}>
                       {isTransitioning ? "..." : "GO"}
                     </button>
-                    <button onClick={() => { setProgramSceneId(scene.id); setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`Cut → ${scene.name}`); }}
+                    <button onClick={() => { if (activeSceneId) { setProgramSceneId(activeSceneId); toast.success(`Cut → ${activeScene?.name ?? "scene"}`); } }}
                       style={{ padding: "2px 6px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#C0C2C8", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                       Cut
                     </button>
