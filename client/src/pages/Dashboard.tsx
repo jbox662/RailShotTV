@@ -814,13 +814,59 @@ export default function Dashboard() {
               );
             })}
           </div>
-          {/* Audio mixer toggle */}
-          <div style={{ display: "flex", alignItems: "center", padding: "0 8px", borderLeft: "1px solid #2A2D35", flexShrink: 0 }}>
-            <button onClick={() => setAudioMixerOpen(v => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: audioMixerOpen ? "linear-gradient(180deg,#22C55E30,#16A34A20)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${audioMixerOpen ? "#22C55E40" : "#3A3D45"}`, borderRadius: 3, color: audioMixerOpen ? "#22C55E" : "#C0C2C8", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 600, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
-              <Volume2 size={12} />
-              Audio Mixer
-            </button>
+          {/* Audio Mixer — slides in horizontally from the right inside the tiles row */}
+          <div style={{
+            display: "flex", overflow: "hidden", flexShrink: 0,
+            maxWidth: audioMixerOpen ? 320 : 0,
+            transition: "max-width 0.25s cubic-bezier(0.23,1,0.32,1)",
+            borderLeft: audioMixerOpen ? "1px solid #2A2D35" : "none",
+            background: "#0D0F12",
+          }}>
+            {/* OUTPUTS label */}
+            <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#1A3AFF15", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", transform: "rotate(180deg)", textTransform: "uppercase" }}>OUTPUTS</span>
+            </div>
+            {/* Master fader */}
+            <div style={{ width: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 4px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
+              <div style={{ padding: "1px 6px", background: "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>Master</div>
+              <button style={{ width: 22, height: 22, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Cpu size={9} />
+              </button>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0 }}>
+                <div style={{ width: 6, height: "100%", background: "#1E2128", border: "1px solid #3A3D45", borderRadius: 3, position: "relative" }}>
+                  <div style={{ position: "absolute", bottom: "30%", left: -7, right: -7, height: 12, background: "linear-gradient(180deg,#4A4D55,#2A2D35)", border: "1px solid #5A5D65", borderRadius: 2, cursor: "pointer" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                <button style={{ width: 18, height: 18, background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Volume2 size={9} /></button>
+                <button style={{ width: 18, height: 18, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 2, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Mic size={9} /></button>
+              </div>
+            </div>
+            {/* Channel strips */}
+            <div style={{ display: "flex", overflowX: "auto", minWidth: 0 }}>
+              {audioChannels.map(ch => {
+                const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+                return (
+                  <div key={ch.id} style={{ minWidth: 52, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "5px 3px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s", flexShrink: 0 }}>
+                    <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
+                    <input type="range" min={0} max={100} value={cs.volume}
+                      onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
+                      style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, color: "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 46, textAlign: "center" }}>{ch.name}</span>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
+                        style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#3A3D45"}`, background: cs.solo ? "#FBBF24" : "#1E2128", color: cs.solo ? "#000" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
+                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
+                        style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#3A3D45"}`, background: cs.muted ? "#EF4444" : "#1E2128", color: cs.muted ? "#fff" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* INPUTS label */}
+            <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#1A3AFF15", borderLeft: "1px solid #2A2D35", flexShrink: 0 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", textTransform: "uppercase" }}>INPUTS</span>
+            </div>
           </div>
         </div>
 
@@ -905,66 +951,6 @@ export default function Dashboard() {
             <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: isLive ? "#FF5A2C" : "#606878" }}>Total: {isLive ? "63%" : "8%"}</span>
           </div>
         </div>
-
-        {/* ── COLLAPSIBLE AUDIO MIXER (vMix-style floating panel) ── */}
-        {/* ── AUDIO MIXER — inline slide-up panel ── */}
-        <div style={{
-          overflow: "hidden",
-          maxHeight: audioMixerOpen ? 180 : 0,
-          transition: "max-height 0.25s cubic-bezier(0.23,1,0.32,1)",
-          flexShrink: 0,
-          borderTop: audioMixerOpen ? "1px solid #2A2D35" : "none",
-          background: "linear-gradient(180deg,#141619,#0F1114)",
-        }}>
-          <div style={{ display: "flex", height: 180 }}>
-            {/* OUTPUTS label */}
-            <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#0D0F12", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
-              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", transform: "rotate(180deg)", textTransform: "uppercase" }}>OUTPUTS</span>
-            </div>
-            {/* Master fader */}
-            <div style={{ width: 64, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRight: "1px solid #2A2D35", background: "#0D0F12", flexShrink: 0 }}>
-              <div style={{ padding: "2px 8px", background: "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.06em" }}>Master</div>
-              <button style={{ width: 24, height: 24, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Cpu size={10} />
-              </button>
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
-                <div style={{ width: 6, height: "100%", background: "#1E2128", border: "1px solid #3A3D45", borderRadius: 3, position: "relative" }}>
-                  <div style={{ position: "absolute", bottom: "25%", left: -8, right: -8, height: 14, background: "linear-gradient(180deg,#4A4D55,#2A2D35)", border: "1px solid #5A5D65", borderRadius: 2, cursor: "pointer" }} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button style={{ width: 20, height: 20, background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Volume2 size={10} /></button>
-                <button style={{ width: 20, height: 20, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 2, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Mic size={10} /></button>
-              </div>
-            </div>
-            {/* Channel strips */}
-            <div style={{ flex: 1, display: "flex", overflowX: "auto" }}>
-              {audioChannels.map(ch => {
-                const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
-                return (
-                  <div key={ch.id} style={{ minWidth: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 4px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s" }}>
-                    <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
-                    <input type="range" min={0} max={100} value={cs.volume}
-                      onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
-                      style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
-                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, color: "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 52, textAlign: "center" }}>{ch.name}</span>
-                    <div style={{ display: "flex", gap: 2 }}>
-                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
-                        style={{ width: 16, height: 16, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#3A3D45"}`, background: cs.solo ? "#FBBF24" : "#1E2128", color: cs.solo ? "#000" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
-                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
-                        style={{ width: 16, height: 16, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#3A3D45"}`, background: cs.muted ? "#EF4444" : "#1E2128", color: cs.muted ? "#fff" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* INPUTS label */}
-            <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#0D0F12", borderLeft: "1px solid #2A2D35", flexShrink: 0 }}>
-              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", textTransform: "uppercase" }}>INPUTS</span>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       {/* Modals */}
