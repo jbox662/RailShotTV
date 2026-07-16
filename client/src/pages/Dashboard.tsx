@@ -303,57 +303,353 @@ function BitrateSparkline({ active }: { active: boolean }) {
   return <canvas ref={canvasRef} width={180} height={36} style={{ width: "100%", height: 36 }} />;
 }
 
-// ── Add Source Modal ──────────────────────────────────────────────────────────
+// ── vMix-style Input Select Modal ─────────────────────────────────────────────
+const VMIX_INPUT_TYPES = [
+  { id: "video",        label: "Video",                       icon: "▶", color: "#22C55E" },
+  { id: "dvd",          label: "DVD",                         icon: "💿", color: "#A855F7" },
+  { id: "list",         label: "List",                        icon: "☰", color: "#4F9EFF" },
+  { id: "camera",       label: "Camera",                      icon: "📷", color: "#22C55E" },
+  { id: "ndi",          label: "NDI / OMT / Desktop Capture", icon: "🖥", color: "#4F9EFF" },
+  { id: "stream",       label: "Stream / SRT",                icon: "📡", color: "#22D3EE" },
+  { id: "instant",      label: "Instant Replay",              icon: "⏮", color: "#FF5A2C" },
+  { id: "imagseq",      label: "Image Sequence / Stinger",    icon: "🎞", color: "#F59E0B" },
+  { id: "videodelay",   label: "Video Delay",                 icon: "⏱", color: "#A855F7" },
+  { id: "image",        label: "Image",                       icon: "🖼", color: "#4F9EFF" },
+  { id: "photos",       label: "Photos",                      icon: "📸", color: "#22C55E" },
+  { id: "powerpoint",   label: "PowerPoint",                  icon: "📊", color: "#FF5A2C" },
+  { id: "colour",       label: "Colour",                      icon: "🎨", color: "#A855F7" },
+  { id: "audio",        label: "Audio",                       icon: "🎵", color: "#22D3EE" },
+  { id: "audioinput",   label: "Audio Input",                 icon: "🎤", color: "#22D3EE" },
+  { id: "title",        label: "Title",                       icon: "T",  color: "#F59E0B" },
+  { id: "virtualset",   label: "Virtual Set",                 icon: "🏟", color: "#4F9EFF" },
+  { id: "browser",      label: "Web Browser",                 icon: "🌐", color: "#22D3EE" },
+  { id: "videocall",    label: "Video Call",                  icon: "📞", color: "#22C55E" },
+  { id: "zoom",         label: "Zoom",                        icon: "Z",  color: "#4F9EFF" },
+  { id: "telestrator",  label: "Telestrator",                 icon: "✏", color: "#F59E0B" },
+  { id: "scoreboard",   label: "Scoreboard",                  icon: "🏆", color: "#FF5A2C" },
+  { id: "lowerthird",   label: "Lower Third",                 icon: "▬", color: "#A855F7" },
+  { id: "overlay",      label: "Overlay",                     icon: "⧉", color: "#22D3EE" },
+  { id: "display",      label: "Display Capture",             icon: "🖥", color: "#4F9EFF" },
+  { id: "alert",        label: "Alert / Stinger",             icon: "🔔", color: "#FF5A2C" },
+];
+
+function vmixTypeToSource(id: string): { icon: React.ElementType; color: string } {
+  const map: Record<string, string> = {
+    video: "image", dvd: "image", list: "overlay", camera: "camera",
+    ndi: "display", stream: "browser", instant: "camera", imagseq: "image",
+    videodelay: "camera", image: "image", photos: "image", powerpoint: "image",
+    colour: "image", audio: "audio", audioinput: "audio", title: "text",
+    virtualset: "display", browser: "browser", videocall: "camera",
+    zoom: "browser", telestrator: "overlay", scoreboard: "scoreboard",
+    lowerthird: "lowerthird", overlay: "overlay", display: "display", alert: "alert",
+  };
+  const srcType = SOURCE_TYPES.find(s => s.type === (map[id] ?? id)) ?? SOURCE_TYPES[0];
+  return { icon: srcType.icon, color: srcType.color };
+}
+
+function InputConfigPanel({ typeId, name, setName, config, setConfig }: {
+  typeId: string;
+  name: string;
+  setName: (v: string) => void;
+  config: Record<string, string | number | boolean>;
+  setConfig: (k: string, v: string | number | boolean) => void;
+}) {
+  const S = {
+    label: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#8892A4", display: "block" as const, marginBottom: 4, letterSpacing: "0.05em" },
+    input: { width: "100%", background: "#0D1017", border: "1px solid #2A2D35", borderRadius: 3, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, padding: "5px 8px", outline: "none", boxSizing: "border-box" as const },
+    select: { width: "100%", background: "#0D1017", border: "1px solid #2A2D35", borderRadius: 3, color: "#D0D2D8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, padding: "5px 8px", outline: "none" },
+    row: { marginBottom: 12 },
+    check: { display: "flex" as const, alignItems: "center" as const, gap: 8, marginBottom: 8, cursor: "pointer" as const },
+    checkLabel: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#C0C2C8" },
+    browse: { padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C0C2C8", fontFamily: "'DM Sans',sans-serif", fontSize: 11, cursor: "pointer" as const, whiteSpace: "nowrap" as const },
+    hint: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#606878", marginTop: 0, marginBottom: 14, lineHeight: 1.5 },
+  };
+  const nameRow = (
+    <div style={S.row}>
+      <label style={S.label}>Input Name</label>
+      <input value={name} onChange={e => setName(e.target.value)} style={S.input} autoFocus />
+    </div>
+  );
+  const numInput = (label: string, key: string, def: number, min?: number, max?: number) => (
+    <div style={{ ...S.row, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <label style={{ ...S.label, marginBottom: 0 }}>{label}</label>
+      <input type="number" value={(config[key] as number) ?? def} min={min} max={max}
+        onChange={e => setConfig(key, Number(e.target.value))}
+        style={{ ...S.input, width: 80, textAlign: "right" }} />
+    </div>
+  );
+  const selectInput = (label: string, key: string, options: string[], def: string) => (
+    <div style={S.row}>
+      <label style={S.label}>{label}</label>
+      <select value={(config[key] as string) ?? def} onChange={e => setConfig(key, e.target.value)} style={S.select}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  const checkRow = (label: string, key: string) => (
+    <label style={S.check}>
+      <input type="checkbox" checked={!!(config[key])} onChange={e => setConfig(key, e.target.checked)}
+        style={{ width: 14, height: 14, accentColor: "#4F9EFF" }} />
+      <span style={S.checkLabel}>{label}</span>
+    </label>
+  );
+  const fileRow = (label: string, key: string, placeholder: string) => (
+    <div style={S.row}>
+      <label style={S.label}>{label}</label>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input value={(config[key] as string) ?? ""} onChange={e => setConfig(key, e.target.value)}
+          placeholder={placeholder} style={{ ...S.input, flex: 1 }} />
+        <button style={S.browse}>Browse</button>
+      </div>
+    </div>
+  );
+  switch (typeId) {
+    case "video":
+    case "dvd":
+      return (<><p style={S.hint}>Select the {typeId === "dvd" ? "DVD" : "Video"} file to open.</p>
+        {fileRow("File Path", "filePath", typeId === "dvd" ? "D:\\" : "C:\\Videos\\clip.mp4")}
+        {nameRow}
+        {checkRow("Video contains Alpha Channel", "alphaChannel")}
+        {checkRow("Video is Interlaced", "interlaced")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "list":
+      return (<><p style={S.hint}>Create a playlist of video files that play sequentially.</p>
+        {nameRow}
+        {selectInput("Playback Mode", "playbackMode", ["Sequential","Shuffle","Loop"], "Sequential")}
+        {checkRow("Auto-advance to next item", "autoAdvance")}
+        {checkRow("Loop playlist", "loopList")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "camera":
+    case "videocall":
+      return (<><p style={S.hint}>Select a connected camera or video capture device.</p>
+        {nameRow}
+        {selectInput("Device", "device", ["Default Camera","USB Camera 1","USB Camera 2","Capture Card (HDMI)","Virtual Camera"], "Default Camera")}
+        {selectInput("Resolution", "resolution", ["1920x1080","1280x720","3840x2160","720x480"], "1920x1080")}
+        {selectInput("Frame Rate", "fps", ["29.97","30","60","25","24","23.976"], "29.97")}
+        {checkRow("Deinterlace", "deinterlace")}
+        {checkRow("Mirror Horizontal", "mirrorH")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "ndi":
+    case "display":
+      return (<><p style={S.hint}>Capture an NDI source, desktop monitor, or application window.</p>
+        {nameRow}
+        {selectInput("Source", "ndiSource", ["NDI Source 1","NDI Source 2","Primary Monitor","Secondary Monitor","Application Window"], "Primary Monitor")}
+        {selectInput("Resolution", "resolution", ["1920x1080","1280x720","3840x2160"], "1920x1080")}
+        {checkRow("Show Cursor", "showCursor")}
+        {checkRow("Capture Audio", "captureAudio")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "stream":
+      return (<><p style={S.hint}>Connect to an RTMP, RTSP, or SRT stream URL.</p>
+        {nameRow}
+        {selectInput("Protocol", "protocol", ["RTMP","RTSP","SRT","HLS","UDP"], "RTMP")}
+        <div style={S.row}>
+          <label style={S.label}>Stream URL</label>
+          <input value={(config["url"] as string) ?? ""} onChange={e => setConfig("url", e.target.value)}
+            placeholder="rtmp://live.example.com/app/streamkey" style={S.input} />
+        </div>
+        {numInput("Latency (ms)", "latency", 120, 0, 10000)}
+        {checkRow("Reconnect on disconnect", "autoReconnect")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "image":
+    case "photos":
+      return (<><p style={S.hint}>Add a still image or photo as an input.</p>
+        {fileRow("File Path", "filePath", "C:\\Images\\photo.png")}
+        {nameRow}
+        {checkRow("Image contains Alpha Channel", "alphaChannel")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "imagseq":
+      return (<><p style={S.hint}>Load an image sequence or animated stinger transition.</p>
+        {fileRow("Folder / First Frame", "folderPath", "C:\\Stingers\\intro_0001.png")}
+        {nameRow}
+        {numInput("Frame Rate", "fps", 30, 1, 120)}
+        {checkRow("Loop", "loop")}
+        {checkRow("Alpha Channel", "alphaChannel")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "videodelay":
+      return (<><p style={S.hint}>Add a delayed version of another input.</p>
+        {nameRow}
+        {selectInput("Source Input", "sourceInput", ["Input 1","Input 2","Input 3","Input 4"], "Input 1")}
+        {numInput("Delay (frames)", "delayFrames", 30, 0, 3600)}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "powerpoint":
+      return (<><p style={S.hint}>Open a PowerPoint or PDF presentation as an input.</p>
+        {fileRow("File Path", "filePath", "C:\\Presentations\\slides.pptx")}
+        {nameRow}
+        {checkRow("Auto-advance slides", "autoAdvance")}
+        {numInput("Slide duration (s)", "slideDuration", 5, 1, 300)}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "colour":
+      return (<><p style={S.hint}>Add a solid colour or gradient background input.</p>
+        {nameRow}
+        <div style={S.row}>
+          <label style={S.label}>Colour</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="color" value={(config["colour"] as string) ?? "#000000"} onChange={e => setConfig("colour", e.target.value)}
+              style={{ width: 40, height: 28, border: "1px solid #2A2D35", borderRadius: 3, background: "none", cursor: "pointer" }} />
+            <input value={(config["colour"] as string) ?? "#000000"} onChange={e => setConfig("colour", e.target.value)}
+              style={{ ...S.input, flex: 1 }} />
+          </div>
+        </div>
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "audio":
+    case "audioinput":
+      return (<><p style={S.hint}>Add an audio-only input from a file or device.</p>
+        {nameRow}
+        {typeId === "audio"
+          ? fileRow("Audio File", "filePath", "C:\\Audio\\music.mp3")
+          : selectInput("Audio Device", "device", ["Default Microphone","USB Mic","Line In","Virtual Audio Cable"], "Default Microphone")}
+        {numInput("Volume (%)", "volume", 100, 0, 200)}
+        {checkRow("Loop", "loop")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "title":
+    case "lowerthird":
+      return (<><p style={S.hint}>Add a {typeId === "title" ? "title" : "lower third"} graphic with editable text fields.</p>
+        {nameRow}
+        <div style={S.row}>
+          <label style={S.label}>Title Text</label>
+          <input value={(config["title"] as string) ?? ""} onChange={e => setConfig("title", e.target.value)}
+            placeholder="Enter title..." style={S.input} />
+        </div>
+        {typeId === "lowerthird" && (
+          <div style={S.row}>
+            <label style={S.label}>Subtitle</label>
+            <input value={(config["subtitle"] as string) ?? ""} onChange={e => setConfig("subtitle", e.target.value)}
+              placeholder="Enter subtitle..." style={S.input} />
+          </div>
+        )}
+        {selectInput("Font", "font", ["DM Sans","Arial","Impact","Helvetica Neue","Bebas Neue"], "DM Sans")}
+        {numInput("Font Size", "fontSize", 48, 8, 400)}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "virtualset":
+      return (<><p style={S.hint}>Load a virtual studio set background with chroma key support.</p>
+        {fileRow("Set File (.vs)", "filePath", "C:\\VirtualSets\\studio.vs")}
+        {nameRow}
+        {selectInput("Camera Angle", "angle", ["Wide","Medium","Close-up","Over Shoulder"], "Wide")}
+        {checkRow("Enable Chroma Key", "chromaKey")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "browser":
+      return (<><p style={S.hint}>Capture a web page or browser-based overlay.</p>
+        {nameRow}
+        <div style={S.row}>
+          <label style={S.label}>URL</label>
+          <input value={(config["url"] as string) ?? ""} onChange={e => setConfig("url", e.target.value)}
+            placeholder="https://example.com" style={S.input} />
+        </div>
+        {numInput("Width (px)", "width", 1920, 100, 7680)}
+        {numInput("Height (px)", "height", 1080, 100, 4320)}
+        {checkRow("Transparent Background", "transparent")}
+        {checkRow("Capture Audio", "captureAudio")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "zoom":
+      return (<><p style={S.hint}>Connect a Zoom meeting as a video input.</p>
+        {nameRow}
+        <div style={S.row}>
+          <label style={S.label}>Meeting ID</label>
+          <input value={(config["meetingId"] as string) ?? ""} onChange={e => setConfig("meetingId", e.target.value)}
+            placeholder="123 456 7890" style={S.input} />
+        </div>
+        <div style={S.row}>
+          <label style={S.label}>Password</label>
+          <input type="password" value={(config["password"] as string) ?? ""} onChange={e => setConfig("password", e.target.value)}
+            placeholder="••••••" style={S.input} />
+        </div>
+        {selectInput("Layout", "layout", ["Gallery","Speaker","Side-by-side"], "Gallery")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "telestrator":
+      return (<><p style={S.hint}>Add a drawing overlay for live annotation on top of another input.</p>
+        {nameRow}
+        {selectInput("Source Input", "sourceInput", ["Input 1","Input 2","Input 3","Input 4"], "Input 1")}
+        <div style={S.row}>
+          <label style={S.label}>Pen Colour</label>
+          <input type="color" value={(config["penColour"] as string) ?? "#FF0000"} onChange={e => setConfig("penColour", e.target.value)}
+            style={{ width: 40, height: 28, border: "1px solid #2A2D35", borderRadius: 3, background: "none", cursor: "pointer" }} />
+        </div>
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    case "scoreboard":
+      return (<><p style={S.hint}>Add a live scoreboard overlay.</p>
+        {nameRow}
+        {selectInput("Sport", "sport", ["Billiards","Basketball","Football","Soccer","Tennis","Baseball","Hockey"], "Billiards")}
+        {selectInput("Style", "style", ["Minimal","Broadcast","Retro","Modern"], "Broadcast")}
+        {checkRow("Show Timer", "showTimer")}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+    default:
+      return (<><p style={S.hint}>Configure this input source.</p>
+        {nameRow}
+        {numInput("Number", "number", 1, 1, 1000)}</>);
+  }
+}
+
+// ── Add Source Modal (vMix-style Input Select) ────────────────────────────────
 function AddSourceModal({ onAdd, onClose }: {
   onAdd: (type: string, name: string, icon: React.ElementType, color: string) => void;
   onClose: () => void;
 }) {
-  const [name, setName]       = useState(SOURCE_TYPES[0].label);
-  const [selected, setSelected] = useState(SOURCE_TYPES[0]);
-  useEffect(() => { setName(selected.label); }, [selected]);
+  const [selectedType, setSelectedType] = useState(VMIX_INPUT_TYPES[0]);
+  const [name, setName] = useState(VMIX_INPUT_TYPES[0].label);
+  const [config, setConfigState] = useState<Record<string, string | number | boolean>>({});
+  const setConfig = (k: string, v: string | number | boolean) => setConfigState(prev => ({ ...prev, [k]: v }));
+  useEffect(() => { setName(selectedType.label); setConfigState({}); }, [selectedType]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
+  const handleOk = () => {
+    if (!name.trim()) return;
+    const { icon, color } = vmixTypeToSource(selectedType.id);
+    onAdd(selectedType.id, name.trim(), icon, color);
+    onClose();
+  };
   return (
-    <div className="fixed inset-0 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.75)", zIndex: 9999 }}
+    <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.82)", zIndex: 9999 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 12, width: 420, boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(79,158,255,0.08), 0 0 60px rgba(79,158,255,0.06)" }}>
-        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: "1px solid rgba(79,158,255,0.15)", background: "linear-gradient(90deg, rgba(79,158,255,0.06) 0%, transparent 100%)" }}>
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 14, color: "#F8F8FF" }}>Add Source</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#606078" }}><X size={16} /></button>
+      <div style={{ display: "flex", flexDirection: "column", width: 780, maxHeight: "88vh", background: "#141618", border: "1px solid #3A3D45", borderRadius: 4, boxShadow: "0 24px 80px rgba(0,0,0,0.9)", overflow: "hidden" }}>
+        {/* Title bar */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", borderBottom: "1px solid #3A3D45", flexShrink: 0 }}>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 13, color: "#E0E2E8" }}>Input Select</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#808898", display: "flex", padding: 2 }}><X size={14} /></button>
         </div>
-        <div className="grid grid-cols-4 gap-2 p-4">
-          {SOURCE_TYPES.map(st => (
-            <button key={st.type} onClick={() => setSelected(st)}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 6px", borderRadius: 7, cursor: "pointer",
-                border: `1px solid ${selected.type === st.type ? st.color + "90" : "rgba(255,255,255,0.07)"}`,
-                background: selected.type === st.type ? st.color + "22" : "rgba(255,255,255,0.03)", transition: "all 0.15s", boxShadow: selected.type === st.type ? `0 0 16px ${st.color}30, inset 0 1px 0 rgba(255,255,255,0.1)` : "0 1px 4px rgba(0,0,0,0.3)" }}>
-              <st.icon size={20} style={{ color: selected.type === st.type ? st.color : "#606078" }} />
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: selected.type === st.type ? "#F8F8FF" : "#606078", textAlign: "center", lineHeight: 1.2 }}>{st.label}</span>
-            </button>
-          ))}
+        {/* Body: left sidebar + right panel */}
+        <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
+          {/* Left sidebar — input type list */}
+          <div style={{ width: 210, borderRight: "1px solid #2A2D35", overflowY: "auto", flexShrink: 0, background: "#0F1114", scrollbarWidth: "thin" as const, scrollbarColor: "#2A2D35 transparent" }}>
+            {VMIX_INPUT_TYPES.map(t => (
+              <button key={t.id} onClick={() => setSelectedType(t)}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 12px", background: selectedType.id === t.id ? "#1A3A6A" : "none", border: "none", borderLeft: selectedType.id === t.id ? `3px solid ${t.color}` : "3px solid transparent", cursor: "pointer", textAlign: "left" as const, transition: "background 0.1s" }}>
+                <span style={{ fontSize: 14, width: 20, textAlign: "center" as const, flexShrink: 0 }}>{t.icon}</span>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: selectedType.id === t.id ? "#E0E2E8" : "#8892A4", lineHeight: 1.3 }}>{t.label}</span>
+              </button>
+            ))}
+          </div>
+          {/* Right config panel */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", scrollbarWidth: "thin" as const, scrollbarColor: "#2A2D35 transparent" }}>
+            <div style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #2A2D35" }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 13, color: selectedType.color }}>{selectedType.label}</span>
+            </div>
+            <InputConfigPanel
+              typeId={selectedType.id}
+              name={name}
+              setName={setName}
+              config={config}
+              setConfig={setConfig}
+            />
+          </div>
         </div>
-        <div className="px-4 pb-4">
-          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#8892A4", display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>Source Name</label>
-          <input autoFocus value={name} onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
-            style={{ width: "100%", background: "#141928", border: "1px solid #303D5A", borderRadius: 6, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 13, padding: "8px 12px", outline: "none", boxSizing: "border-box" as const }} />
-        </div>
-        <div className="flex justify-end gap-2 px-4 pb-4">
-          <button onClick={onClose} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid #303D5A", background: "none", color: "#8892A4", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => { if (name.trim()) { onAdd(selected.type, name.trim(), selected.icon, selected.color); onClose(); } }}
-            style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "linear-gradient(135deg, #4F9EFF 0%, #7C3AED 100%)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(79,158,255,0.4), 0 2px 8px rgba(124,58,237,0.3), inset 0 1px 0 rgba(255,255,255,0.2)" }}>
-            Add Source
+        {/* Footer */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "8px 16px", background: "linear-gradient(180deg,#1E2128,#16181E)", borderTop: "1px solid #2A2D35", flexShrink: 0 }}>
+          <button onClick={onClose}
+            style={{ padding: "6px 20px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C0C2C8", fontFamily: "'DM Sans',sans-serif", fontSize: 12, cursor: "pointer" }}>
+            Cancel
+          </button>
+          <button onClick={handleOk}
+            style={{ padding: "6px 24px", background: "linear-gradient(180deg,#1A6AFF,#1050CC)", border: "1px solid #3A6AFF", borderRadius: 3, color: "#fff", fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 12px rgba(26,106,255,0.4)" }}>
+            OK
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 // ── Properties panel ──────────────────────────────────────────────────────────
 type SourceItem = ReturnType<typeof useScenes>["scenes"][0]["sources"][0];
 function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransform }: {
