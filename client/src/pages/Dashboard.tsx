@@ -503,6 +503,7 @@ export default function Dashboard() {
 
   // Audio mixer
   const [channelState, setChannelState] = useState<Record<number, { muted: boolean; solo: boolean; volume: number }>>({});
+  const [audioMixerOpen, setAudioMixerOpen] = useState(false);
 
   // Active scene
   const activeScene  = useMemo(() => scenes.find(s => s.id === activeSceneId) ?? null, [scenes, activeSceneId]);
@@ -583,227 +584,64 @@ export default function Dashboard() {
 
   return (
     <AppSidebar>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#080E1A" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#0B0D0F", fontFamily: "'DM Sans', sans-serif" }}>
 
-        {/* ── Top bar ── */}
-        <div className="flex items-center gap-3 px-3 shrink-0" style={{ height: 44, background: "linear-gradient(90deg, #0A1020 0%, #111828 50%, #0A1020 100%)", borderBottom: "1px solid rgba(79,158,255,0.22)", boxShadow: "0 1px 0 rgba(79,158,255,0.12), 0 4px 24px rgba(0,0,0,0.5)" }}>
-          <div className="flex items-center gap-1">
-            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#F8F8FF", letterSpacing: "0.06em" }}>RAILSHOT</span>
-            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 17, color: "#FF5A2C", letterSpacing: "0.06em" }}>TV</span>
+        {/* ── TOP MENU BAR (vMix-style) ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 8px", height: 36, background: "linear-gradient(180deg, #1A1D22 0%, #141619 100%)", borderBottom: "1px solid #2A2D35", boxShadow: "0 1px 0 rgba(0,0,0,0.5)", flexShrink: 0 }}>
+          {/* Brand */}
+          <div style={{ display: "flex", alignItems: "center", gap: 0, marginRight: 12 }}>
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: "#F0F0F0", letterSpacing: "0.04em" }}>RAILSHOT</span>
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: "#FF5A2C", letterSpacing: "0.04em" }}>TV</span>
           </div>
-          <div className="w-px h-4" style={{ background: "#303D5A" }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: isLive ? "#4F9EFF" : "#50506A", letterSpacing: "0.04em" }}>{tc}</span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>1920×1080</span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>60fps</span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>H.264</span>
-          <div className="flex-1" />
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: isLive ? "#FF5A2C18" : "#1E2640", border: `1px solid ${isLive ? "#FF5A2C40" : "#303D5A"}` }}>
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 11, color: isLive ? "#FF5A2C" : "#50506A" }}>
-              {isLive ? `LIVE · ${livePlatform.toUpperCase()}` : "OFFLINE"}
-            </span>
-          </div>
-          {isLive && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#4F9EFF" }}>{Math.round(bitrate / 100) / 10} Mbps</span>}
-          {isLive && (
-            <div className="flex items-center gap-1">
-              <Users size={11} style={{ color: "#22C55E" }} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#22C55E" }}>{viewers}</span>
-            </div>
-          )}
-          {!isLive ? (
-            <button onClick={() => setShowGoLive(true)}
-              style={{ height: 30, padding: "0 16px", background: "linear-gradient(135deg, #FF5A2C 0%, #FF8C42 100%)", boxShadow: "0 0 20px rgba(255,90,44,0.55), 0 2px 8px rgba(255,90,44,0.3), inset 0 1px 0 rgba(255,255,255,0.2)", color: "#fff", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", border: "none", borderRadius: 6, cursor: "pointer", transition: "transform 0.12s, box-shadow 0.12s" }}>
-              ● GO LIVE
+          {/* Menu buttons */}
+          {["Preset","New","Open","Save","Save As","Last"].map(item => (
+            <button key={item} onClick={() => toast.info(`${item} — coming soon`)}
+              style={{ padding: "3px 10px", background: item === "Preset" ? "linear-gradient(180deg,#2A2D35,#1E2128)" : "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, boxShadow: "0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+              {item}
             </button>
-          ) : (
-            <button onClick={() => { setIsLive(false); setLivePlatform(""); setTc("00:00:00"); setViewers(0); setBitrate(0); }}
-              style={{ height: 30, padding: "0 16px", background: "#7F1D1D", border: "1px solid #EF444440", color: "#FCA5A5", fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", borderRadius: 6, cursor: "pointer" }}>
-              ■ END STREAM
-            </button>
-          )}
+          ))}
+          <div style={{ flex: 1 }} />
+          {/* Resolution selector */}
+          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            Fullscreen ▾
+          </button>
+          <div style={{ width: 1, height: 20, background: "#3A3D45", margin: "0 6px" }} />
+          {/* Status */}
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>1080p29.97</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878", marginLeft: 8 }}>EX FPS: 30</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878", marginLeft: 8 }}>CPU: {isLive ? "12%" : "3%"}</span>
+          <div style={{ width: 1, height: 20, background: "#3A3D45", margin: "0 6px" }} />
+          {/* Pause Inputs */}
+          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            Pause Inputs
+          </button>
+          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            Basic
+          </button>
+          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            Settings
+          </button>
         </div>
 
-        {/* ── Main 3-column layout ── */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* ── MAIN AREA: Preview | Transitions | Program ── */}
+        <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
 
-          {/* ── LEFT: Scenes + Sources ── */}
-          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 220, background: "linear-gradient(180deg, #0C1220 0%, #090E1A 100%)", borderRight: "1px solid rgba(79,158,255,0.18)" }}>
-
-            {/* Scenes section */}
-            <div className="flex flex-col shrink-0" style={{ height: "40%", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center justify-between px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(255,90,44,0.18) 0%, rgba(255,90,44,0.04) 100%)", borderBottom: "1px solid rgba(255,90,44,0.25)" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF8C60", letterSpacing: "0.12em", textTransform: "uppercase" }}>Scenes</span>
-                  <button onClick={() => { handleAddScene(); }}
-                  style={{ background: "rgba(79,158,255,0.12)", border: "1px solid rgba(79,158,255,0.3)", borderRadius: 4, cursor: "pointer", color: "#4F9EFF", display: "flex", padding: "2px 4px", boxShadow: "0 0 8px rgba(79,158,255,0.2)" }}>
-                  <Plus size={12} />
-                </button>
-              </div>
-              <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
-                {scenes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
-                    <Monitor size={16} style={{ color: "#2A3550" }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A", letterSpacing: "0.04em" }}>No scenes yet</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, textAlign: "center", color: "#2A3550" }}>Press + to rack your first</span>
-                  </div>
-                ) : scenes.map(scene => (
-                  <ContextMenu key={scene.id}>
-                    <ContextMenuTrigger>
-                      <div
-                        onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); }}
-                        onDoubleClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }}
-                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer"
-                        style={{ background: scene.id === activeSceneId ? "linear-gradient(90deg, rgba(255,90,44,0.22) 0%, rgba(255,90,44,0.06) 100%)" : "transparent", borderLeft: `2px solid ${scene.id === activeSceneId ? "#FF6A3C" : "transparent"}`, boxShadow: scene.id === activeSceneId ? "inset 0 0 24px rgba(255,90,44,0.08)" : "none" }}>
-                        <Monitor size={12} style={{ color: scene.id === activeSceneId ? "#FF5A2C" : "#606078", flexShrink: 0 }} />
-                        {renamingSceneId === scene.id ? (
-                          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
-                            onBlur={() => { if (renameValue.trim()) renameScene(scene.id, renameValue.trim()); setRenamingSceneId(null); }}
-                            onKeyDown={e => { if (e.key === "Enter") { if (renameValue.trim()) renameScene(scene.id, renameValue.trim()); setRenamingSceneId(null); } if (e.key === "Escape") setRenamingSceneId(null); }}
-                            onClick={e => e.stopPropagation()}
-                            style={{ flex: 1, background: "#0F1520", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 12, padding: "1px 4px", outline: "none" }} />
-                        ) : (
-                          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: scene.id === activeSceneId ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scene.name}</span>
-                        )}
-                      </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,158,255,0.06)" }}>
-                      <ContextMenuItem onClick={() => { setRenamingSceneId(scene.id); setRenameValue(scene.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
-                      <ContextMenuItem onClick={() => duplicateScene(scene)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem onClick={() => { deleteScene(scene.id); if (activeSceneId === scene.id) setSelectedSourceId(null); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#EF4444" }}>Delete</ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))}
+          {/* ── PREVIEW monitor (left) ── */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#0D0F12", borderRight: "1px solid #2A2D35" }}>
+            {/* Preview label bar */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 10px", background: "linear-gradient(180deg,#1A1D22,#141619)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 11, color: "#22C55E", letterSpacing: "0.06em" }}>PREVIEW</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{activeScene?.name ?? "No Scene"}</span>
               </div>
             </div>
-
-            {/* Sources section */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex items-center justify-between px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(79,158,255,0.18) 0%, rgba(79,158,255,0.04) 100%)", borderBottom: "1px solid rgba(79,158,255,0.25)" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#6BAAFF", letterSpacing: "0.12em", textTransform: "uppercase" }}>Sources</span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setOverlayBrowserOpen(v => !v)} title="Overlay Library"
-                    style={{ background: overlayBrowserOpen ? "#A855F718" : "none", border: overlayBrowserOpen ? "1px solid #A855F740" : "1px solid transparent", borderRadius: 3, cursor: "pointer", color: overlayBrowserOpen ? "#A855F7" : "#606078", display: "flex", padding: 2 }}>
-                    <LayoutTemplate size={12} />
-                  </button>
-                  <button onClick={() => setShowAddSource(true)} disabled={activeSceneId === null}
-                    style={{ background: activeSceneId === null ? "transparent" : "rgba(79,158,255,0.12)", border: `1px solid ${activeSceneId === null ? "transparent" : "rgba(79,158,255,0.3)"}`, borderRadius: 4, cursor: activeSceneId === null ? "not-allowed" : "pointer", color: activeSceneId === null ? "#303D5A" : "#4F9EFF", display: "flex", padding: "2px 4px", boxShadow: activeSceneId === null ? "none" : "0 0 8px rgba(79,158,255,0.2)" }}>
-                    <Plus size={12} />
-                  </button>
-                  <button onClick={handleDeleteSource} disabled={selectedSourceId === null}
-                    style={{ background: "none", border: "none", cursor: selectedSourceId === null ? "not-allowed" : "pointer", color: selectedSourceId === null ? "#303D5A" : "#EF4444", display: "flex" }}>
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-              {/* Overlay browser */}
-              {overlayBrowserOpen && (
-                <div className="shrink-0 overflow-y-auto" style={{ maxHeight: 180, borderBottom: "1px solid #2A3350", background: "#0F1520" }}>
-                  <div className="flex items-center gap-1 px-2 py-1.5" style={{ borderBottom: "1px solid #1E2640" }}>
-                    <Search size={10} style={{ color: "#606078" }} />
-                    <input value={overlaySearch} onChange={e => setOverlaySearch(e.target.value)} placeholder="Search overlays…"
-                      style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#A0A0B8", fontFamily: "'DM Sans', sans-serif", fontSize: 11 }} />
-                  </div>
-                  {filteredOverlays.map(tmpl => (
-                    <div key={tmpl.id}
-                      onClick={() => handleAddSource(tmpl.cat, tmpl.name, tmpl.icon, tmpl.color)}
-                      className="flex items-center gap-2 px-2 py-1.5 cursor-pointer"
-                      style={{ borderBottom: "1px solid #1A1A24" }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "#1E2640"}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
-                      <tmpl.icon size={12} style={{ color: tmpl.color, flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#A0A0B8" }}>{tmpl.name}</span>
-                      <Sparkles size={9} style={{ color: "#A855F7", marginLeft: "auto", flexShrink: 0 }} />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Source list */}
-              <div className="flex flex-col overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "#303D5A transparent" }}>
+            {/* Preview canvas */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#080A0D", position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "relative", width: "100%", maxWidth: "100%", aspectRatio: "16/9", background: "#000", border: "2px solid #22C55E30", overflow: "hidden" }}>
                 {activeSceneId === null ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
-                    <Layers size={14} style={{ color: "#2A3550" }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A" }}>Select a scene</span>
-                  </div>
-                ) : sources.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center flex-1 gap-1.5 p-3">
-                    <Layers size={14} style={{ color: "#2A3550" }} />
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, textAlign: "center", color: "#3A4A6A" }}>Scene is empty</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, textAlign: "center", color: "#2A3550" }}>Press + to add a source</span>
-                  </div>
-                ) : sources.map((src, idx) => {
-                  const isSelected = src.id === selectedSourceId;
-                  return (
-                    <ContextMenu key={src.id}>
-                      <ContextMenuTrigger asChild>
-                        <div
-                          onClick={() => setSelectedSourceId(src.id)}
-                          className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
-                          style={{ background: isSelected ? `linear-gradient(90deg, ${src.color}28 0%, ${src.color}08 100%)` : "transparent", borderLeft: `2px solid ${isSelected ? src.color : "transparent"}`, boxShadow: isSelected ? `inset 0 0 20px ${src.color}12` : "none" }}>
-                          <src.icon size={11} style={{ color: src.color, flexShrink: 0 }} />
-                          {renamingSourceId === src.id ? (
-                            <input autoFocus value={renameSourceValue} onChange={e => setRenameSourceValue(e.target.value)}
-                              onBlur={() => handleRenameSource(src.id, renameSourceValue)}
-                              onKeyDown={e => { if (e.key === "Enter") handleRenameSource(src.id, renameSourceValue); if (e.key === "Escape") setRenamingSourceId(null); }}
-                              onClick={e => e.stopPropagation()}
-                              style={{ flex: 1, background: "#0F1520", border: "1px solid #4F9EFF", borderRadius: 3, color: "#F8F8FF", fontFamily: "'DM Sans', sans-serif", fontSize: 11, padding: "1px 4px", outline: "none" }} />
-                          ) : (
-                            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: isSelected ? "#F8F8FF" : "#8892A4", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.name}</span>
-                          )}
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { visible: !src.visible }); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: src.visible ? "#8892A4" : "#303D5A", display: "flex", padding: 1 }}>
-                              {src.visible ? <Eye size={10} /> : <EyeOff size={10} />}
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); if (activeSceneId) updateSource(activeSceneId, src.id, { locked: !src.locked }); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: src.locked ? "#FBBF24" : "#303D5A", display: "flex", padding: 1 }}>
-                              {src.locked ? <Lock size={10} /> : <Unlock size={10} />}
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx > 0) moveSource(activeSceneId, src.id, "up"); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
-                              <ChevronUp size={10} />
-                            </button>
-                            <button onClick={e => { e.stopPropagation(); if (activeSceneId && idx < sources.length - 1) moveSource(activeSceneId, src.id, "down"); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: "#606078", display: "flex", padding: 1 }}>
-                              <ChevronDown size={10} />
-                            </button>
-                          </div>
-                        </div>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent style={{ background: "linear-gradient(135deg, #161E30 0%, #111826 100%)", border: "1px solid rgba(79,158,255,0.2)", boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,158,255,0.06)" }}>
-                        <ContextMenuItem onClick={() => { setSelectedSourceId(src.id); setRenamingSourceId(src.id); setRenameSourceValue(src.name); }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Rename</ContextMenuItem>
-                        <ContextMenuItem onClick={() => handleDuplicateSource(src)} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12 }}>Duplicate</ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem onClick={() => { if (activeSceneId) { removeSource(activeSceneId, src.id); if (selectedSourceId === src.id) setSelectedSourceId(null); } }} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#EF4444" }}>Delete</ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ── CENTER: Program canvas ── */}
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex items-center px-2 py-1.5 shrink-0" style={{ borderBottom: "1px solid rgba(255,90,44,0.25)", background: "linear-gradient(90deg, rgba(255,90,44,0.12) 0%, #0D1525 60%, #131C30 100%)" }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#FF8C60", letterSpacing: "0.12em", textTransform: "uppercase" }}>Program Output</span>
-              <div className="flex-1" />
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: isLive ? "#FF5A2C" : "#50506A" }}>{isLive ? "LIVE" : "OFFLINE"}</span>
-              </div>
-            </div>
-            <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: "radial-gradient(ellipse at center, #0A1018 30%, #040810 100%)", position: "relative" }}>
-              <div style={{ position: "relative", width: "100%", maxWidth: "calc((100vh - 44px - 32px - 36px - 80px) * 16/9)", aspectRatio: "16/9", background: "#000", border: "1px solid rgba(79,158,255,0.2)", borderRadius: 4, overflow: "hidden", boxShadow: "0 0 40px rgba(0,0,0,0.8), 0 0 1px rgba(79,158,255,0.3)" }}>
-                {activeSceneId === null ? (
-                  <div className="flex flex-col items-center justify-center w-full h-full gap-3" style={{ position: "absolute", inset: 0 }}>
-                    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" style={{ opacity: 0.22 }}>
-                      <circle cx="28" cy="28" r="22" stroke="#4F9EFF" strokeWidth="1.5"/>
-                      <circle cx="28" cy="28" r="14" stroke="#4F9EFF" strokeWidth="1"/>
-                      <line x1="6" y1="28" x2="50" y2="28" stroke="#FF5A2C" strokeWidth="1.5" strokeDasharray="3 2"/>
-                      <circle cx="28" cy="28" r="4" fill="#4F9EFF" opacity="0.5"/>
-                    </svg>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#3A4A6A", letterSpacing: "0.08em", textTransform: "uppercase" }}>Build a rack-ready scene</span>
-                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#2A3550" }}>Create a scene in the panel to begin</span>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Monitor size={32} style={{ color: "#2A3550", opacity: 0.4 }} />
+                    <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Preview</span>
                   </div>
                 ) : (
                   <ProgramCanvas
@@ -814,154 +652,330 @@ export default function Dashboard() {
                     onTransformChange={handleCanvasTransformChange}
                   />
                 )}
-                {/* Corner markers */}
-                {(["top-left","top-right","bottom-left","bottom-right"] as const).map(pos => (
-                  <div key={pos} style={{ position: "absolute", width: 16, height: 16, pointerEvents: "none",
-                    top: pos.includes("top") ? 4 : "auto", bottom: pos.includes("bottom") ? 4 : "auto",
-                    left: pos.includes("left") ? 4 : "auto", right: pos.includes("right") ? 4 : "auto",
-                    borderTop: pos.includes("top") ? "2px solid rgba(79,158,255,0.4)" : "none",
-                    borderBottom: pos.includes("bottom") ? "2px solid rgba(79,158,255,0.4)" : "none",
-                    borderLeft: pos.includes("left") ? "2px solid rgba(79,158,255,0.4)" : "none",
-                    borderRight: pos.includes("right") ? "2px solid rgba(79,158,255,0.4)" : "none",
-                  }} />
-                ))}
-                {/* Title-safe area (80% inset) */}
-                <div style={{ position: "absolute", inset: "10%", border: "1px dashed rgba(79,158,255,0.07)", borderRadius: 2, pointerEvents: "none" }} />
-                {/* Center crosshair */}
-                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 20, height: 20, pointerEvents: "none" }}>
-                  <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(79,158,255,0.1)", transform: "translateY(-50%)" }} />
-                  <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(79,158,255,0.1)", transform: "translateX(-50%)" }} />
-                </div>
+                {/* PREVIEW badge */}
+                <div style={{ position: "absolute", top: 6, left: 6, padding: "1px 6px", background: "#22C55E", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.08em", pointerEvents: "none" }}>PREVIEW</div>
               </div>
-            </div>
-            {/* Transitions strip */}
-            <div className="flex items-center gap-2 px-3 shrink-0" style={{ height: 40, background: "linear-gradient(90deg, #0A1020 0%, #0D1525 100%)", borderTop: "1px solid rgba(79,158,255,0.2)" }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#4F6080", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>Transition</span>
-              {["Cut","Fade","Slide","Wipe"].map(t => (
-                <button key={t}
-                  onClick={() => setActiveTransition(t)}
-                  style={{ padding: "2px 10px", borderRadius: 4,
-                    border: `1px solid ${activeTransition === t ? "rgba(79,158,255,0.6)" : "rgba(255,255,255,0.08)"}`,
-                    background: activeTransition === t ? "linear-gradient(135deg, rgba(79,158,255,0.25) 0%, rgba(79,158,255,0.1) 100%)" : "rgba(255,255,255,0.03)",
-                    color: activeTransition === t ? "#7BBFFF" : "#606880",
-                    fontFamily: "'DM Sans', sans-serif", fontSize: 10, cursor: "pointer", fontWeight: activeTransition === t ? 700 : 400,
-                    boxShadow: activeTransition === t ? "0 0 12px rgba(79,158,255,0.3), inset 0 1px 0 rgba(79,158,255,0.2)" : "none",
-                    transition: "all 0.15s" }}>{t}</button>
-              ))}
-              <div className="flex-1" />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#50506A" }}>SCENE</span>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#F8F8FF" }}>{activeScene?.name ?? "—"}</span>
             </div>
           </div>
 
-          {/* ── RIGHT: Properties + Stream Status ── */}
-          <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: 240, background: "linear-gradient(180deg, #0C1220 0%, #090E1A 100%)", borderLeft: "1px solid rgba(79,158,255,0.18)" }}>
-            {/* Properties */}
-            <div className="flex flex-col overflow-hidden" style={{ flex: 1, borderBottom: "1px solid #2A3350" }}>
-              <div className="flex items-center px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.04) 100%)", borderBottom: "1px solid rgba(168,85,247,0.25)" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#C084FC", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                  {selectedSource ? `Props — ${selectedSource.name}` : "Properties"}
-                </span>
+          {/* ── CENTER: Transition controls ── */}
+          <div style={{ width: 100, display: "flex", flexDirection: "column", alignItems: "stretch", background: "linear-gradient(180deg,#141619 0%,#0F1114 100%)", borderLeft: "1px solid #2A2D35", borderRight: "1px solid #2A2D35", flexShrink: 0, overflow: "hidden" }}>
+            {/* Quick Play */}
+            <button onClick={() => toast.info("Quick Play")}
+              style={{ margin: "8px 6px 4px", padding: "6px 0", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              Quick Play
+            </button>
+            {/* Transition buttons */}
+            {[
+              { label: "Cut",      color: "#E0E2E8" },
+              { label: "Fade",     color: "#E0E2E8" },
+              { label: "Merge",    color: "#E0E2E8" },
+              { label: "Wipe",     color: "#E0E2E8" },
+              { label: "CubeZoom",color: "#E0E2E8" },
+              { label: "FTB",      color: "#E0E2E8" },
+            ].map(({ label, color }) => (
+              <div key={label} style={{ display: "flex", alignItems: "stretch", margin: "2px 6px", gap: 2 }}>
+                <button
+                  onClick={() => { setActiveTransition(label); toast.success(`Transition: ${label}`); }}
+                  style={{ flex: 1, padding: "7px 0", background: activeTransition === label ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${activeTransition === label ? "#5A8AFF" : "#3A3D45"}`, borderRadius: "3px 0 0 3px", color: activeTransition === label ? "#fff" : "#C0C2C8", fontSize: 11, fontWeight: activeTransition === label ? 700 : 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: activeTransition === label ? "0 0 12px rgba(58,106,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15)" : "0 1px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)", transition: "all 0.12s" }}>
+                  {label}
+                </button>
+                <button onClick={() => toast.info(`${label} settings`)}
+                  style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #3A3D45", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#606878", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
+                  ▾
+                </button>
               </div>
-              <PropertiesPanel
-                sourceId={selectedSourceId}
-                sources={sources}
-                onUpdateSettings={handleUpdateSettings}
-                onUpdateTransform={handleUpdateTransform}
-              />
+            ))}
+            {/* Scene number buttons */}
+            <div style={{ margin: "6px 6px 2px", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 2 }}>
+              {[1,2,3,4,5,6,7,8].map(n => (
+                <button key={n}
+                  onClick={() => { const sc = scenes[n-1]; if (sc) { setActiveSceneId(sc.id); setSelectedSourceId(null); } }}
+                  style={{ padding: "4px 0", background: scenes[n-1]?.id === activeSceneId ? "linear-gradient(180deg,#3A6AFF,#2A50CC)" : "linear-gradient(180deg,#2A2D35,#1E2128)", border: `1px solid ${scenes[n-1]?.id === activeSceneId ? "#5A8AFF" : "#3A3D45"}`, borderRadius: 3, color: scenes[n-1]?.id === activeSceneId ? "#fff" : scenes[n-1] ? "#C0C2C8" : "#404450", fontSize: 11, fontWeight: 700, cursor: scenes[n-1] ? "pointer" : "default", fontFamily: "'JetBrains Mono',monospace", boxShadow: scenes[n-1]?.id === activeSceneId ? "0 0 8px rgba(58,106,255,0.5)" : "0 1px 3px rgba(0,0,0,0.4)" }}>
+                  {n}
+                </button>
+              ))}
             </div>
-            {/* Stream Status */}
-            <div className="flex flex-col shrink-0">
-              <div className="flex items-center px-2 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(34,197,94,0.18) 0%, rgba(34,197,94,0.04) 100%)", borderBottom: "1px solid rgba(34,197,94,0.25)" }}>
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#4ADE80", letterSpacing: "0.12em", textTransform: "uppercase" }}>Stream Status</span>
+            {/* Transition speed fader */}
+            <div style={{ margin: "4px 6px", display: "flex", flexDirection: "column", gap: 3 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", textAlign: "center" }}>Speed</span>
+              <input type="range" min={100} max={2000} defaultValue={500}
+                style={{ width: "100%", accentColor: "#3A6AFF", cursor: "pointer", height: 3 }} />
+            </div>
+          </div>
+
+          {/* ── PROGRAM monitor (right) ── */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#0D0F12" }}>
+            {/* Program label bar */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 10px", background: "linear-gradient(180deg,#1A1D22,#141619)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+              <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 11, color: isLive ? "#FF5A2C" : "#FF5A2C80", letterSpacing: "0.06em" }}>PROGRAM</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {isLive && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#FF5A2C" }}>● LIVE</span>}
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878" }}>{tc}</span>
               </div>
-              <div className="px-3 py-2 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ background: isLive ? "#FF5A2C" : "#50506A" }} />
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, color: isLive ? "#FF5A2C" : "#50506A" }}>
-                    {isLive ? `LIVE · ${livePlatform.toUpperCase()}` : "OFFLINE"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#606078", textTransform: "uppercase", letterSpacing: "0.08em" }}>Bitrate</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#4F9EFF" }}>{isLive ? `${Math.round(bitrate / 100) / 10} Mbps` : "—"}</span>
-                </div>
-                <BitrateSparkline active={isLive} />
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { icon: Users,    label: "Viewers", val: isLive ? String(viewers) : "—", color: "#22C55E" },
-                    { icon: Clock,    label: "Uptime",  val: isLive ? tc : "—",              color: "#4F9EFF" },
-                    { icon: Cpu,      label: "CPU",     val: isLive ? "12%" : "—",           color: "#A855F7" },
-                    { icon: Activity, label: "Health",  val: isLive ? "Good" : "—",          color: "#22C55E" },
-                  ].map(({ icon: Icon, label, val, color }) => (
-                    <div key={label} className="flex flex-col gap-0.5 px-2 py-1.5 rounded" style={{ background: "linear-gradient(135deg, #131C2C 0%, #0C1420 100%)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
-                      <div className="flex items-center gap-1">
-                        <Icon size={9} style={{ color }} />
-                        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#606078", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-                      </div>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color }}>{val}</span>
-                    </div>
-                  ))}
-                </div>
+            </div>
+            {/* Program canvas */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#080A0D", position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "relative", width: "100%", maxWidth: "100%", aspectRatio: "16/9", background: "#000", border: `2px solid ${isLive ? "#FF5A2C50" : "#FF5A2C20"}`, overflow: "hidden", boxShadow: isLive ? "0 0 30px rgba(255,90,44,0.15)" : "none", transition: "box-shadow 0.3s, border-color 0.3s" }}>
+                {activeSceneId === null ? (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Monitor size={32} style={{ color: "#2A3550", opacity: 0.4 }} />
+                    <span style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.06em", textTransform: "uppercase" }}>No Output</span>
+                  </div>
+                ) : (
+                  <ProgramCanvas
+                    sources={sources}
+                    selectedId={selectedSourceId}
+                    transforms={canvasTransforms}
+                    onSelect={setSelectedSourceId}
+                    onTransformChange={handleCanvasTransformChange}
+                  />
+                )}
+                {/* ON AIR badge */}
+                {isLive && <div style={{ position: "absolute", top: 6, left: 6, padding: "1px 6px", background: "#FF5A2C", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#fff", letterSpacing: "0.08em", pointerEvents: "none", animation: "pulse 1.5s infinite" }}>ON AIR</div>}
+                {/* Corner markers */}
+                {(["tl","tr","bl","br"] as const).map(c => (
+                  <div key={c} style={{ position: "absolute", width: 14, height: 14, pointerEvents: "none",
+                    top: c[0]==="t" ? 4 : "auto", bottom: c[0]==="b" ? 4 : "auto",
+                    left: c[1]==="l" ? 4 : "auto", right: c[1]==="r" ? 4 : "auto",
+                    borderTop: c[0]==="t" ? `1px solid ${isLive ? "rgba(255,90,44,0.5)" : "rgba(79,158,255,0.3)"}` : "none",
+                    borderBottom: c[0]==="b" ? `1px solid ${isLive ? "rgba(255,90,44,0.5)" : "rgba(79,158,255,0.3)"}` : "none",
+                    borderLeft: c[1]==="l" ? `1px solid ${isLive ? "rgba(255,90,44,0.5)" : "rgba(79,158,255,0.3)"}` : "none",
+                    borderRight: c[1]==="r" ? `1px solid ${isLive ? "rgba(255,90,44,0.5)" : "rgba(79,158,255,0.3)"}` : "none",
+                  }} />
+                ))}
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── BOTTOM: Audio Mixer ── */}
-        <div className="flex flex-col shrink-0" style={{ borderTop: "1px solid rgba(168,85,247,0.25)", background: "linear-gradient(90deg, #0A1020 0%, #0D1525 100%)" }}>
-          <div className="flex items-center justify-between px-3 py-1.5 shrink-0" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(168,85,247,0.04) 100%)", borderBottom: "1px solid rgba(168,85,247,0.25)" }}>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 10, color: "#C084FC", letterSpacing: "0.12em", textTransform: "uppercase" }}>Audio Mixer</span>
-            <div className="flex items-center gap-3">
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: "#50506A" }}>{audioChannels.length} ch</span>
-              <Volume2 size={11} style={{ color: "#A855F7" }} />
-            </div>
+        {/* ── INPUT TILES ROW ── */}
+        <div style={{ display: "flex", alignItems: "stretch", background: "#0D0F12", borderTop: "1px solid #2A2D35", flexShrink: 0, minHeight: 0, overflow: "hidden" }}>
+          {/* Color filter dots (vMix-style) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
+            {["#EF4444","#F97316","#EAB308","#22C55E","#3B82F6","#A855F7"].map(c => (
+              <div key={c} style={{ width: 12, height: 12, borderRadius: "50%", background: c, cursor: "pointer", boxShadow: `0 0 6px ${c}60` }} />
+            ))}
+            <Search size={12} style={{ color: "#606878", cursor: "pointer", marginLeft: 2 }} />
           </div>
-          {/* dB scale + channel strips */}
-          <div className="flex overflow-x-auto" style={{ height: 120 }}>
-            {/* dB scale ruler */}
-            <div className="shrink-0 flex flex-col justify-between py-1 pr-1" style={{ width: 28, paddingTop: 4, paddingBottom: 22 }}>
-              {[0, -6, -12, -18, -24, -30].map(db => (
-                <span key={db} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: db === 0 ? "#EF4444" : db >= -6 ? "#FBBF24" : "#50506A", textAlign: "right", lineHeight: 1 }}>{db}</span>
-              ))}
-            </div>
-            {/* Channel strips */}
-            {audioChannels.map(ch => {
-              const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
-              const isMic = ch.type === "mic" || ch.type === "camera";
-              const isDesk = ch.type === "desktop";
+          {/* Input tiles */}
+          <div style={{ display: "flex", flex: 1, overflow: "hidden", gap: 0 }}>
+            {scenes.length === 0 ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, padding: "12px 20px" }}>
+                <span style={{ fontSize: 10, color: "#404450", letterSpacing: "0.06em" }}>No inputs — click Add Input to begin</span>
+              </div>
+            ) : scenes.map((scene, idx) => {
+              const isActive = scene.id === activeSceneId;
+              const isProgram = isActive;
               return (
-                <div key={ch.id} className="flex flex-col items-center gap-1 px-2 py-1 shrink-0"
-                  style={{ minWidth: 72, borderRight: "1px solid rgba(255,255,255,0.05)", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s", background: "rgba(255,255,255,0.015)" }}>
-                  {/* VU meters */}
-                  <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
-                  {/* Volume fader */}
-                  <div className="flex items-center gap-1 w-full">
-                    <input type="range" min={0} max={100} value={cs.volume}
-                      onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
-                      style={{ flex: 1, accentColor: ch.color, cursor: "pointer", height: 3 }} />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: "#606078", width: 22, textAlign: "right" }}>
-                      {cs.volume === 100 ? "0dB" : cs.volume > 0 ? `${Math.round((cs.volume / 100 - 1) * 60)}` : "−∞"}
+                <div key={scene.id} style={{ display: "flex", flexDirection: "column", minWidth: 160, maxWidth: 200, flex: "1 1 160px", borderRight: "1px solid #2A2D35", position: "relative", background: isProgram ? "#0F1A0A" : "#0D0F12" }}>
+                  {/* Tile header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px", background: isProgram ? "linear-gradient(90deg,#22C55E,#16A34A)" : "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35", flexShrink: 0 }}>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: isProgram ? "#000" : "#C0C2C8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 110 }}>
+                      {idx + 1} {scene.name}
                     </span>
+                    <button onClick={() => { const sc = scenes.find(s => s.id !== scene.id); if (sc) setActiveSceneId(sc.id); deleteScene(scene.id); }}
+                      style={{ background: "none", border: "none", color: isProgram ? "#00000080" : "#606878", cursor: "pointer", display: "flex", padding: 1, flexShrink: 0 }}>
+                      <X size={10} />
+                    </button>
                   </div>
-                  {/* Channel name + controls */}
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-0.5 overflow-hidden">
-                      {isMic ? <Mic size={8} style={{ color: ch.color, flexShrink: 0 }} /> : isDesk ? <Monitor size={8} style={{ color: ch.color, flexShrink: 0 }} /> : <Music size={8} style={{ color: ch.color, flexShrink: 0 }} />}
-                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, fontWeight: 600, color: "#A0A8C0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 42 }}>{ch.name}</span>
-                    </div>
-                    <div className="flex gap-0.5">
-                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
-                        style={{ width: 14, height: 14, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#303D5A"}`, background: cs.solo ? "#FBBF24" : "#0F1520", color: cs.solo ? "#0F1520" : "#606078", fontFamily: "'DM Sans', sans-serif", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
-                      <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
-                        style={{ width: 14, height: 14, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#303D5A"}`, background: cs.muted ? "#EF4444" : "#0F1520", color: cs.muted ? "#fff" : "#606078", fontFamily: "'DM Sans', sans-serif", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
-                    </div>
+                  {/* Tile preview */}
+                  <div style={{ flex: 1, background: "#000", minHeight: 60, maxHeight: 80, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer" }}
+                    onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); }}>
+                    {scene.sources.length === 0 ? (
+                      <span style={{ fontSize: 9, color: "#303540", letterSpacing: "0.04em" }}>Blank</span>
+                    ) : (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: 4, alignItems: "center", justifyContent: "center" }}>
+                        {scene.sources.slice(0,3).map(src => (
+                          <div key={src.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                            <src.icon size={10} style={{ color: src.color }} />
+                            <span style={{ fontSize: 8, color: "#808898" }}>{src.name}</span>
+                          </div>
+                        ))}
+                        {scene.sources.length > 3 && <span style={{ fontSize: 8, color: "#606878" }}>+{scene.sources.length - 3}</span>}
+                      </div>
+                    )}
+                  </div>
+                  {/* Tile controls */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "3px 4px", borderTop: "1px solid #2A2D35", background: "#0D0F12", flexShrink: 0 }}>
+                    {[1,2,3,4].map(n => (
+                      <button key={n} style={{ width: 16, height: 16, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#808898", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace" }}>{n}</button>
+                    ))}
+                    <button onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`GO: ${scene.name}`); }}
+                      style={{ padding: "2px 6px", background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 0 8px rgba(34,197,94,0.3)", marginLeft: "auto" }}>
+                      GO
+                    </button>
+                    <button onClick={() => toast.info("Cut")}
+                      style={{ padding: "2px 6px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#C0C2C8", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                      Cut
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
+          {/* Audio mixer toggle */}
+          <div style={{ display: "flex", alignItems: "center", padding: "0 8px", borderLeft: "1px solid #2A2D35", flexShrink: 0 }}>
+            <button onClick={() => setAudioMixerOpen(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: audioMixerOpen ? "linear-gradient(180deg,#22C55E30,#16A34A20)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${audioMixerOpen ? "#22C55E40" : "#3A3D45"}`, borderRadius: 3, color: audioMixerOpen ? "#22C55E" : "#C0C2C8", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 600, boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
+              <Volume2 size={12} />
+              Audio Mixer
+            </button>
+          </div>
         </div>
+
+        {/* ── BOTTOM ACTION TOOLBAR ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "4px 8px", background: "linear-gradient(180deg,#141619,#0F1114)", borderTop: "1px solid #2A2D35", flexShrink: 0 }}>
+          {/* Add Input */}
+          <div style={{ display: "flex", alignItems: "stretch", marginRight: 4 }}>
+            <button onClick={() => setShowAddSource(true)}
+              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              Add Input
+            </button>
+            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+          </div>
+          {/* Settings */}
+          <button style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
+            <Cpu size={13} />
+          </button>
+          {/* Record */}
+          <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
+            <button onClick={() => toast.info("Record — coming soon")}
+              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              Record
+            </button>
+            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+          </div>
+          {/* External */}
+          <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
+            <button onClick={() => toast.info("External output — coming soon")}
+              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              External
+            </button>
+            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+          </div>
+          {/* Stream */}
+          <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
+            {!isLive ? (
+              <>
+                <button onClick={() => setShowGoLive(true)}
+                  style={{ padding: "5px 12px", background: "linear-gradient(180deg,#FF5A2C,#CC3A18)", border: "1px solid #FF5A2C80", borderRadius: "3px 0 0 3px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 0 16px rgba(255,90,44,0.4), 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)" }}>
+                  ● Stream
+                </button>
+                <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#CC3A18,#AA2A10)", border: "1px solid #FF5A2C80", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+              </>
+            ) : (
+              <button onClick={() => { setIsLive(false); setLivePlatform(""); setTc("00:00:00"); setViewers(0); setBitrate(0); }}
+                style={{ padding: "5px 12px", background: "linear-gradient(180deg,#7F1D1D,#5A1010)", border: "1px solid #EF444440", borderRadius: 3, color: "#FCA5A5", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                ■ End Stream
+              </button>
+            )}
+          </div>
+          {/* MultiCorder */}
+          <div style={{ display: "flex", alignItems: "stretch", marginLeft: 4 }}>
+            <button onClick={() => toast.info("MultiCorder — coming soon")}
+              style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: "3px 0 0 3px", color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+              MultiCorder
+            </button>
+            <button style={{ width: 18, padding: 0, background: "linear-gradient(180deg,#222530,#181B22)", border: "1px solid #4A4D55", borderLeft: "none", borderRadius: "0 3px 3px 0", color: "#808898", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>▾</button>
+          </div>
+          {/* PlayList */}
+          <button onClick={() => toast.info("PlayList — coming soon")}
+            style={{ marginLeft: 4, padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+            PlayList
+          </button>
+          <div style={{ flex: 1 }} />
+          {/* Overlay / view mode icons */}
+          <button onClick={() => toast.info("Overlay — coming soon")}
+            style={{ padding: "5px 12px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>
+            Overlay
+          </button>
+          {[<Square size={12} />, <Activity size={12} />, <LayoutTemplate size={12} />, <Cpu size={12} />, <Lock size={12} />].map((icon, i) => (
+            <button key={i} style={{ width: 28, height: 28, padding: 0, background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#606878", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 2 }}>
+              {icon}
+            </button>
+          ))}
+          {/* Status bar */}
+          <div style={{ marginLeft: 8, display: "flex", alignItems: "center", gap: 8, padding: "2px 8px", background: "#0A0C0F", border: "1px solid #2A2D35", borderRadius: 3 }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#22C55E" }}>1080p29.97</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#606878" }}>EX FPS: 30</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#606878" }}>Render: 1ms</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#606878" }}>GPU: 2%</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#606878" }}>CPU: {isLive ? "12%" : "3%"}</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: isLive ? "#FF5A2C" : "#606878" }}>Total: {isLive ? "63%" : "8%"}</span>
+          </div>
+        </div>
+
+        {/* ── COLLAPSIBLE AUDIO MIXER (vMix-style floating panel) ── */}
+        {audioMixerOpen && (
+          <div style={{ position: "fixed", bottom: 80, right: 16, width: 260, background: "linear-gradient(180deg,#141619,#0F1114)", border: "1px solid #3A3D45", borderRadius: 4, boxShadow: "0 8px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)", zIndex: 100, overflow: "hidden" }}>
+            {/* Mixer header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", background: "linear-gradient(180deg,#1E2128,#181B22)", borderBottom: "1px solid #2A2D35" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button style={{ background: "none", border: "none", color: "#606878", cursor: "pointer", display: "flex", padding: 0 }}>📌</button>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 10, color: "#C0C2C8", letterSpacing: "0.08em" }}>AUDIO MIXER</span>
+              </div>
+              <button onClick={() => setAudioMixerOpen(false)} style={{ background: "none", border: "none", color: "#606878", cursor: "pointer", display: "flex", padding: 0 }}>
+                <X size={12} />
+              </button>
+            </div>
+            {/* Master + channels */}
+            <div style={{ display: "flex", height: 200 }}>
+              {/* OUTPUTS label */}
+              <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#0D0F12", borderRight: "1px solid #2A2D35" }}>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", transform: "rotate(180deg)", textTransform: "uppercase" }}>OUTPUTS</span>
+              </div>
+              {/* Master fader */}
+              <div style={{ width: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRight: "1px solid #2A2D35", background: "#0D0F12" }}>
+                <div style={{ padding: "2px 8px", background: "linear-gradient(180deg,#22C55E,#16A34A)", borderRadius: 2, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 9, color: "#000", letterSpacing: "0.06em" }}>Master</div>
+                <button style={{ width: 24, height: 24, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Cpu size={10} />
+                </button>
+                {/* Vertical master fader */}
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", width: "100%" }}>
+                  <div style={{ width: 6, height: "100%", background: "#1E2128", border: "1px solid #3A3D45", borderRadius: 3, position: "relative" }}>
+                    <div style={{ position: "absolute", bottom: "25%", left: -8, right: -8, height: 14, background: "linear-gradient(180deg,#4A4D55,#2A2D35)", border: "1px solid #5A5D65", borderRadius: 2, cursor: "pointer" }} />
+                  </div>
+                </div>
+                {/* Monitor + headphone icons */}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button style={{ width: 20, height: 20, background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Volume2 size={10} />
+                  </button>
+                  <button style={{ width: 20, height: 20, background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 2, color: "#808898", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Mic size={10} />
+                  </button>
+                </div>
+              </div>
+              {/* Channel strips */}
+              <div style={{ flex: 1, display: "flex", overflowX: "auto" }}>
+                {audioChannels.map(ch => {
+                  const cs = channelState[ch.id] ?? { muted: false, solo: false, volume: 75 };
+                  return (
+                    <div key={ch.id} style={{ minWidth: 52, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 4px", borderRight: "1px solid #2A2D35", opacity: cs.muted ? 0.4 : 1, transition: "opacity 0.15s" }}>
+                      <VUMeterVertical color={ch.color} active={isLive && !cs.muted} volume={cs.volume} />
+                      <input type="range" min={0} max={100} value={cs.volume}
+                        onChange={e => setChannelState(p => ({ ...p, [ch.id]: { ...cs, volume: Number(e.target.value) } }))}
+                        style={{ width: "100%", accentColor: ch.color, cursor: "pointer", height: 3 }} />
+                      <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, color: "#808898", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 44, textAlign: "center" }}>{ch.name}</span>
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, solo: !cs.solo } }))}
+                          style={{ width: 16, height: 16, borderRadius: 2, border: `1px solid ${cs.solo ? "#FBBF24" : "#3A3D45"}`, background: cs.solo ? "#FBBF24" : "#1E2128", color: cs.solo ? "#000" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>S</button>
+                        <button onClick={() => setChannelState(p => ({ ...p, [ch.id]: { ...cs, muted: !cs.muted } }))}
+                          style={{ width: 16, height: 16, borderRadius: 2, border: `1px solid ${cs.muted ? "#EF4444" : "#3A3D45"}`, background: cs.muted ? "#EF4444" : "#1E2128", color: cs.muted ? "#fff" : "#606878", fontSize: 8, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>M</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* INPUTS label */}
+              <div style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "#0D0F12", borderLeft: "1px solid #2A2D35" }}>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 8, fontWeight: 700, color: "#3A6AFF", letterSpacing: "0.1em", writingMode: "vertical-rl", textTransform: "uppercase" }}>INPUTS</span>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Modals */}
