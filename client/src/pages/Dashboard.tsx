@@ -1,6 +1,6 @@
 // RailShotTV — Chromatic Command — Unified Broadcast Control Surface (OBS-style single screen)
 // Colors: Brand=#FF5A2C, Blue=#4F9EFF, Violet=#A855F7, Emerald=#22C55E, Cyan=#22D3EE, Amber=#FBBF24
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import GoLiveModal from "@/components/GoLiveModal";
 import { useScenes } from "@/contexts/SceneContext";
@@ -27,7 +27,7 @@ const DEFAULT_TRANSFORMS: Record<string, CanvasTransform> = {
   lowerthird: { x: 0.0,  y: 0.72, w: 1.0,  h: 0.2  },
 };
 // ── Program Canvas ────────────────────────────────────────────────────────────
-function ProgramCanvas({
+const ProgramCanvas = memo(function ProgramCanvas({
   sources, selectedId, transforms, onSelect, onTransformChange,
 }: {
   sources: SourceItem[];
@@ -183,7 +183,7 @@ function ProgramCanvas({
       })}
     </div>
   );
-}
+});
 
 // ── Source type catalogue ─────────────────────────────────────────────────────
 const SOURCE_TYPES = [
@@ -421,7 +421,7 @@ function PropertiesPanel({ sourceId, sources, onUpdateSettings, onUpdateTransfor
           {row("URL", txtIn(setting("url","") as string, v => onUpdateSettings("url", v), "https://...", 130))}
           {row("W px", numIn(setting("bw",1920) as number, v => onUpdateSettings("bw", v), 1))}
           {row("H px", numIn(setting("bh",1080) as number, v => onUpdateSettings("bh", v), 1))}
-          {row("Refresh", tog(setting("refresh",true) as boolean, v => onUpdateSettings("refresh", v)))}
+          {row("Auto-reload", tog(setting("refresh",false) as boolean, v => onUpdateSettings("refresh", v)))}
         </>)}
         {src.type === "image" && (<>
           {row("Path / URL", txtIn(setting("src","") as string, v => onUpdateSettings("src", v), "/path/to/img", 130))}
