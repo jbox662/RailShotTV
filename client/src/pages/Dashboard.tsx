@@ -602,8 +602,9 @@ export default function Dashboard() {
           ))}
           <div style={{ flex: 1 }} />
           {/* Resolution selector */}
-          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-            Fullscreen ▾
+          <button onClick={handleFullscreen}
+            style={{ padding: "3px 10px", background: isFullscreen ? "linear-gradient(180deg,#2A3A2A,#1E281E)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${isFullscreen ? "#22C55E60" : "#3A3D45"}`, borderRadius: 3, color: isFullscreen ? "#22C55E" : "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           </button>
           <div style={{ width: 1, height: 20, background: "#3A3D45", margin: "0 6px" }} />
           {/* Status */}
@@ -612,13 +613,16 @@ export default function Dashboard() {
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#606878", marginLeft: 8 }}>CPU: {isLive ? "12%" : "3%"}</span>
           <div style={{ width: 1, height: 20, background: "#3A3D45", margin: "0 6px" }} />
           {/* Pause Inputs */}
-          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-            Pause Inputs
+          <button onClick={() => { setInputsPaused(v => !v); toast.info(inputsPaused ? "Inputs resumed" : "Inputs paused"); }}
+            style={{ padding: "3px 10px", background: inputsPaused ? "linear-gradient(180deg,#3A2A1A,#281E14)" : "linear-gradient(180deg,#1E2128,#16181E)", border: `1px solid ${inputsPaused ? "#F9731660" : "#3A3D45"}`, borderRadius: 3, color: inputsPaused ? "#F97316" : "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            {inputsPaused ? "▐▐ Paused" : "Pause Inputs"}
           </button>
-          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+          <button onClick={() => toast.info("Basic mode — simplified layout coming soon")}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             Basic
           </button>
-          <button style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+          <button onClick={() => { window.location.href = "/settings"; }}
+            style={{ padding: "3px 10px", background: "linear-gradient(180deg,#1E2128,#16181E)", border: "1px solid #3A3D45", borderRadius: 3, color: "#C8CAD0", fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             Settings
           </button>
         </div>
@@ -661,7 +665,7 @@ export default function Dashboard() {
           {/* ── CENTER: Transition controls ── */}
           <div style={{ width: 100, display: "flex", flexDirection: "column", alignItems: "stretch", background: "linear-gradient(180deg,#141619 0%,#0F1114 100%)", borderLeft: "1px solid #2A2D35", borderRight: "1px solid #2A2D35", flexShrink: 0, overflow: "hidden" }}>
             {/* Quick Play */}
-            <button onClick={() => toast.info("Quick Play")}
+            <button onClick={() => { if (activeScene) { toast.success(`Quick Play: ${activeScene.name}`); } else { toast.error("No scene selected"); } }}
               style={{ margin: "8px 6px 4px", padding: "6px 0", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
               Quick Play
             </button>
@@ -754,7 +758,7 @@ export default function Dashboard() {
           {/* Color filter dots (vMix-style) */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
             {["#EF4444","#F97316","#EAB308","#22C55E","#3B82F6","#A855F7"].map(c => (
-              <div key={c} style={{ width: 12, height: 12, borderRadius: "50%", background: c, cursor: "pointer", boxShadow: `0 0 6px ${c}60` }} />
+              <div key={c} onClick={() => setActiveColorFilter(activeColorFilter === c ? null : c)} style={{ width: 12, height: 12, borderRadius: "50%", background: c, cursor: "pointer", boxShadow: activeColorFilter === c ? `0 0 10px ${c}, 0 0 20px ${c}80` : `0 0 6px ${c}60`, outline: activeColorFilter === c ? `2px solid ${c}` : "none", outlineOffset: 2, transition: "all 0.15s" }} />
             ))}
             <Search size={12} style={{ color: "#606878", cursor: "pointer", marginLeft: 2 }} />
           </div>
@@ -805,7 +809,7 @@ export default function Dashboard() {
                       style={{ padding: "2px 6px", background: "linear-gradient(180deg,#22C55E,#16A34A)", border: "1px solid #22C55E80", borderRadius: 2, color: "#000", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 0 8px rgba(34,197,94,0.3)", marginLeft: "auto" }}>
                       GO
                     </button>
-                    <button onClick={() => toast.info("Cut")}
+                    <button onClick={() => { setActiveSceneId(scene.id); setSelectedSourceId(null); toast.success(`Cut → ${scene.name}`); }}
                       style={{ padding: "2px 6px", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #3A3D45", borderRadius: 2, color: "#C0C2C8", fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                       Cut
                     </button>
@@ -966,3 +970,23 @@ export default function Dashboard() {
     </AppSidebar>
   );
 }
+  // Fullscreen handler
+  const handleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => toast.error("Fullscreen not available"));
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // Pause inputs handler
+  const [inputsPaused, setInputsPaused] = useState(false);
+
+  // Color filter state
+  const [activeColorFilter, setActiveColorFilter] = useState<string | null>(null);
