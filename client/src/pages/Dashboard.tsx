@@ -1095,12 +1095,42 @@ export default function Dashboard() {
           </div>
 
           {/* ── CENTER: Transition controls ── */}
-          <div style={{ width: 100, display: "flex", flexDirection: "column", alignItems: "stretch", background: "linear-gradient(180deg,#141619 0%,#0F1114 100%)", borderLeft: "1px solid #2A2D35", borderRight: "1px solid #2A2D35", flexShrink: 0, overflow: "hidden" }}>
-            {/* Quick Play */}
-            <button onClick={() => { if (activeScene) { toast.success(`Quick Play: ${activeScene.name}`); } else { toast.error("No scene selected"); } }}
-              style={{ margin: "8px 6px 4px", padding: "6px 0", background: "linear-gradient(180deg,#2A2D35,#1E2128)", border: "1px solid #4A4D55", borderRadius: 3, color: "#D0D2D8", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
-              Quick Play
+          <div style={{ width: 120, display: "flex", flexDirection: "column", alignItems: "stretch", background: "linear-gradient(180deg,#141619 0%,#0F1114 100%)", borderLeft: "1px solid #2A2D35", borderRight: "1px solid #2A2D35", flexShrink: 0, overflow: "hidden" }}>
+            {/* ── BIG GO / TAKE button ── */}
+            <button
+              onClick={() => {
+                if (!previewSceneId) { toast.error("Nothing in Preview — select a scene first"); return; }
+                setProgramSceneId(previewSceneId);
+                toast.success(`${activeTransition} → Program: ${scenes.find(s => s.id === previewSceneId)?.name ?? "scene"}`);
+              }}
+              style={{
+                margin: "8px 6px 4px",
+                padding: "10px 0",
+                background: previewSceneId
+                  ? "linear-gradient(180deg,#22C55E,#16A34A)"
+                  : "linear-gradient(180deg,#2A3A2A,#1E281E)",
+                border: `1px solid ${previewSceneId ? "#22C55E" : "#2A3A2A"}`,
+                borderRadius: 4,
+                color: previewSceneId ? "#000" : "#3A5A3A",
+                fontSize: 15,
+                fontWeight: 900,
+                cursor: previewSceneId ? "pointer" : "not-allowed",
+                fontFamily: "'DM Sans',sans-serif",
+                letterSpacing: "0.08em",
+                boxShadow: previewSceneId
+                  ? "0 0 16px rgba(34,197,94,0.5), inset 0 1px 0 rgba(255,255,255,0.2)"
+                  : "none",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { if (previewSceneId) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 24px rgba(34,197,94,0.8), inset 0 1px 0 rgba(255,255,255,0.2)"; }}
+              onMouseLeave={e => { if (previewSceneId) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 16px rgba(34,197,94,0.5), inset 0 1px 0 rgba(255,255,255,0.2)"; }}
+            >
+              GO
             </button>
+            {/* Active transition label */}
+            <div style={{ textAlign: "center", fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: "#606878", letterSpacing: "0.08em", marginBottom: 2 }}>
+              {activeTransition.toUpperCase()}
+            </div>
             {/* Transition buttons */}
             {[
               { label: "Cut",      color: "#E0E2E8" },
