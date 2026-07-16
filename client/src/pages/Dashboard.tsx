@@ -849,7 +849,6 @@ export default function Dashboard() {
   // Fullscreen state and handler
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [inputsPaused, setInputsPaused] = useState(false);
-  const [activeColorFilter, setActiveColorFilter] = useState<string | null>(null);
   const handleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => toast.error("Fullscreen not available"));
@@ -1235,13 +1234,6 @@ export default function Dashboard() {
             onMoveUp={idx => { if (idx > 0) reorderScenes(idx, idx - 1); }}
             onMoveDown={idx => { if (idx < scenes.length - 1) reorderScenes(idx, idx + 1); }}
           />
-          {/* Color filter dots (vMix-style) */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", borderRight: "1px solid #2A2D35", flexShrink: 0 }}>
-            {["#EF4444","#F97316","#EAB308","#22C55E","#3B82F6","#A855F7"].map(c => (
-              <div key={c} onClick={() => setActiveColorFilter(activeColorFilter === c ? null : c)} style={{ width: 12, height: 12, borderRadius: "50%", background: c, cursor: "pointer", boxShadow: activeColorFilter === c ? `0 0 10px ${c}, 0 0 20px ${c}80` : `0 0 6px ${c}60`, outline: activeColorFilter === c ? `2px solid ${c}` : "none", outlineOffset: 2, transition: "all 0.15s" }} />
-            ))}
-            <Search size={12} style={{ color: "#606878", cursor: "pointer", marginLeft: 2 }} />
-          </div>
           {/* Input tiles — sources of the ACTIVE scene */}
           <div style={{ display: "flex", flex: 1, overflow: "hidden", gap: 0 }}>
             {activeSceneId === null ? (
