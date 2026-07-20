@@ -46,6 +46,8 @@ private:
     QSlider* m_brightness = nullptr;
     QSlider* m_contrast = nullptr;
     QSlider* m_saturation = nullptr;
+    QCheckBox* m_chromaKey = nullptr;
+    QSlider* m_chromaSim = nullptr;
     QSlider* m_volume = nullptr;
     QCheckBox* m_audioMute = nullptr;
     bool m_block = false;

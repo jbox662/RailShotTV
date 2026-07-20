@@ -226,17 +226,23 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
         auto* rate = new QComboBox(w);
-        rate->addItems({QStringLiteral("44100"), QStringLiteral("48000")});
-        rate->setCurrentText(QStringLiteral("48000"));
+        rate->addItems({QStringLiteral("48000")});
+        rate->setEnabled(false);
         auto* ch = new QComboBox(w);
-        ch->addItems({QStringLiteral("Stereo"), QStringLiteral("Mono")});
-        auto* desktop = new QLineEdit(QStringLiteral("Default desktop"), w);
-        auto* mic = new QLineEdit(QStringLiteral("Default mic"), w);
+        ch->addItems({QStringLiteral("Stereo")});
+        ch->setEnabled(false);
+        auto* desktop = new QLineEdit(QStringLiteral("System default (WASAPI loopback)"), w);
+        desktop->setReadOnly(true);
+        auto* mic = new QLineEdit(QStringLiteral("System default (WASAPI capture)"), w);
+        mic->setReadOnly(true);
+        auto* note = new QLabel(QStringLiteral("Device picker coming next — engine uses Windows default devices."), w);
+        note->setWordWrap(true);
+        note->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
         f->addRow(QStringLiteral("Sample rate"), rate);
         f->addRow(QStringLiteral("Channels"), ch);
         f->addRow(QStringLiteral("Desktop device"), desktop);
         f->addRow(QStringLiteral("Mic device"), mic);
-        connect(rate, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        f->addRow(note);
         addScrollPage(w);
     }
 
@@ -271,15 +277,21 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         auto* f = new QFormLayout(w);
         auto* prio = new QComboBox(w);
         prio->addItems({QStringLiteral("Normal"), QStringLiteral("Above normal"), QStringLiteral("High")});
-        auto* net = new QCheckBox(QStringLiteral("Network optimize"), w);
-        auto* lowLat = new QCheckBox(QStringLiteral("Low latency mode"), w);
+        auto* net = new QCheckBox(QStringLiteral("Network optimize (saved preference)"), w);
+        auto* lowLat = new QCheckBox(QStringLiteral("Low latency mode (saved preference)"), w);
         auto* bind = new QLineEdit(w);
         bind->setPlaceholderText(QStringLiteral("0.0.0.0"));
+        auto* note = new QLabel(QStringLiteral("Priority / bind IP apply on next launch when process hooks land."), w);
+        note->setWordWrap(true);
+        note->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
         f->addRow(QStringLiteral("Process priority"), prio);
         f->addRow(net);
         f->addRow(lowLat);
         f->addRow(QStringLiteral("Bind IP"), bind);
+        f->addRow(note);
         connect(prio, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(net, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        connect(lowLat, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
         addScrollPage(w);
     }
 

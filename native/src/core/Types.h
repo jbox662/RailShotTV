@@ -131,6 +131,7 @@ struct StreamTarget {
     QString id;
     QString platform;   // youtube|twitch|facebook|custom
     QString name;
+    QString title;
     QString rtmpUrl;
     QString streamKeySecretId; // Credential Manager key id — never store raw key
     bool enabled = true;

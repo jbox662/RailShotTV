@@ -187,6 +187,7 @@ QJsonObject StreamTarget::toJson() const
         {QStringLiteral("id"), id},
         {QStringLiteral("platform"), platform},
         {QStringLiteral("name"), name},
+        {QStringLiteral("title"), title},
         {QStringLiteral("rtmpUrl"), rtmpUrl},
         {QStringLiteral("streamKeySecretId"), streamKeySecretId},
         {QStringLiteral("enabled"), enabled},
@@ -199,6 +200,7 @@ StreamTarget StreamTarget::fromJson(const QJsonObject& o)
     t.id = o.value(QStringLiteral("id")).toString(newId(QStringLiteral("tgt")));
     t.platform = o.value(QStringLiteral("platform")).toString(QStringLiteral("custom"));
     t.name = o.value(QStringLiteral("name")).toString(QStringLiteral("Stream"));
+    t.title = o.value(QStringLiteral("title")).toString();
     t.rtmpUrl = o.value(QStringLiteral("rtmpUrl")).toString();
     t.streamKeySecretId = o.value(QStringLiteral("streamKeySecretId")).toString();
     t.enabled = o.value(QStringLiteral("enabled")).toBool(true);

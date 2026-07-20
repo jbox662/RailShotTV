@@ -15,6 +15,8 @@ struct ScoreboardState {
     int raceTo = 7;
     QString layout = QStringLiteral("standard");
     QString theme = QStringLiteral("railshot");
+    QString colorA = QStringLiteral("#FF5A2C");
+    QString colorB = QStringLiteral("#4F9EFF");
     bool clockRunning = false;
     int clockSeconds = 0;
 

@@ -160,6 +160,7 @@ void D3D11Compositor::resize(int width, int height)
     if (width == m_width && height == m_height) return;
     m_width = width;
     m_height = height;
+    clearProgramHold();
     createTargets(nullptr);
 }
 
@@ -168,7 +169,7 @@ void D3D11Compositor::shutdown()
 #ifdef _WIN32
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
     rel(m_blend); rel(m_sampler); rel(m_cb); rel(m_vb); rel(m_layout); rel(m_ps); rel(m_vs);
-    rel(m_previewRtv); rel(m_programRtv); rel(m_previewTex); rel(m_programTex);
+    rel(m_previewRtv); rel(m_programRtv); rel(m_previewTex); rel(m_programTex); rel(m_holdTex);
 #endif
 }
 
@@ -228,20 +229,31 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->cropMin[1] = ct;
         cb->cropMax[0] = 1.0f - cr;
         cb->cropMax[1] = 1.0f - cb_;
-        const float brightness = static_cast<float>(src.settings.value(QStringLiteral("brightness")).toDouble(0.0));
-        const float contrast = static_cast<float>(src.settings.value(QStringLiteral("contrast")).toDouble(1.0));
-        const float saturation = static_cast<float>(src.settings.value(QStringLiteral("saturation")).toDouble(1.0));
-        // Approximate colour matrix: contrast * saturation scale + brightness bias
-        const float sat = std::clamp(saturation, 0.0f, 3.0f);
-        const float con = std::clamp(contrast, 0.0f, 3.0f);
-        cb->colorMul[0] = con * sat;
-        cb->colorMul[1] = con * sat;
-        cb->colorMul[2] = con * sat;
+        const double briUi = src.settings.value(QStringLiteral("brightness")).toDouble(0.0);
+        const double conUi = src.settings.value(QStringLiteral("contrast")).toDouble(0.0);
+        const double satUi = src.settings.value(QStringLiteral("saturation")).toDouble(0.0);
+        // UI stores −100…100; shader wants brightness ±1, contrast/sat multipliers around 1.
+        const float brightness = static_cast<float>(std::clamp(briUi / 100.0, -1.0, 1.0));
+        const float contrast = static_cast<float>(std::clamp(1.0 + conUi / 100.0, 0.0, 3.0));
+        const float saturation = static_cast<float>(std::clamp(1.0 + satUi / 100.0, 0.0, 3.0));
+        // Luma-preserving-ish: scale around mid-gray after contrast
+        const float mid = 0.5f * (1.0f - contrast);
+        cb->colorMul[0] = contrast * saturation;
+        cb->colorMul[1] = contrast * saturation;
+        cb->colorMul[2] = contrast * (2.0f - saturation); // slight channel split when sat≠1
+        if (saturation >= 0.99f && saturation <= 1.01f) {
+            cb->colorMul[0] = contrast;
+            cb->colorMul[1] = contrast;
+            cb->colorMul[2] = contrast;
+        }
         cb->colorMul[3] = 1.0f;
-        cb->colorAdd[0] = brightness;
-        cb->colorAdd[1] = brightness;
-        cb->colorAdd[2] = brightness;
+        cb->colorAdd[0] = brightness + mid;
+        cb->colorAdd[1] = brightness + mid;
+        cb->colorAdd[2] = brightness + mid;
         cb->colorAdd[3] = 0.0f;
+        // Chroma key (optional)
+        cb->_padCrop[0] = src.settings.value(QStringLiteral("chromaKey")).toBool(false) ? 1.0f : 0.0f;
+        cb->_padCrop[1] = static_cast<float>(src.settings.value(QStringLiteral("chromaSimilarity")).toDouble(40.0) / 100.0);
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
@@ -272,6 +284,106 @@ bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProg
 #else
     Q_UNUSED(scene); Q_UNUSED(bus); Q_UNUSED(toProgram); Q_UNUSED(transitionMix);
     return false;
+#endif
+}
+
+bool D3D11Compositor::captureProgramHold()
+{
+#ifdef _WIN32
+    if (!m_programTex || !m_device) return false;
+    auto* dev = m_device->device();
+    auto* ctx = m_device->context();
+    D3D11_TEXTURE2D_DESC desc{};
+    m_programTex->GetDesc(&desc);
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.CPUAccessFlags = 0;
+    if (m_holdTex) { m_holdTex->Release(); m_holdTex = nullptr; }
+    ComPtr<ID3D11Texture2D> hold;
+    if (FAILED(dev->CreateTexture2D(&desc, nullptr, &hold)))
+        return false;
+    ctx->CopyResource(hold.Get(), m_programTex);
+    m_holdTex = hold.Detach();
+    return true;
+#else
+    return false;
+#endif
+}
+
+void D3D11Compositor::clearProgramHold()
+{
+#ifdef _WIN32
+    if (m_holdTex) { m_holdTex->Release(); m_holdTex = nullptr; }
+#endif
+}
+
+void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
+{
+#ifdef _WIN32
+    if (!m_holdTex || !m_programRtv || !m_device) return;
+    progress = std::clamp(progress, 0.0f, 1.0f);
+    auto* ctx = m_device->context();
+    auto* dev = m_device->device();
+    ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(dev->CreateShaderResourceView(m_holdTex, nullptr, &srv)))
+        return;
+
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(m_width);
+    vp.Height = static_cast<float>(m_height);
+    vp.MaxDepth = 1.0f;
+    ctx->RSSetViewports(1, &vp);
+    ctx->OMSetRenderTargets(1, &m_programRtv, nullptr);
+    ctx->OMSetBlendState(m_blend, nullptr, 0xffffffff);
+    ctx->IASetInputLayout(m_layout);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    UINT stride = 16, offset = 0;
+    ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
+    ctx->VSSetShader(m_vs, nullptr, 0);
+    ctx->PSSetShader(m_ps, nullptr, 0);
+    ctx->PSSetShaderResources(0, 1, srv.GetAddressOf());
+    ctx->PSSetSamplers(0, 1, &m_sampler);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        auto* cb = reinterpret_cast<CBData*>(mapped.pData);
+        if (type == TransitionType::Wipe) {
+            // Old program slides away to the right as progress increases
+            cb->rect[0] = progress;
+            cb->rect[1] = 0.0f;
+            cb->rect[2] = 1.0f - progress;
+            cb->rect[3] = 1.0f;
+            cb->opacity = 1.0f;
+            cb->cropMin[0] = progress;
+            cb->cropMin[1] = 0.0f;
+            cb->cropMax[0] = 1.0f;
+            cb->cropMax[1] = 1.0f;
+        } else {
+            // Fade / Merge / CubeZoom: dissolve old over new
+            cb->rect[0] = 0.0f;
+            cb->rect[1] = 0.0f;
+            cb->rect[2] = 1.0f;
+            cb->rect[3] = 1.0f;
+            cb->opacity = 1.0f - progress;
+            cb->cropMin[0] = 0.0f;
+            cb->cropMin[1] = 0.0f;
+            cb->cropMax[0] = 1.0f;
+            cb->cropMax[1] = 1.0f;
+        }
+        cb->rotation = 0.0f;
+        cb->_padCrop[0] = 0.0f;
+        cb->_padCrop[1] = 0.0f;
+        cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
+        cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
+        ctx->Unmap(m_cb, 0);
+    }
+    ctx->VSSetConstantBuffers(0, 1, &m_cb);
+    ctx->PSSetConstantBuffers(0, 1, &m_cb);
+    ctx->Draw(4, 0);
+    ID3D11ShaderResourceView* nullSrv = nullptr;
+    ctx->PSSetShaderResources(0, 1, &nullSrv);
+#else
+    Q_UNUSED(progress); Q_UNUSED(type);
 #endif
 }
 

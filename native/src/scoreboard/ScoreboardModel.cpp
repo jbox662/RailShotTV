@@ -13,6 +13,8 @@ QJsonObject ScoreboardState::toJson() const
         {QStringLiteral("raceTo"), raceTo},
         {QStringLiteral("layout"), layout},
         {QStringLiteral("theme"), theme},
+        {QStringLiteral("colorA"), colorA},
+        {QStringLiteral("colorB"), colorB},
         {QStringLiteral("clockRunning"), clockRunning},
         {QStringLiteral("clockSeconds"), clockSeconds},
     };
@@ -29,6 +31,8 @@ ScoreboardState ScoreboardState::fromJson(const QJsonObject& o)
     s.raceTo = o.value(QStringLiteral("raceTo")).toInt(7);
     s.layout = o.value(QStringLiteral("layout")).toString(s.layout);
     s.theme = o.value(QStringLiteral("theme")).toString(s.theme);
+    s.colorA = o.value(QStringLiteral("colorA")).toString(s.colorA);
+    s.colorB = o.value(QStringLiteral("colorB")).toString(s.colorB);
     s.clockRunning = o.value(QStringLiteral("clockRunning")).toBool();
     s.clockSeconds = o.value(QStringLiteral("clockSeconds")).toInt();
     return s;

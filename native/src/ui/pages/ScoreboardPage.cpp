@@ -138,12 +138,22 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
         auto* ba = new QPushButton(left);
         ba->setFixedSize(20, 20);
         ba->setStyleSheet(QStringLiteral("background:%1; border:1px solid #3A3D45; border-radius:3px;").arg(c));
-        connect(ba, &QPushButton::clicked, this, [colorA, c] { *colorA = c; });
+        connect(ba, &QPushButton::clicked, this, [model, colorA, c] {
+            *colorA = c;
+            auto st = model->state();
+            st.colorA = c;
+            model->setState(st);
+        });
         swA->addWidget(ba);
         auto* bb = new QPushButton(left);
         bb->setFixedSize(20, 20);
         bb->setStyleSheet(QStringLiteral("background:%1; border:1px solid #3A3D45; border-radius:3px;").arg(c));
-        connect(bb, &QPushButton::clicked, this, [colorB, c] { *colorB = c; });
+        connect(bb, &QPushButton::clicked, this, [model, colorB, c] {
+            *colorB = c;
+            auto st = model->state();
+            st.colorB = c;
+            model->setState(st);
+        });
         swB->addWidget(bb);
     }
     leftLay->addWidget(new QLabel(QStringLiteral("Team A color"), left));
@@ -269,6 +279,8 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
         st.sport = mapSportUiToModel(sportUi);
         st.theme = mapThemeUiToModel(themeBox->currentText());
         st.layout = mapLayoutUiToModel(layoutBox->currentText());
+        st.colorA = *colorA;
+        st.colorB = *colorB;
         st.raceTo = raceTo->value();
         model->setState(st);
     };
@@ -332,8 +344,16 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
         const auto raw = s.value(QStringLiteral("scoreboard/preset")).toByteArray();
         if (raw.isEmpty()) return;
         model->setState(ScoreboardState::fromJson(QJsonDocument::fromJson(raw).object()));
-        *colorA = s.value(QStringLiteral("scoreboard/colorA"), *colorA).toString();
-        *colorB = s.value(QStringLiteral("scoreboard/colorB"), *colorB).toString();
+        *colorA = model->state().colorA;
+        *colorB = model->state().colorB;
+        if (s.contains(QStringLiteral("scoreboard/colorA")))
+            *colorA = s.value(QStringLiteral("scoreboard/colorA")).toString();
+        if (s.contains(QStringLiteral("scoreboard/colorB")))
+            *colorB = s.value(QStringLiteral("scoreboard/colorB")).toString();
+        auto st = model->state();
+        st.colorA = *colorA;
+        st.colorB = *colorB;
+        model->setState(st);
     });
 
     auto refresh = [=](const ScoreboardState& st) {
@@ -341,8 +361,10 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
                              .arg(st.playerA).arg(st.scoreA).arg(st.scoreB).arg(st.playerB)
                              .arg(st.sport).arg(st.raceTo));
         preview->setStyleSheet(QStringLiteral(
-            "background:#0A0B0F; border:1px solid #2A2D35; font-size:28px; font-weight:800;"
-            "font-family:'Bebas Neue'; color:%1;").arg(*colorA));
+            "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 %1,stop:1 %2);"
+            "border:2px solid #3A3D45; font-size:28px; font-weight:800;"
+            "font-family:'Bebas Neue'; color:#FFFFFF;")
+                                   .arg(st.colorA, st.colorB));
         const int m = st.clockSeconds / 60;
         const int sec = st.clockSeconds % 60;
         clockLbl->setText(QStringLiteral("%1:%2").arg(m, 2, 10, QLatin1Char('0')).arg(sec, 2, 10, QLatin1Char('0')));

@@ -104,13 +104,22 @@ bool EngineController::initialize(QString* error)
         m_capture->poll();
 
         float mix = 1.0f;
-        if (m_transition)
+        TransitionType activeType = TransitionType::Cut;
+        if (m_transition) {
             mix = m_transition->tick();
+            activeType = m_transition->type();
+        }
 
         if (const auto* preview = project.findScene(project.previewSceneId))
             m_compositor->compose(*preview, m_capture->frameBus(), false, 1.0f);
-        if (const auto* program = project.findScene(project.programSceneId))
-            m_compositor->compose(*program, m_capture->frameBus(), true, mix);
+        if (const auto* program = project.findScene(project.programSceneId)) {
+            // Crossfade: compose new program at full, then blend hold on top
+            const bool cross = m_transition && m_transition->isActive() && m_transition->isCrossfade()
+                               && m_compositor->hasProgramHold();
+            m_compositor->compose(*program, m_capture->frameBus(), true, cross ? 1.0f : mix);
+            if (cross)
+                m_compositor->blendProgramHold(mix, activeType);
+        }
 
         const qint64 pts = m_audio->clock().nowUs();
         if (m_outputs && (m_outputs->isRecording() || m_outputs->isStreaming()))
@@ -214,8 +223,19 @@ void EngineController::go(TransitionType type)
         emit transitionStarted(effective);
         if (effective == TransitionType::Cut) {
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
+            if (m_compositor) m_compositor->clearProgramHold();
             emit transitionFinished();
+        } else if (m_transition->isCrossfade()) {
+            // Snapshot current program, switch immediately, blend hold → new
+            if (m_compositor) m_compositor->captureProgramHold();
+            m_sceneGraph->setProgramSceneId(p.previewSceneId);
+            connect(m_transition, &TransitionEngine::finished, this, [this] {
+                if (m_compositor) m_compositor->clearProgramHold();
+                emit transitionFinished();
+            }, Qt::SingleShotConnection);
+            m_transition->start();
         } else {
+            // FTB: fade out old, swap, fade in new
             const QString target = p.previewSceneId;
             connect(m_transition, &TransitionEngine::phaseChanged, this, [this, target](TransitionEngine::Phase phase) {
                 if (phase == TransitionEngine::Phase::In)

@@ -172,19 +172,26 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
         m_saturation->setValue(0);
     });
     cForm->addRow(resetCol);
-    auto* colourNote = new QLabel(QStringLiteral("Colour adjust is stored for future engine support."), colour);
+    auto* colourNote = new QLabel(QStringLiteral("Colour adjust applies live on Program/Preview."), colour);
     colourNote->setWordWrap(true);
     colourNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
     cForm->addRow(colourNote);
     m_tabs->addTab(colour, QStringLiteral("Colour"));
 
-    // Effects stub
-    auto* effects = new QLabel(QStringLiteral(
-        "Effects\n\nBlur / Sharpen / Pixelate and Luma/Chroma key controls will appear here.\n"
-        "Engine hooks are not wired yet."), m_tabs);
-    effects->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    effects->setWordWrap(true);
-    effects->setStyleSheet(QStringLiteral("color:#808898; padding:16px; font-size:11px;"));
+    // Effects — chroma key
+    auto* effects = new QWidget(m_tabs);
+    auto* eForm = new QFormLayout(effects);
+    eForm->setContentsMargins(14, 12, 14, 12);
+    m_chromaKey = new QCheckBox(QStringLiteral("Chroma key (green)"), effects);
+    m_chromaSim = new QSlider(Qt::Horizontal, effects);
+    m_chromaSim->setRange(5, 95);
+    m_chromaSim->setValue(40);
+    eForm->addRow(m_chromaKey);
+    eForm->addRow(QStringLiteral("Similarity"), m_chromaSim);
+    auto* effectsNote = new QLabel(QStringLiteral("Blur / sharpen / pixelate still coming. Chroma key is live."), effects);
+    effectsNote->setWordWrap(true);
+    effectsNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+    eForm->addRow(effectsNote);
     m_tabs->addTab(effects, QStringLiteral("Effects"));
 
     // Layers
@@ -249,6 +256,24 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     auto onSpin = [this](double) { applyTransformFromUi(); };
     for (auto* s : {m_x, m_y, m_w, m_h, m_rot, m_opacity, m_cropL, m_cropR, m_cropT, m_cropB})
         connect(s, qOverload<double>(&QDoubleSpinBox::valueChanged), this, onSpin);
+    auto pushColour = [this] {
+        if (m_block || !m_engine) return;
+        auto src = m_engine->selectedSource();
+        if (!src) return;
+        auto settings = src->settings;
+        settings.insert(QStringLiteral("brightness"), m_brightness->value());
+        settings.insert(QStringLiteral("contrast"), m_contrast->value());
+        settings.insert(QStringLiteral("saturation"), m_saturation->value());
+        if (m_chromaKey)
+            settings.insert(QStringLiteral("chromaKey"), m_chromaKey->isChecked());
+        if (m_chromaSim)
+            settings.insert(QStringLiteral("chromaSimilarity"), m_chromaSim->value());
+        m_engine->updateSourceSettings(src->id, settings);
+    };
+    for (auto* s : {m_brightness, m_contrast, m_saturation, m_chromaSim})
+        if (s) connect(s, &QSlider::valueChanged, this, [pushColour](int) { pushColour(); });
+    if (m_chromaKey)
+        connect(m_chromaKey, &QCheckBox::toggled, this, [pushColour](bool) { pushColour(); });
     connect(zUp, &QPushButton::clicked, this, [this] {
         if (m_engine) m_engine->moveSourceZOrder(m_engine->selectedSourceId(), 1);
     });
@@ -296,6 +321,8 @@ void SourcePropertiesWidget::applyAll()
     settings.insert(QStringLiteral("brightness"), m_brightness->value());
     settings.insert(QStringLiteral("contrast"), m_contrast->value());
     settings.insert(QStringLiteral("saturation"), m_saturation->value());
+    settings.insert(QStringLiteral("chromaKey"), m_chromaKey && m_chromaKey->isChecked());
+    settings.insert(QStringLiteral("chromaSimilarity"), m_chromaSim ? m_chromaSim->value() : 40);
     settings.insert(QStringLiteral("audioVolume"), m_volume->value());
     settings.insert(QStringLiteral("audioMute"), m_audioMute->isChecked());
     m_engine->updateSourceSettings(src->id, settings);
@@ -327,6 +354,10 @@ void SourcePropertiesWidget::rebuild()
         m_brightness->setValue(src->settings.value(QStringLiteral("brightness")).toInt());
         m_contrast->setValue(src->settings.value(QStringLiteral("contrast")).toInt());
         m_saturation->setValue(src->settings.value(QStringLiteral("saturation")).toInt());
+        if (m_chromaKey)
+            m_chromaKey->setChecked(src->settings.value(QStringLiteral("chromaKey")).toBool());
+        if (m_chromaSim)
+            m_chromaSim->setValue(src->settings.value(QStringLiteral("chromaSimilarity")).toInt(40));
         m_volume->setValue(src->settings.value(QStringLiteral("audioVolume")).toInt(100));
         m_audioMute->setChecked(src->settings.value(QStringLiteral("audioMute")).toBool());
     } else {

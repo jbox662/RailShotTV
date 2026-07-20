@@ -48,6 +48,13 @@ cbuffer CB : register(b0) {
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float4 c = tex.Sample(samp, uv);
     c.rgb = c.rgb * colorMul.rgb + colorAdd.rgb;
+    // chroma key when _padCrop.x > 0.5 (green screen default)
+    if (_padCrop.x > 0.5) {
+        float g = c.g;
+        float rb = (c.r + c.b) * 0.5;
+        float key = saturate((g - rb - (1.0 - _padCrop.y) * 0.35) / max(0.05, _padCrop.y));
+        c.a *= (1.0 - key);
+    }
     c.a *= opacity;
     return c;
 }

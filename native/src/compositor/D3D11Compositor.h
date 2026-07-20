@@ -37,6 +37,13 @@ public:
     bool compose(const SceneItem& scene, FrameBus& bus, bool toProgram,
                  float transitionMix = 1.0f);
 
+    /// Snapshot current program into hold buffer for A/B transitions.
+    bool captureProgramHold();
+    void clearProgramHold();
+    bool hasProgramHold() const { return m_holdTex != nullptr; }
+    /// After compose of new program, blend hold over it (crossfade / wipe).
+    void blendProgramHold(float progress, TransitionType type);
+
     /// Readback program frame for encoder (BGRA). Avoid in steady UI path.
     QImage readbackProgram() const;
 
@@ -58,6 +65,7 @@ private:
 
     ID3D11Texture2D* m_previewTex = nullptr;
     ID3D11Texture2D* m_programTex = nullptr;
+    ID3D11Texture2D* m_holdTex = nullptr;
     ID3D11RenderTargetView* m_previewRtv = nullptr;
     ID3D11RenderTargetView* m_programRtv = nullptr;
 

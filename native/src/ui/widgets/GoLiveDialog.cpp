@@ -11,6 +11,8 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <QFrame>
+#include <QTcpSocket>
+#include <QUrl>
 #include <functional>
 
 namespace railshot {
@@ -107,7 +109,8 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
         "QLineEdit:focus{border-color:#FF5A2C;}"));
     cfg->addWidget(m_key);
 
-    auto* chips = new QLabel(QStringLiteral("Ready  ·  Audio  ·  Scene  ·  Encoder  ·  Network"), config);
+    auto* chips = new QLabel(QStringLiteral("Ready  ·  Audio  ·  Scene  ·  Encoder  ·  Network  ·  Key"), config);
+
     chips->setAlignment(Qt::AlignCenter);
     chips->setStyleSheet(QStringLiteral("color:#606878; font-size:10px; letter-spacing:0.5px;"));
     cfg->addWidget(chips);
@@ -270,6 +273,17 @@ void GoLiveDialog::runChecks()
         enc->close();
         return QString();
     }});
+    checks.push_back({QStringLiteral("Network"), QStringLiteral("#22D3EE"), [this] {
+        const QUrl url(m_url->text().trimmed());
+        if (!url.isValid() || url.host().isEmpty())
+            return QStringLiteral("RTMP host missing");
+        QTcpSocket sock;
+        sock.connectToHost(url.host(), url.port(1935));
+        if (!sock.waitForConnected(1500))
+            return QStringLiteral("Cannot reach %1").arg(url.host());
+        sock.disconnectFromHost();
+        return QString();
+    }});
 
     auto* t = new QTimer(this);
     connect(t, &QTimer::timeout, this, [this, t, checks]() mutable {
@@ -321,7 +335,8 @@ void GoLiveDialog::goLiveNow()
     StreamTarget target;
     target.id = newId(QStringLiteral("tgt"));
     target.platform = m_platform;
-    target.name = m_platform;
+    target.name = m_title->text().trimmed().isEmpty() ? m_platform : m_title->text().trimmed();
+    target.title = m_title->text().trimmed();
     target.rtmpUrl = m_url->text().trimmed();
     target.streamKeySecretId = SecretStore::makeStreamKeyId(target.id);
     if (!m_key->text().isEmpty())
