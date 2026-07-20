@@ -10,6 +10,7 @@
 #include <QStackedLayout>
 #include <QEvent>
 #include <cmath>
+#include <QFontMetrics>
 
 namespace railshot {
 
@@ -62,6 +63,80 @@ Handle hitHandle(const QRectF& r, const QPointF& p, qreal pad = 8.0)
     if (r.contains(p)) return Handle::Move;
     return Handle::None;
 }
+
+/** Paints stage border + L-brackets in layout margins around the D3D HWND (overlays on HWND don't show). */
+class StageChrome : public QWidget {
+public:
+    StageChrome(bool program, QWidget* parent = nullptr)
+        : QWidget(parent), m_program(program)
+    {
+        setAttribute(Qt::WA_StyledBackground, true);
+        setStyleSheet(QStringLiteral("background:#060608;"));
+    }
+    void setLive(bool on)
+    {
+        if (m_live == on) return;
+        m_live = on;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, false);
+        const QColor accent = m_program ? QColor(QStringLiteral("#FF5A2C"))
+                                        : QColor(QStringLiteral("#22C55E"));
+        const int a = m_program ? (m_live ? 200 : 120) : 160;
+        QColor border = accent;
+        border.setAlpha(a);
+        p.setPen(QPen(border, 2));
+        p.setBrush(Qt::NoBrush);
+        // Outer frame in the margin ring
+        p.drawRect(rect().adjusted(1, 1, -2, -2));
+
+        const int L = 18;
+        const int inset = 6;
+        p.setPen(QPen(accent, 3, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        auto corner = [&](int x, int y, int dx, int dy) {
+            p.drawLine(x, y, x + dx * L, y);
+            p.drawLine(x, y, x, y + dy * L);
+        };
+        corner(inset, inset, 1, 1);
+        corner(width() - inset - 1, inset, -1, 1);
+        corner(inset, height() - inset - 1, 1, -1);
+        corner(width() - inset - 1, height() - inset - 1, -1, -1);
+
+        // Always-visible canvas badge chip — drawn in top margin above HWND
+        const QString badge = m_program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW");
+        QFont f = p.font();
+        f.setFamily(QStringLiteral("DM Sans"));
+        f.setBold(true);
+        f.setPointSize(8);
+        p.setFont(f);
+        const QFontMetrics fm(f);
+        const int bw = fm.horizontalAdvance(badge) + 14;
+        const QRect chip(12, 5, bw, 18);
+        p.setPen(Qt::NoPen);
+        p.setBrush(accent);
+        p.drawRoundedRect(chip, 2, 2);
+        p.setPen(m_program ? Qt::white : QColor(QStringLiteral("#04140A")));
+        p.drawText(chip, Qt::AlignCenter, badge);
+
+        if (m_program && m_live) {
+            const QRect air(12 + bw + 6, 5, 54, 18);
+            p.setBrush(QColor(QStringLiteral("#FF5A2C")));
+            p.setPen(Qt::NoPen);
+            p.drawRoundedRect(air, 2, 2);
+            p.setPen(Qt::white);
+            p.drawText(air, Qt::AlignCenter, QStringLiteral("ON AIR"));
+        }
+    }
+
+private:
+    bool m_program = false;
+    bool m_live = false;
+};
 } // namespace
 
 class PreviewWidget::CanvasOverlay : public QWidget {
@@ -88,50 +163,13 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override
     {
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing);
-        const QColor accent = m_program
-                                  ? (m_live ? QColor(QStringLiteral("#FF5A2C")) : QColor(255, 90, 44, 128))
-                                  : QColor(QStringLiteral("#22C55E"));
-        const QColor bracket = m_live && m_program ? QColor(QStringLiteral("#FF5A2C"))
-                                                   : (m_program ? QColor(QStringLiteral("#4F9EFF"))
-                                                                : QColor(QStringLiteral("#22C55E")));
-
-        // 16:9 stage frame
-        const QRect stage = letterboxRect(size());
-        p.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), m_program ? (m_live ? 80 : 32) : 48), 2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(stage.adjusted(1, 1, -1, -1));
-
-        // Corner L-brackets (14px)
-        const int L = 14;
-        p.setPen(QPen(bracket, 2, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
-        auto drawBracket = [&](int x, int y, int dx, int dy) {
-            p.drawLine(x, y, x + dx * L, y);
-            p.drawLine(x, y, x, y + dy * L);
-        };
-        drawBracket(stage.left() + 4, stage.top() + 4, 1, 1);
-        drawBracket(stage.right() - 4, stage.top() + 4, -1, 1);
-        drawBracket(stage.left() + 4, stage.bottom() - 4, 1, -1);
-        drawBracket(stage.right() - 4, stage.bottom() - 4, -1, -1);
-
-        if (m_program && m_live) {
-            p.setPen(Qt::NoPen);
-            p.setBrush(QColor(QStringLiteral("#FF5A2C")));
-            p.drawRoundedRect(QRect(stage.left() + 6, stage.top() + 6, 52, 16), 2, 2);
-            p.setPen(Qt::white);
-            QFont f = p.font();
-            f.setFamily(QStringLiteral("DM Sans"));
-            f.setBold(true);
-            f.setPointSize(8);
-            p.setFont(f);
-            p.drawText(QRect(stage.left() + 6, stage.top() + 6, 52, 16), Qt::AlignCenter,
-                       QStringLiteral("ON AIR"));
-        }
-
+        // Stage frame/brackets live on StageChrome (margins around HWND).
+        // This overlay only draws interactive selection chrome on Preview.
         if (!m_interactive || !m_engine) return;
         const auto sel = m_engine->selectedSource();
         if (!sel || !sel->visible) return;
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
         const QRectF r = normToWidget(sel->transform, size());
         p.setPen(QPen(QColor(QStringLiteral("#4F9EFF")), 2.0));
         p.setBrush(Qt::NoBrush);
@@ -278,9 +316,14 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     h->setSpacing(6);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
     title->setObjectName(program ? QStringLiteral("programLabel") : QStringLiteral("previewLabel"));
-    title->setStyleSheet(QStringLiteral(
-        "color:%1; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;")
-                             .arg(accent));
+    // Solid chip style — never violet; PROGRAM always brand orange
+    title->setStyleSheet(program
+                             ? QStringLiteral(
+                                   "color:#FFFFFF; font-weight:800; font-size:10px; letter-spacing:1px;"
+                                   "background:#FF5A2C; border-radius:2px; padding:2px 8px;")
+                             : QStringLiteral(
+                                   "color:#04140A; font-weight:800; font-size:10px; letter-spacing:1px;"
+                                   "background:#22C55E; border-radius:2px; padding:2px 8px;"));
     h->addWidget(title);
     h->addStretch();
 
@@ -290,11 +333,14 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
         "font-family:'JetBrains Mono'; font-size:10px; color:#A0A8B8; background:transparent;"));
     h->addWidget(sceneName);
 
+    StageChrome* stage = nullptr;
+
     if (program) {
         auto* live = new QLabel(QStringLiteral("● LIVE"), header);
         live->setObjectName(QStringLiteral("liveBadge"));
         live->setStyleSheet(QStringLiteral(
-            "font-family:'JetBrains Mono'; font-size:10px; color:#FF5A2C; background:transparent;"));
+            "font-family:'JetBrains Mono'; font-size:10px; color:#FF5A2C; font-weight:800;"
+            "background:transparent;"));
         live->setVisible(false);
         h->addWidget(live);
         auto* tc = new QLabel(QStringLiteral("00:00:00"), header);
@@ -306,10 +352,10 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
             connect(engine, &EngineController::telemetryUpdated, this,
                     [live, tc, title](const TelemetrySnapshot& s) {
                         live->setVisible(s.streaming);
+                        // Keep PROGRAM chip solid orange; only LIVE badge toggles
                         title->setStyleSheet(QStringLiteral(
-                            "color:%1; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;")
-                                                 .arg(s.streaming ? QStringLiteral("#FF5A2C")
-                                                                  : QStringLiteral("#FF5A2C80")));
+                            "color:#FFFFFF; font-weight:800; font-size:10px; letter-spacing:1px;"
+                            "background:#FF5A2C; border-radius:2px; padding:2px 8px;"));
                         if (!s.streaming) {
                             tc->setText(QStringLiteral("00:00:00"));
                             return;
@@ -320,8 +366,6 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
                                         .arg((secs % 3600) / 60, 2, 10, QChar('0'))
                                         .arg(secs % 60, 2, 10, QChar('0')));
                     });
-            title->setStyleSheet(QStringLiteral(
-                "color:#FF5A2C80; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;"));
         }
     }
 
@@ -330,17 +374,22 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     clearBtn->setStyleSheet(QStringLiteral(
         "padding:1px 7px; border:1px solid %1; border-radius:2px; color:%2;"
         "font-size:9px; font-weight:700; letter-spacing:1px; background:transparent;")
-                                .arg(program ? QStringLiteral("#FF5A2C40") : QStringLiteral("#22C55E40"),
-                                     program ? QStringLiteral("#FF5A2C70") : QStringLiteral("#22C55E70")));
+                                .arg(program ? QStringLiteral("#FF5A2C60") : QStringLiteral("#22C55E60"),
+                                     program ? QStringLiteral("#FF8A6A") : QStringLiteral("#6EE7A0")));
     clearBtn->installEventFilter(this);
     clearBtn->setProperty("clearRole", program ? QStringLiteral("program") : QStringLiteral("preview"));
     h->addWidget(clearBtn);
     col->addWidget(header);
 
-    auto* stackHost = new QWidget(this);
-    stackHost->setStyleSheet(QStringLiteral(
-        "background:#080A0D; border:2px solid %1;")
-                                 .arg(program ? QStringLiteral("#FF5A2C20") : QStringLiteral("#22C55E30")));
+    // Stage chrome draws in margins around HWND (D3D surface punches through overlays)
+    stage = new StageChrome(program, this);
+    auto* stageLay = new QVBoxLayout(stage);
+    // Top margin tall enough for badge chip; sides/bottom for L-brackets
+    stageLay->setContentsMargins(10, 28, 10, 10);
+    stageLay->setSpacing(0);
+
+    auto* stackHost = new QWidget(stage);
+    stackHost->setStyleSheet(QStringLiteral("background:#000000;"));
     auto* stack = new QStackedLayout(stackHost);
     stack->setStackingMode(QStackedLayout::StackAll);
     stack->setContentsMargins(0, 0, 0, 0);
@@ -355,11 +404,21 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     m_overlay = new CanvasOverlay(engine, this, program);
     m_overlay->setInteractive(!program);
-    if (program)
-        m_overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    stack->addWidget(m_overlay);
+    // Preview only: interactive handles. Program: no overlay over HWND.
+    if (program) {
+        m_overlay->hide();
+    } else {
+        stack->addWidget(m_overlay);
+    }
+    stageLay->addWidget(stackHost, 1);
+    col->addWidget(stage, 1);
 
-    col->addWidget(stackHost, 1);
+    if (engine && program) {
+        connect(engine, &EngineController::telemetryUpdated, stage, [stage](const TelemetrySnapshot& s) {
+            stage->setLive(s.streaming);
+        });
+        stage->setLive(engine->telemetrySnapshot().streaming);
+    }
 
     if (engine) {
         connect(engine, &EngineController::selectedSourceChanged, m_overlay, QOverload<>::of(&QWidget::update));

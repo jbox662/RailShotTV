@@ -67,8 +67,12 @@ void InputTilesWidget::refresh()
     const auto p = m_engine->projectSnapshot();
     const auto* scene = p.findScene(p.activeSceneId);
     if (!scene || scene->sources.isEmpty()) {
-        m_row->addWidget(theme::makeEmptyState(QStringLiteral("◇"),
-            QStringLiteral("No inputs — click Add Input to begin"), this));
+        auto* empty = theme::makeEmptyState(QStringLiteral("◇"),
+            QStringLiteral("No inputs — click Add Input to begin"), this);
+        empty->setMinimumHeight(100);
+        empty->setStyleSheet(empty->styleSheet()
+            + QStringLiteral("border:1px dashed #2A2D35; border-radius:4px; margin:8px;"));
+        m_row->addWidget(empty);
         return;
     }
     const QString selected = m_engine->selectedSourceId();

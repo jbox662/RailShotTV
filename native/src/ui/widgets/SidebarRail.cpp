@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QTimer>
 #include <QVariant>
+#include <QEnterEvent>
 
 namespace railshot {
 
@@ -64,6 +65,89 @@ protected:
             p.drawRoundedRect(i * 4, 14 - h, 3, h, 1.5, 1.5);
         }
     }
+};
+
+/** Lucide-style stroked icons (Tv2 / MessageSquare / BarChart2 / Trophy / Calendar / Settings). */
+class NavIconButton : public QPushButton {
+public:
+    NavIconButton(const QString& id, QWidget* parent = nullptr)
+        : QPushButton(parent), m_id(id)
+    {
+        setFixedSize(40, 40);
+        setCursor(Qt::PointingHandCursor);
+        setFocusPolicy(Qt::NoFocus);
+        setText(QString());
+        setFlat(true);
+    }
+    void setNavActive(bool on, const QColor& accent)
+    {
+        m_active = on;
+        m_accent = accent;
+        update();
+    }
+
+protected:
+    void enterEvent(QEnterEvent* e) override { QPushButton::enterEvent(e); update(); }
+    void leaveEvent(QEvent* e) override { QPushButton::leaveEvent(e); update(); }
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor accent = m_accent.isValid() ? m_accent : QColor(QStringLiteral("#6B7280"));
+        if (m_active) {
+            QRadialGradient glow(rect().center(), 22);
+            glow.setColorAt(0, QColor(accent.red(), accent.green(), accent.blue(), 110));
+            glow.setColorAt(1, QColor(accent.red(), accent.green(), accent.blue(), 0));
+            p.setPen(Qt::NoPen);
+            p.setBrush(glow);
+            p.drawEllipse(rect().adjusted(-2, -2, 2, 2));
+            p.setBrush(QColor(accent.red(), accent.green(), accent.blue(), 40));
+            p.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), 140), 1));
+            p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 8, 8);
+        } else if (underMouse()) {
+            p.setPen(QPen(QColor(255, 255, 255, 28), 1));
+            p.setBrush(QColor(255, 255, 255, 16));
+            p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 8, 8);
+        }
+        const QColor stroke = m_active ? accent : QColor(QStringLiteral("#6B7280"));
+        p.setPen(QPen(stroke, m_active ? 2.1 : 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        const QRectF ic = QRectF(11, 11, 18, 18);
+        if (m_id == QLatin1String("dashboard")) {
+            // Tv2
+            p.drawRoundedRect(QRectF(ic.left(), ic.top() + 3, 18, 12), 2, 2);
+            p.drawLine(QPointF(ic.center().x() - 3, ic.bottom() - 1), QPointF(ic.center().x() + 3, ic.bottom() - 1));
+            p.drawLine(QPointF(ic.center().x(), ic.top() + 15), QPointF(ic.center().x(), ic.bottom() - 1));
+        } else if (m_id == QLatin1String("chat")) {
+            p.drawRoundedRect(QRectF(ic.left(), ic.top(), 16, 12), 2.5, 2.5);
+            p.drawLine(QPointF(ic.left() + 3, ic.top() + 12), QPointF(ic.left() + 3, ic.bottom()));
+            p.drawLine(QPointF(ic.left() + 3, ic.bottom()), QPointF(ic.left() + 8, ic.top() + 12));
+        } else if (m_id == QLatin1String("analytics")) {
+            p.drawLine(QPointF(ic.left() + 2, ic.bottom()), QPointF(ic.left() + 2, ic.top() + 8));
+            p.drawLine(QPointF(ic.left() + 8, ic.bottom()), QPointF(ic.left() + 8, ic.top() + 3));
+            p.drawLine(QPointF(ic.left() + 14, ic.bottom()), QPointF(ic.left() + 14, ic.top() + 6));
+        } else if (m_id == QLatin1String("scoreboard")) {
+            // Trophy cup
+            p.drawLine(QPointF(ic.left() + 4, ic.top() + 2), QPointF(ic.right() - 4, ic.top() + 2));
+            p.drawArc(QRectF(ic.left() + 3, ic.top() + 2, 12, 10), 0, -180 * 16);
+            p.drawLine(QPointF(ic.center().x(), ic.top() + 12), QPointF(ic.center().x(), ic.bottom() - 3));
+            p.drawLine(QPointF(ic.left() + 5, ic.bottom() - 2), QPointF(ic.right() - 5, ic.bottom() - 2));
+        } else if (m_id == QLatin1String("schedule")) {
+            p.drawRoundedRect(QRectF(ic.left() + 1, ic.top() + 3, 16, 14), 2, 2);
+            p.drawLine(QPointF(ic.left() + 1, ic.top() + 7), QPointF(ic.right() - 1, ic.top() + 7));
+            p.drawLine(QPointF(ic.left() + 5, ic.top() + 1), QPointF(ic.left() + 5, ic.top() + 5));
+            p.drawLine(QPointF(ic.right() - 5, ic.top() + 1), QPointF(ic.right() - 5, ic.top() + 5));
+        } else {
+            // Settings gear (simplified)
+            p.drawEllipse(QRectF(ic.center().x() - 3, ic.center().y() - 3, 6, 6));
+            p.drawEllipse(QRectF(ic.center().x() - 7, ic.center().y() - 7, 14, 14));
+        }
+    }
+
+private:
+    QString m_id;
+    bool m_active = false;
+    QColor m_accent;
 };
 } // namespace
 
@@ -181,21 +265,8 @@ void SidebarRail::setLive(bool live)
 
 QPushButton* SidebarRail::addNav(const QString& id, const QString& tip, const QColor& /*color*/)
 {
-    auto* btn = new QPushButton(this);
-    btn->setFixedSize(40, 40);
+    auto* btn = new NavIconButton(id, this);
     btn->setToolTip(tip);
-    btn->setCursor(Qt::PointingHandCursor);
-    btn->setFocusPolicy(Qt::NoFocus);
-
-    QString glyph = QStringLiteral("•");
-    if (id == QLatin1String("dashboard")) glyph = QStringLiteral("▣");
-    else if (id == QLatin1String("chat")) glyph = QStringLiteral("◎");
-    else if (id == QLatin1String("analytics")) glyph = QStringLiteral("▥");
-    else if (id == QLatin1String("scoreboard")) glyph = QStringLiteral("◆");
-    else if (id == QLatin1String("schedule")) glyph = QStringLiteral("☰");
-    else if (id == QLatin1String("settings")) glyph = QStringLiteral("⚙");
-    btn->setText(glyph);
-
     m_buttons.insert(id, btn);
     connect(btn, &QPushButton::clicked, this, [this, id] {
         setActivePage(id);
@@ -209,22 +280,8 @@ void SidebarRail::restyleNav()
     for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
         const QColor color = m_colors.value(it.key(), QColor(QStringLiteral("#6B7280")));
         const bool active = (it.key() == m_active);
-        const QString fill = active
-                                 ? QStringLiteral("rgba(%1,%2,%3,0.18)").arg(color.red()).arg(color.green()).arg(color.blue())
-                                 : QStringLiteral("transparent");
-        const QString border = active
-                                   ? QStringLiteral("rgba(%1,%2,%3,0.55)").arg(color.red()).arg(color.green()).arg(color.blue())
-                                   : QStringLiteral("transparent");
-        const QString text = active ? color.name() : QStringLiteral("#6B7280");
-        it.value()->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background:%1; border:1px solid %2; border-radius:8px; color:%3;"
-            "  font-weight:700; font-size:14px;"
-            "}"
-            "QPushButton:hover {"
-            "  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:%3;"
-            "}")
-                                      .arg(fill, border, text));
+        it.value()->setStyleSheet(QStringLiteral("QPushButton{background:transparent;border:none;}"));
+        static_cast<NavIconButton*>(it.value())->setNavActive(active, color);
         it.value()->setProperty("navActive", active);
         it.value()->setProperty("navColor", color);
     }
@@ -234,20 +291,7 @@ void SidebarRail::restyleNav()
 void SidebarRail::paintEvent(QPaintEvent* event)
 {
     QWidget::paintEvent(event);
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-    for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
-        if (!it.value()->property("navActive").toBool()) continue;
-        const QColor color = it.value()->property("navColor").value<QColor>();
-        if (!color.isValid()) continue;
-        const QRect r = it.value()->geometry().adjusted(-4, -4, 4, 4);
-        QRadialGradient g(r.center(), r.width() * 0.75);
-        g.setColorAt(0, QColor(color.red(), color.green(), color.blue(), 90));
-        g.setColorAt(1, QColor(color.red(), color.green(), color.blue(), 0));
-        p.setPen(Qt::NoPen);
-        p.setBrush(g);
-        p.drawEllipse(r);
-    }
+    // Glow is painted inside NavIconButton for correct z-order under the icon strokes.
 }
 
 } // namespace railshot
