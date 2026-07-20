@@ -28,7 +28,7 @@ protected:
             g.setColorAt(1, QColor(255, 90, 44, 0));
             p.setPen(Qt::NoPen);
             p.setBrush(g);
-            p.drawEllipse(rect().adjusted(-12, -8, 12, 8));
+            p.drawEllipse(rect().adjusted(-6, -4, 6, 4));
         }
         QPushButton::paintEvent(e);
     }
@@ -39,26 +39,27 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("bottomToolbar"));
-    setFixedHeight(52);
+    setFixedHeight(36);
     // MUST scope to #bottomToolbar — unscoped rules flatten every child button to the bar fill.
     setStyleSheet(QStringLiteral(
         "QWidget#bottomToolbar {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #0C0E12);"
-        "  border-top: 2px solid #5A5E68;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #171A1F, stop:1 #0C0E12);"
+        "  border-top: 1px solid #3A3D45;"
         "}"
         "QWidget#bottomToolbar QPushButton#toolbarChromeBtn {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #424854, stop:1 #1A1E26);"
-        "  border: 2px solid #6A7080;"
-        "  border-radius: 4px;"
-        "  color: #F0F2F8;"
-        "  font-weight: 800;"
-        "  font-size: 12px;"
-        "  padding: 6px 14px;"
-        "  min-height: 30px;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #32363F, stop:1 #1A1E26);"
+        "  border: 1px solid #5A5E68;"
+        "  border-radius: 3px;"
+        "  color: #E0E2E8;"
+        "  font-weight: 700;"
+        "  font-size: 10px;"
+        "  padding: 2px 9px;"
+        "  min-height: 22px;"
+        "  max-height: 24px;"
         "}"
         "QWidget#bottomToolbar QPushButton#toolbarChromeBtn:hover {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #4A5568, stop:1 #2A3040);"
-        "  border: 2px solid #4F9EFF;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #3A404C, stop:1 #242830);"
+        "  border: 1px solid #4F9EFF;"
         "  color: #FFFFFF;"
         "}"
         "QWidget#bottomToolbar QPushButton#toolbarChromeBtn:pressed {"
@@ -72,91 +73,95 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         "}"
         "QWidget#bottomToolbar QPushButton#toolbarChromeBtn:checked {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A2A3A, stop:1 #101820);"
-        "  border: 2px solid #4F9EFF;"
+        "  border: 1px solid #4F9EFF;"
         "  color: #7AB8FF;"
         "}"
         "QWidget#bottomToolbar QPushButton#recordButton {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #424854, stop:1 #1A1E26);"
-        "  border: 2px solid #6A7080;"
-        "  border-radius: 4px;"
-        "  color: #F0F2F8;"
-        "  font-weight: 900;"
-        "  font-size: 12px;"
-        "  padding: 6px 14px;"
-        "  min-height: 30px;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #32363F, stop:1 #1A1E26);"
+        "  border: 1px solid #5A5E68;"
+        "  border-radius: 3px;"
+        "  color: #E0E2E8;"
+        "  font-weight: 800;"
+        "  font-size: 10px;"
+        "  padding: 2px 9px;"
+        "  min-height: 22px;"
+        "  max-height: 24px;"
         "}"
         "QWidget#bottomToolbar QPushButton#recordButton:hover {"
-        "  border: 2px solid #EF4444;"
+        "  border: 1px solid #EF4444;"
         "  color: #FECACA;"
         "}"
         "QWidget#bottomToolbar QPushButton#recordButton[recording=\"true\"] {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #9F1D1D, stop:1 #5A1010);"
-        "  border: 2px solid #EF4444;"
+        "  border: 1px solid #EF4444;"
         "  color: #FECACA;"
         "}"
         "QWidget#bottomToolbar QPushButton#streamButton {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FF8C42, stop:1 #CC3A18);"
-        "  border: 2px solid #FFB08A;"
-        "  border-radius: 4px;"
+        "  border: 1px solid #FFB08A;"
+        "  border-radius: 3px;"
         "  color: #FFFFFF;"
         "  font-weight: 900;"
-        "  font-size: 13px;"
-        "  padding: 6px 18px;"
-        "  min-height: 30px;"
+        "  font-size: 11px;"
+        "  padding: 2px 12px;"
+        "  min-height: 22px;"
+        "  max-height: 24px;"
         "}"
         "QWidget#bottomToolbar QPushButton#streamButton:hover {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FFA868, stop:1 #FF5A2C);"
-        "  border: 2px solid #FFD0B0;"
+        "  border: 1px solid #FFD0B0;"
         "}"
         "QWidget#bottomToolbar QPushButton#endStreamButton {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #9F1D1D, stop:1 #5A1010);"
-        "  border: 2px solid #EF4444;"
-        "  border-radius: 4px;"
+        "  border: 1px solid #EF4444;"
+        "  border-radius: 3px;"
         "  color: #FECACA;"
         "  font-weight: 900;"
-        "  font-size: 13px;"
-        "  padding: 6px 18px;"
-        "  min-height: 30px;"
+        "  font-size: 11px;"
+        "  padding: 2px 12px;"
+        "  min-height: 22px;"
+        "  max-height: 24px;"
         "}"
         "QWidget#bottomToolbar QPushButton#addInputBtn {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #3A6AFF, stop:1 #1A3AFF);"
-        "  border: 2px solid #5A8AFF;"
-        "  border-radius: 4px;"
+        "  border: 1px solid #5A8AFF;"
+        "  border-radius: 3px;"
         "  color: #FFFFFF;"
-        "  font-weight: 900;"
-        "  font-size: 12px;"
-        "  padding: 6px 14px;"
-        "  min-height: 30px;"
+        "  font-weight: 800;"
+        "  font-size: 10px;"
+        "  padding: 2px 10px;"
+        "  min-height: 22px;"
+        "  max-height: 24px;"
         "}"
         "QWidget#bottomToolbar QPushButton#addInputBtn:hover {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5A8AFF, stop:1 #3A6AFF);"
-        "  border: 2px solid #8AB4FF;"
+        "  border: 1px solid #8AB4FF;"
         "}"
         "QWidget#bottomToolbar QLabel#statusPill {"
         "  font-family: 'JetBrains Mono','Consolas',monospace;"
-        "  font-size: 9px;"
-        "  color: #A0A8B8;"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #0A0C0F);"
-        "  border: 2px solid #4A4D55;"
-        "  border-radius: 4px;"
-        "  padding: 6px 12px;"
+        "  font-size: 8px;"
+        "  color: #8892A4;"
+        "  background: #0A0C0F;"
+        "  border: 1px solid #3A3D45;"
+        "  border-radius: 2px;"
+        "  padding: 2px 8px;"
         "}"));
 
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(10, 8, 10, 8);
-    row->setSpacing(7);
+    row->setContentsMargins(6, 4, 6, 4);
+    row->setSpacing(4);
 
     auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
     add->setObjectName(QStringLiteral("addInputBtn"));
     add->setCursor(Qt::PointingHandCursor);
-    add->setMinimumHeight(32);
+    add->setFixedHeight(22);
     connect(add, &QPushButton::clicked, this, &BottomToolbar::addInputRequested);
     row->addWidget(add);
 
     m_recordBtn = new QPushButton(QStringLiteral("+ Record"), this);
     m_recordBtn->setObjectName(QStringLiteral("recordButton"));
     m_recordBtn->setCursor(Qt::PointingHandCursor);
-    m_recordBtn->setMinimumHeight(32);
+    m_recordBtn->setFixedHeight(22);
     connect(m_recordBtn, &QPushButton::clicked, this, [this] {
         if (m_engine->telemetrySnapshot().recording) {
             m_engine->stopRecording();
@@ -179,14 +184,14 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* external = new QPushButton(QStringLiteral("External"), this);
     external->setObjectName(QStringLiteral("toolbarChromeBtn"));
     external->setEnabled(false);
-    external->setMinimumHeight(32);
+    external->setFixedHeight(22);
     row->addWidget(external);
 
     m_streamBtn = new StreamGlowButton(QStringLiteral("● Stream"), this);
     m_streamBtn->setObjectName(QStringLiteral("streamButton"));
     m_streamBtn->setCursor(Qt::PointingHandCursor);
-    m_streamBtn->setMinimumWidth(124);
-    m_streamBtn->setMinimumHeight(32);
+    m_streamBtn->setMinimumWidth(96);
+    m_streamBtn->setFixedHeight(22);
     connect(m_streamBtn, &QPushButton::clicked, this, [this] {
         if (m_engine->telemetrySnapshot().streaming) {
             m_engine->stopStreaming();
@@ -203,7 +208,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* multi = new QPushButton(QStringLiteral("MultiCorder"), this);
     multi->setObjectName(QStringLiteral("toolbarChromeBtn"));
     multi->setCursor(Qt::PointingHandCursor);
-    multi->setMinimumHeight(32);
+    multi->setFixedHeight(22);
     connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
     row->addWidget(multi);
     m_multiBtn = multi;
@@ -211,7 +216,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
     playlist->setObjectName(QStringLiteral("toolbarChromeBtn"));
     playlist->setCursor(Qt::PointingHandCursor);
-    playlist->setMinimumHeight(32);
+    playlist->setFixedHeight(22);
     connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
     row->addWidget(playlist);
     m_playlistBtn = playlist;
@@ -219,7 +224,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* overlay = new QPushButton(QStringLiteral("Overlay  ▾"), this);
     overlay->setObjectName(QStringLiteral("toolbarChromeBtn"));
     overlay->setCursor(Qt::PointingHandCursor);
-    overlay->setMinimumHeight(32);
+    overlay->setFixedHeight(22);
     connect(overlay, &QPushButton::clicked, this, [this, overlay] {
         emit overlayMenuRequested(overlay->mapToGlobal(QPoint(0, overlay->height())));
     });
@@ -228,7 +233,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     auto* replayBtn = new QPushButton(QStringLiteral("Save Replay"), this);
     replayBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    replayBtn->setMinimumHeight(32);
+    replayBtn->setFixedHeight(22);
     connect(replayBtn, &QPushButton::clicked, this, [this] {
         QString err;
         if (!m_engine->saveReplay(&err))
@@ -241,7 +246,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* vcamBtn = new QPushButton(QStringLiteral("Virtual Cam"), this);
     vcamBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
     vcamBtn->setCheckable(true);
-    vcamBtn->setMinimumHeight(32);
+    vcamBtn->setFixedHeight(22);
     connect(vcamBtn, &QPushButton::toggled, this, [this, vcamBtn](bool on) {
         QString err;
         if (!m_engine->setVirtualCameraEnabled(on, &err)) {
