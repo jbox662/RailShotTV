@@ -35,6 +35,7 @@
 #include <QMainWindow>
 #include <QDockWidget>
 #include <QByteArray>
+#include <QMouseEvent>
 
 namespace railshot {
 
@@ -135,44 +136,85 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
 constexpr const char* kDockHostStyle = R"(
 QMainWindow#dashboardDockHost {
   background: #0A0C0F;
-  border-top: 1px solid #3A3D45;
+  border-top: 2px solid #4A4D55;
 }
-QMainWindow#dashboardDockHost QDockWidget {
-  color: #E0E2E8;
-  font-family: 'DM Sans';
-  font-size: 10px;
-  font-weight: 800;
-  titlebar-close-icon: none;
+QMainWindow#dashboardDockHost QSplitter::handle:horizontal {
+  background: #2A2D35;
+  width: 4px;
+  margin: 0px;
 }
-QMainWindow#dashboardDockHost QDockWidget::title {
-  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-    stop:0 rgba(79,158,255,0.28), stop:0.55 transparent);
-  border-bottom: 1px solid #3A3D45;
-  border-left: 3px solid #4F9EFF;
-  padding-left: 10px;
-  text-align: left;
-  height: 28px;
+QMainWindow#dashboardDockHost QSplitter::handle:horizontal:hover {
+  background: #4F9EFF;
 }
-QMainWindow#dashboardDockHost QDockWidget#sourcesDock::title {
-  border-left-color: #FF5A2C;
-  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-    stop:0 rgba(255,90,44,0.22), stop:0.55 transparent);
-}
-QMainWindow#dashboardDockHost QDockWidget#mixerDock::title {
-  border-left-color: #A855F7;
-  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-    stop:0 rgba(168,85,247,0.22), stop:0.55 transparent);
-}
-QMainWindow#dashboardDockHost QDockWidget > QWidget {
-  background: #0A0C0F;
-  border: 1px solid #2A2D35;
-}
-QMainWindow#dashboardDockHost QSplitter::handle {
-  background: #3A3D45;
-  width: 3px;
-  height: 3px;
+QMainWindow#dashboardDockHost QSplitter::handle:vertical {
+  background: #2A2D35;
+  height: 4px;
 }
 )";
+
+class DockTitleBar : public QWidget {
+public:
+    DockTitleBar(QDockWidget* dock, const QString& title, const QString& accent, QWidget* parent = nullptr)
+        : QWidget(parent), m_dock(dock)
+    {
+        setFixedHeight(26);
+        setCursor(Qt::SizeAllCursor);
+        setStyleSheet(QStringLiteral(
+            "QWidget#dockTitleBar {"
+            "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "    stop:0 %1, stop:0.45 transparent);"
+            "  border-bottom: 1px solid #3A3D45;"
+            "  border-left: 3px solid %2;"
+            "}").arg(accent + QStringLiteral("40"), accent));
+        setObjectName(QStringLiteral("dockTitleBar"));
+
+        auto* lay = new QHBoxLayout(this);
+        lay->setContentsMargins(8, 0, 4, 0);
+        lay->setSpacing(4);
+
+        auto* lab = new QLabel(title.toUpper(), this);
+        lab->setStyleSheet(QStringLiteral(
+            "color:%1; font-family:'DM Sans'; font-size:10px; font-weight:900;"
+            "letter-spacing:1.5px; background:transparent;").arg(accent));
+        lay->addWidget(lab, 1);
+
+        auto btnStyle = QStringLiteral(
+            "QPushButton{background:transparent;border:none;color:#808898;font-size:11px;padding:2px 4px;}"
+            "QPushButton:hover{color:#E0E2E8;}");
+
+        auto* floatBtn = new QPushButton(QStringLiteral("⧉"), this);
+        floatBtn->setFixedSize(22, 20);
+        floatBtn->setCursor(Qt::PointingHandCursor);
+        floatBtn->setToolTip(QStringLiteral("Float / dock"));
+        floatBtn->setStyleSheet(btnStyle);
+        connect(floatBtn, &QPushButton::clicked, this, [this] {
+            if (m_dock) m_dock->setFloating(!m_dock->isFloating());
+        });
+
+        auto* hideBtn = new QPushButton(QStringLiteral("✕"), this);
+        hideBtn->setFixedSize(22, 20);
+        hideBtn->setCursor(Qt::PointingHandCursor);
+        hideBtn->setToolTip(QStringLiteral("Hide panel (right-click desk to show)"));
+        hideBtn->setStyleSheet(btnStyle);
+        connect(hideBtn, &QPushButton::clicked, this, [this] {
+            if (m_dock) m_dock->hide();
+        });
+
+        lay->addWidget(floatBtn);
+        lay->addWidget(hideBtn);
+    }
+
+protected:
+    void mouseDoubleClickEvent(QMouseEvent* e) override
+    {
+        if (m_dock && e->button() == Qt::LeftButton)
+            m_dock->setFloating(!m_dock->isFloating());
+        QWidget::mouseDoubleClickEvent(e);
+    }
+
+private:
+    QDockWidget* m_dock = nullptr;
+};
 } // namespace
 
 DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
@@ -191,7 +233,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     monitors->addWidget(m_preview, 1);
     monitors->addWidget(transitions);
     monitors->addWidget(m_program, 1);
-    root->addLayout(monitors, 3);
+    root->addLayout(monitors, 5);
 
     // Nested QMainWindow hosts OBS-style docks (must be Qt::Widget, not a top-level window).
     m_dockHost = new QMainWindow(this);
@@ -203,7 +245,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
                                | QMainWindow::AllowTabbedDocks
                                | QMainWindow::GroupedDragging);
     m_dockHost->setStyleSheet(QString::fromLatin1(kDockHostStyle));
-    m_dockHost->setMinimumHeight(180);
+    m_dockHost->setMinimumHeight(200);
     m_dockHost->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_dockHost, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu menu(this);
@@ -222,38 +264,45 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     centralStub->setMaximumHeight(0);
     m_dockHost->setCentralWidget(centralStub);
 
-    // Scenes content
+    // Scenes content — no duplicate header; dock title bar owns the label.
     auto* scenesCol = new QWidget;
     scenesCol->setObjectName(QStringLiteral("chromePanel"));
-    scenesCol->setMinimumWidth(140);
+    scenesCol->setMinimumWidth(150);
+    scenesCol->setStyleSheet(QStringLiteral("background:#0A0C0F;"));
     auto* scenesLay = new QVBoxLayout(scenesCol);
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
     auto* scenesTools = new QWidget(scenesCol);
-    scenesTools->setFixedHeight(28);
+    scenesTools->setFixedHeight(26);
     scenesTools->setStyleSheet(QStringLiteral("background:#0F1218; border-bottom:1px solid #2A2D35;"));
     auto* scenesToolsLay = new QHBoxLayout(scenesTools);
-    scenesToolsLay->setContentsMargins(8, 0, 6, 0);
-    auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
+    scenesToolsLay->setContentsMargins(6, 0, 6, 0);
+    auto* addScene = new QPushButton(QStringLiteral("+ Add Scene"), scenesTools);
     addScene->setObjectName(QStringLiteral("panelAddButton"));
-    addScene->setFixedSize(24, 22);
     addScene->setCursor(Qt::PointingHandCursor);
-    addScene->setToolTip(QStringLiteral("Add scene"));
+    addScene->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#1A2030;border:1px solid #4F9EFF66;color:#7AB8FF;"
+        "font-size:10px;font-weight:700;padding:2px 8px;border-radius:2px;}"
+        "QPushButton:hover{border-color:#4F9EFF;}"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
-    scenesToolsLay->addStretch();
     scenesToolsLay->addWidget(addScene);
+    scenesToolsLay->addStretch();
     scenesLay->addWidget(scenesTools);
     scenesLay->addWidget(new SceneListWidget(engine, scenesCol), 1);
 
     m_tiles = new InputTilesWidget(engine, nullptr);
-    m_tiles->setMinimumWidth(200);
+    m_tiles->setMinimumWidth(220);
     m_mixer = new AudioMixerWidget(engine, nullptr);
+    m_mixer->setMinimumWidth(220);
 
-    m_scenesDock = makeDock(QStringLiteral("Scenes"), QStringLiteral("scenesDock"), scenesCol);
-    m_sourcesDock = makeDock(QStringLiteral("Sources"), QStringLiteral("sourcesDock"), m_tiles);
-    m_mixerDock = makeDock(QStringLiteral("Audio Mixer"), QStringLiteral("mixerDock"), m_mixer);
+    m_scenesDock = makeDock(QStringLiteral("Scenes"), QStringLiteral("scenesDock"),
+                            scenesCol, QStringLiteral("#4F9EFF"));
+    m_sourcesDock = makeDock(QStringLiteral("Sources"), QStringLiteral("sourcesDock"),
+                             m_tiles, QStringLiteral("#FF5A2C"));
+    m_mixerDock = makeDock(QStringLiteral("Audio Mixer"), QStringLiteral("mixerDock"),
+                           m_mixer, QStringLiteral("#A855F7"));
 
     applyDefaultDockLayout();
     m_defaultDockState = m_dockHost->saveState();
@@ -341,7 +390,8 @@ DashboardPage::~DashboardPage()
     saveDockState();
 }
 
-QDockWidget* DashboardPage::makeDock(const QString& title, const QString& objectName, QWidget* content)
+QDockWidget* DashboardPage::makeDock(const QString& title, const QString& objectName,
+                                     QWidget* content, const QString& accent)
 {
     auto* dock = new QDockWidget(title, m_dockHost);
     dock->setObjectName(objectName);
@@ -350,8 +400,9 @@ QDockWidget* DashboardPage::makeDock(const QString& title, const QString& object
     dock->setFeatures(QDockWidget::DockWidgetMovable
                       | QDockWidget::DockWidgetFloatable
                       | QDockWidget::DockWidgetClosable);
-    dock->setMinimumWidth(120);
-    dock->setMinimumHeight(120);
+    dock->setMinimumWidth(140);
+    dock->setMinimumHeight(140);
+    dock->setTitleBarWidget(new DockTitleBar(dock, title, accent));
     dock->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(dock, &QDockWidget::customContextMenuRequested, this, [this, dock](const QPoint& pos) {
         QMenu menu(dock);
@@ -376,7 +427,6 @@ void DashboardPage::applyDefaultDockLayout()
     if (!m_dockHost || !m_scenesDock || !m_sourcesDock || !m_mixerDock)
         return;
 
-    // Clear any prior docking then place Scenes | Sources | Mixer along the bottom.
     m_dockHost->removeDockWidget(m_scenesDock);
     m_dockHost->removeDockWidget(m_sourcesDock);
     m_dockHost->removeDockWidget(m_mixerDock);
@@ -391,9 +441,9 @@ void DashboardPage::applyDefaultDockLayout()
     m_sourcesDock->show();
     m_mixerDock->show();
 
-    // Prefer Sources wider than Scenes/Mixer.
+    // Balanced desk: Scenes | Sources | Mixer (~1 : 2.2 : 1.4)
     m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock},
-                            {180, 520, 300}, Qt::Horizontal);
+                            {200, 440, 280}, Qt::Horizontal);
 }
 
 void DashboardPage::scheduleSaveDockState()
@@ -406,8 +456,9 @@ void DashboardPage::saveDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     auto ui = m_engine->settings()->uiState();
-    ui.insert(QStringLiteral("dashboardDockState"),
+    ui.insert(QStringLiteral("dashboardDockStateV2"),
               QString::fromLatin1(m_dockHost->saveState().toBase64()));
+    ui.remove(QStringLiteral("dashboardDockState")); // drop first-pass layout
     m_engine->settings()->setUiState(ui);
     m_engine->settings()->sync();
 }
@@ -416,7 +467,7 @@ void DashboardPage::restoreDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     const auto ui = m_engine->settings()->uiState();
-    const QString b64 = ui.value(QStringLiteral("dashboardDockState")).toString();
+    const QString b64 = ui.value(QStringLiteral("dashboardDockStateV2")).toString();
     if (b64.isEmpty()) return;
     const QByteArray state = QByteArray::fromBase64(b64.toLatin1());
     if (!state.isEmpty())
@@ -426,13 +477,12 @@ void DashboardPage::restoreDockState()
 void DashboardPage::resetDockLayout()
 {
     m_dockStateReady = false;
-    if (!m_defaultDockState.isEmpty() && m_dockHost)
-        m_dockHost->restoreState(m_defaultDockState);
-    else
-        applyDefaultDockLayout();
+    applyDefaultDockLayout();
+    m_defaultDockState = m_dockHost ? m_dockHost->saveState() : QByteArray();
     if (m_engine && m_engine->settings()) {
         auto ui = m_engine->settings()->uiState();
         ui.remove(QStringLiteral("dashboardDockState"));
+        ui.remove(QStringLiteral("dashboardDockStateV2"));
         m_engine->settings()->setUiState(ui);
         m_engine->settings()->sync();
     }

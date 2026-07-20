@@ -43,7 +43,8 @@ private:
     void setPlayListOpen(bool open);
     void layoutSidePanels();
 
-    QDockWidget* makeDock(const QString& title, const QString& objectName, QWidget* content);
+    QDockWidget* makeDock(const QString& title, const QString& objectName, QWidget* content,
+                          const QString& accent);
     void applyDefaultDockLayout();
     void saveDockState();
     void restoreDockState();

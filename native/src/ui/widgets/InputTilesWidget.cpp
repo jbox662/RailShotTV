@@ -67,37 +67,27 @@ void InputTilesWidget::refresh()
     const auto p = m_engine->projectSnapshot();
     const auto* scene = p.findScene(p.activeSceneId);
     if (!scene || scene->sources.isEmpty()) {
-        // Ghost tile strip so the row reads like a dense desk, not a blank void
-        for (int g = 0; g < 4; ++g) {
-            auto* ghost = new QFrame(this);
-            ghost->setMinimumWidth(160);
-            ghost->setMaximumWidth(200);
-            ghost->setStyleSheet(QStringLiteral(
-                "QFrame{background:#0D0F12; border-right:1px solid #1A1D24;}"));
-            auto* gCol = new QVBoxLayout(ghost);
-            gCol->setContentsMargins(0, 0, 0, 0);
-            gCol->setSpacing(0);
-            auto* gh = new QLabel(QStringLiteral("—"), ghost);
-            gh->setFixedHeight(22);
-            gh->setAlignment(Qt::AlignCenter);
-            gh->setStyleSheet(QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1D22,stop:1 #141619);"
-                "color:#3A3D45; font-size:10px; border-bottom:1px solid #1A1D24;"));
-            gCol->addWidget(gh);
-            auto* body = new QLabel(ghost);
-            body->setMinimumHeight(60);
-            body->setAlignment(Qt::AlignCenter);
-            body->setStyleSheet(QStringLiteral("background:#080A0D; color:#2A2D35; font-size:20px;"));
-            body->setText(QStringLiteral("◇"));
-            gCol->addWidget(body, 1);
-            m_row->addWidget(ghost, 1);
-        }
-        auto* hint = new QLabel(QStringLiteral("No inputs — click Add Input to begin"), this);
+        auto* empty = new QWidget(this);
+        auto* emptyLay = new QVBoxLayout(empty);
+        emptyLay->setContentsMargins(16, 12, 16, 12);
+        emptyLay->setSpacing(6);
+        auto* icon = new QLabel(QStringLiteral("◇"), empty);
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setStyleSheet(QStringLiteral("color:#3A3D45; font-size:28px; background:transparent;"));
+        auto* hint = new QLabel(QStringLiteral("No inputs yet"), empty);
         hint->setAlignment(Qt::AlignCenter);
         hint->setStyleSheet(QStringLiteral(
-            "color:#606878; font-size:11px; background:transparent; padding:0 12px;"));
-        m_row->addWidget(hint, 0);
-        m_row->addStretch(1);
+            "color:#A0A8B8; font-size:13px; font-weight:700; background:transparent;"));
+        auto* sub = new QLabel(QStringLiteral("Click Add Input below to begin"), empty);
+        sub->setAlignment(Qt::AlignCenter);
+        sub->setWordWrap(true);
+        sub->setStyleSheet(QStringLiteral("color:#606878; font-size:11px; background:transparent;"));
+        emptyLay->addStretch(1);
+        emptyLay->addWidget(icon);
+        emptyLay->addWidget(hint);
+        emptyLay->addWidget(sub);
+        emptyLay->addStretch(1);
+        m_row->addWidget(empty, 1);
         return;
     }
     const QString selected = m_engine->selectedSourceId();
