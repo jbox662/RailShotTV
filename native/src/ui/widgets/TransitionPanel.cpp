@@ -56,6 +56,8 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
         b->setCheckable(true);
         b->setChecked(t == QLatin1String("Cut"));
         b->setCursor(Qt::PointingHandCursor);
+        if (t == QLatin1String("CubeZoom"))
+            b->setToolTip(QStringLiteral("Uses a crossfade for now (true 3D cube deferred)"));
         group->addButton(b);
         m_typeButtons.push_back(b);
         connect(b, &QPushButton::clicked, this, [this, t] {

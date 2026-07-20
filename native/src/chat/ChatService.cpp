@@ -105,6 +105,7 @@ bool ChatService::connectTwitch(const QString& token, const QString& channel, QS
     disconnectPlatform(QStringLiteral("twitch"));
 
     QString nick;
+    QString userId;
     {
         QNetworkRequest req{QUrl(QStringLiteral("https://id.twitch.tv/oauth2/validate"))};
         QString auth = token;
@@ -122,7 +123,11 @@ bool ChatService::connectTwitch(const QString& token, const QString& channel, QS
         loop.exec();
         if (reply->error() == QNetworkReply::NoError) {
             const auto doc = QJsonDocument::fromJson(reply->readAll());
-            nick = doc.object().value(QStringLiteral("login")).toString();
+            const auto obj = doc.object();
+            nick = obj.value(QStringLiteral("login")).toString();
+            userId = obj.value(QStringLiteral("user_id")).toString();
+            if (m_twitchClientId.isEmpty())
+                m_twitchClientId = obj.value(QStringLiteral("client_id")).toString();
         }
         reply->deleteLater();
     }
@@ -131,9 +136,15 @@ bool ChatService::connectTwitch(const QString& token, const QString& channel, QS
 
     m_twitchNick = nick.toLower();
     m_twitchChannel = channel.toLower();
+    m_twitchUserId = userId;
     m_twitchToken = token;
     if (m_twitchToken.startsWith(QLatin1String("oauth:"), Qt::CaseInsensitive))
         m_twitchToken = m_twitchToken.mid(6);
+
+    if (!resolveTwitchBroadcasterId(error)) {
+        // Still allow IRC chat even if Helix ids fail (moderation will be unavailable).
+        Logger::warn(QStringLiteral("Twitch broadcaster id resolve failed — moderation APIs disabled"));
+    }
 
     m_twitchSock = new QTcpSocket(this);
     connect(m_twitchSock, &QTcpSocket::connected, this, &ChatService::onTwitchReady);
@@ -152,6 +163,195 @@ bool ChatService::connectTwitch(const QString& token, const QString& channel, QS
         m_connected.append(QStringLiteral("twitch"));
     emit connectionChanged();
     return true;
+}
+
+QNetworkRequest ChatService::helixRequest(const QUrl& url) const
+{
+    QNetworkRequest req(url);
+    req.setRawHeader("Authorization", QByteArray("Bearer ") + m_twitchToken.toUtf8());
+    req.setRawHeader("Client-Id", m_twitchClientId.toUtf8());
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    return req;
+}
+
+bool ChatService::helixWait(QNetworkReply* reply, QByteArray* body, QString* error, int timeoutMs)
+{
+    QEventLoop loop;
+    QTimer::singleShot(timeoutMs, &loop, &QEventLoop::quit);
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+    const QByteArray raw = reply->readAll();
+    if (body) *body = raw;
+    const bool ok = reply->error() == QNetworkReply::NoError
+                    && reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() < 400;
+    if (!ok && error) {
+        *error = QStringLiteral("Helix error %1: %2")
+                     .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt())
+                     .arg(QString::fromUtf8(raw).left(200));
+    }
+    reply->deleteLater();
+    return ok;
+}
+
+bool ChatService::resolveTwitchBroadcasterId(QString* error)
+{
+    m_twitchBroadcasterId.clear();
+    if (m_twitchClientId.isEmpty() || m_twitchToken.isEmpty() || m_twitchChannel.isEmpty()) {
+        if (error) *error = QStringLiteral("Twitch Client-Id / token / channel required for Helix");
+        return false;
+    }
+    QUrl url(QStringLiteral("https://api.twitch.tv/helix/users"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("login"), m_twitchChannel);
+    url.setQuery(q);
+    QNetworkReply* reply = m_nam.get(helixRequest(url));
+    QByteArray body;
+    if (!helixWait(reply, &body, error))
+        return false;
+    const auto arr = QJsonDocument::fromJson(body).object().value(QStringLiteral("data")).toArray();
+    if (arr.isEmpty()) {
+        if (error) *error = QStringLiteral("Twitch user not found: %1").arg(m_twitchChannel);
+        return false;
+    }
+    m_twitchBroadcasterId = arr.first().toObject().value(QStringLiteral("id")).toString();
+    return !m_twitchBroadcasterId.isEmpty();
+}
+
+bool ChatService::applyTwitchChatSettings(const TwitchChatSettings& settings, QString* error)
+{
+    if (!isTwitchConnected()) {
+        if (error) *error = QStringLiteral("Connect Twitch first");
+        return false;
+    }
+    if (m_twitchBroadcasterId.isEmpty() && !resolveTwitchBroadcasterId(error))
+        return false;
+    if (m_twitchUserId.isEmpty()) {
+        if (error) *error = QStringLiteral("Missing moderator user id — re-auth with Twitch");
+        return false;
+    }
+    if (m_twitchClientId.isEmpty()) {
+        if (error) *error = QStringLiteral("Twitch Client-Id required (enter in Chat connections)");
+        return false;
+    }
+
+    QUrl url(QStringLiteral("https://api.twitch.tv/helix/chat/settings"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("broadcaster_id"), m_twitchBroadcasterId);
+    q.addQueryItem(QStringLiteral("moderator_id"), m_twitchUserId);
+    url.setQuery(q);
+
+    QJsonObject body;
+    body.insert(QStringLiteral("slow_mode"), settings.slowMode);
+    if (settings.slowMode)
+        body.insert(QStringLiteral("slow_mode_wait_time"), settings.slowWaitSec);
+    body.insert(QStringLiteral("subscriber_mode"), settings.subscriberMode);
+    body.insert(QStringLiteral("emote_mode"), settings.emoteMode);
+
+    QNetworkRequest req = helixRequest(url);
+    QNetworkReply* reply = m_nam.sendCustomRequest(req, QByteArray("PATCH"),
+                                                   QJsonDocument(body).toJson(QJsonDocument::Compact));
+    QByteArray raw;
+    const bool ok = helixWait(reply, &raw, error);
+    emit moderationResult(ok, ok ? QStringLiteral("Chat settings updated")
+                                 : (error ? *error : QStringLiteral("Failed")));
+    if (ok)
+        appendSystem(QStringLiteral("twitch"),
+                     QStringLiteral("Moderation: slow=%1 sub=%2 emote=%3")
+                         .arg(settings.slowMode ? QStringLiteral("on") : QStringLiteral("off"),
+                              settings.subscriberMode ? QStringLiteral("on") : QStringLiteral("off"),
+                              settings.emoteMode ? QStringLiteral("on") : QStringLiteral("off")));
+    return ok;
+}
+
+bool ChatService::clearTwitchChat(QString* error)
+{
+    if (!isTwitchConnected()) {
+        if (error) *error = QStringLiteral("Connect Twitch first");
+        return false;
+    }
+    if (m_twitchBroadcasterId.isEmpty() && !resolveTwitchBroadcasterId(error))
+        return false;
+    if (m_twitchUserId.isEmpty() || m_twitchClientId.isEmpty()) {
+        if (error) *error = QStringLiteral("Missing Twitch mod credentials");
+        return false;
+    }
+
+    QUrl url(QStringLiteral("https://api.twitch.tv/helix/moderation/chat"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("broadcaster_id"), m_twitchBroadcasterId);
+    q.addQueryItem(QStringLiteral("moderator_id"), m_twitchUserId);
+    url.setQuery(q);
+
+    QNetworkRequest req = helixRequest(url);
+    QNetworkReply* reply = m_nam.sendCustomRequest(req, QByteArray("DELETE"), QByteArray());
+    QByteArray raw;
+    const bool ok = helixWait(reply, &raw, error);
+    emit moderationResult(ok, ok ? QStringLiteral("Chat cleared on Twitch")
+                                 : (error ? *error : QStringLiteral("Clear failed")));
+    if (ok)
+        appendSystem(QStringLiteral("twitch"), QStringLiteral("Cleared Twitch chat"));
+    return ok;
+}
+
+bool ChatService::timeoutTwitchUser(const QString& userLogin, int durationSec, QString* error)
+{
+    if (!isTwitchConnected()) {
+        if (error) *error = QStringLiteral("Connect Twitch first");
+        return false;
+    }
+    if (m_twitchBroadcasterId.isEmpty() && !resolveTwitchBroadcasterId(error))
+        return false;
+    if (m_twitchUserId.isEmpty() || m_twitchClientId.isEmpty()) {
+        if (error) *error = QStringLiteral("Missing Twitch mod credentials");
+        return false;
+    }
+
+    QString login = userLogin.trimmed().toLower();
+    if (login.startsWith(QLatin1Char('@')))
+        login = login.mid(1);
+    if (login.isEmpty()) {
+        if (error) *error = QStringLiteral("User login required");
+        return false;
+    }
+
+    QUrl userUrl(QStringLiteral("https://api.twitch.tv/helix/users"));
+    QUrlQuery uq;
+    uq.addQueryItem(QStringLiteral("login"), login);
+    userUrl.setQuery(uq);
+    QNetworkReply* userReply = m_nam.get(helixRequest(userUrl));
+    QByteArray userBody;
+    if (!helixWait(userReply, &userBody, error))
+        return false;
+    const auto users = QJsonDocument::fromJson(userBody).object().value(QStringLiteral("data")).toArray();
+    if (users.isEmpty()) {
+        if (error) *error = QStringLiteral("User not found: %1").arg(login);
+        return false;
+    }
+    const QString targetId = users.first().toObject().value(QStringLiteral("id")).toString();
+
+    QUrl url(QStringLiteral("https://api.twitch.tv/helix/moderation/bans"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("broadcaster_id"), m_twitchBroadcasterId);
+    q.addQueryItem(QStringLiteral("moderator_id"), m_twitchUserId);
+    url.setQuery(q);
+
+    QJsonObject data;
+    data.insert(QStringLiteral("user_id"), targetId);
+    if (durationSec > 0)
+        data.insert(QStringLiteral("duration"), durationSec);
+    QJsonObject body;
+    body.insert(QStringLiteral("data"), data);
+
+    QNetworkReply* reply = m_nam.post(helixRequest(url), QJsonDocument(body).toJson(QJsonDocument::Compact));
+    QByteArray raw;
+    const bool ok = helixWait(reply, &raw, error);
+    const QString detail = durationSec > 0
+                               ? QStringLiteral("Timed out %1 for %2s").arg(login).arg(durationSec)
+                               : QStringLiteral("Banned %1").arg(login);
+    emit moderationResult(ok, ok ? detail : (error ? *error : QStringLiteral("Timeout failed")));
+    if (ok)
+        appendSystem(QStringLiteral("twitch"), detail);
+    return ok;
 }
 
 void ChatService::onTwitchReady()
@@ -365,6 +565,11 @@ void ChatService::disconnectPlatform(const QString& platform)
             m_twitchSock = nullptr;
         }
         m_twitchBuf.clear();
+        m_twitchUserId.clear();
+        m_twitchBroadcasterId.clear();
+        m_twitchChannel.clear();
+        m_twitchToken.clear();
+        m_twitchNick.clear();
     }
     if (platform == QLatin1String("youtube") || platform.isEmpty()) {
         m_youtubePoll.stop();

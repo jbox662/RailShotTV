@@ -186,9 +186,13 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     m_chromaSim = new QSlider(Qt::Horizontal, effects);
     m_chromaSim->setRange(5, 95);
     m_chromaSim->setValue(40);
+    m_blur = new QSlider(Qt::Horizontal, effects);
+    m_blur->setRange(0, 100);
+    m_blur->setValue(0);
     eForm->addRow(m_chromaKey);
     eForm->addRow(QStringLiteral("Similarity"), m_chromaSim);
-    auto* effectsNote = new QLabel(QStringLiteral("Blur / sharpen / pixelate still coming. Chroma key is live."), effects);
+    eForm->addRow(QStringLiteral("Blur"), m_blur);
+    auto* effectsNote = new QLabel(QStringLiteral("Chroma + blur are live. Sharpen / pixelate still deferred."), effects);
     effectsNote->setWordWrap(true);
     effectsNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
     eForm->addRow(effectsNote);
@@ -268,9 +272,11 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
             settings.insert(QStringLiteral("chromaKey"), m_chromaKey->isChecked());
         if (m_chromaSim)
             settings.insert(QStringLiteral("chromaSimilarity"), m_chromaSim->value());
+        if (m_blur)
+            settings.insert(QStringLiteral("blur"), m_blur->value());
         m_engine->updateSourceSettings(src->id, settings);
     };
-    for (auto* s : {m_brightness, m_contrast, m_saturation, m_chromaSim})
+    for (auto* s : {m_brightness, m_contrast, m_saturation, m_chromaSim, m_blur})
         if (s) connect(s, &QSlider::valueChanged, this, [pushColour](int) { pushColour(); });
     if (m_chromaKey)
         connect(m_chromaKey, &QCheckBox::toggled, this, [pushColour](bool) { pushColour(); });
@@ -323,6 +329,7 @@ void SourcePropertiesWidget::applyAll()
     settings.insert(QStringLiteral("saturation"), m_saturation->value());
     settings.insert(QStringLiteral("chromaKey"), m_chromaKey && m_chromaKey->isChecked());
     settings.insert(QStringLiteral("chromaSimilarity"), m_chromaSim ? m_chromaSim->value() : 40);
+    settings.insert(QStringLiteral("blur"), m_blur ? m_blur->value() : 0);
     settings.insert(QStringLiteral("audioVolume"), m_volume->value());
     settings.insert(QStringLiteral("audioMute"), m_audioMute->isChecked());
     m_engine->updateSourceSettings(src->id, settings);
@@ -358,6 +365,8 @@ void SourcePropertiesWidget::rebuild()
             m_chromaKey->setChecked(src->settings.value(QStringLiteral("chromaKey")).toBool());
         if (m_chromaSim)
             m_chromaSim->setValue(src->settings.value(QStringLiteral("chromaSimilarity")).toInt(40));
+        if (m_blur)
+            m_blur->setValue(src->settings.value(QStringLiteral("blur")).toInt(0));
         m_volume->setValue(src->settings.value(QStringLiteral("audioVolume")).toInt(100));
         m_audioMute->setChecked(src->settings.value(QStringLiteral("audioMute")).toBool());
     } else {

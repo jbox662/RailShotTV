@@ -250,7 +250,9 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->colorAdd[0] = brightness + mid;
         cb->colorAdd[1] = brightness + mid;
         cb->colorAdd[2] = brightness + mid;
-        cb->colorAdd[3] = 0.0f;
+        // colorAdd.a = blur radius in UV space (0..~0.02)
+        const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
+        cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
         // Chroma key (optional)
         cb->_padCrop[0] = src.settings.value(QStringLiteral("chromaKey")).toBool(false) ? 1.0f : 0.0f;
         cb->_padCrop[1] = static_cast<float>(src.settings.value(QStringLiteral("chromaSimilarity")).toDouble(40.0) / 100.0);
@@ -359,7 +361,7 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
             cb->cropMax[0] = 1.0f;
             cb->cropMax[1] = 1.0f;
         } else {
-            // Fade / Merge / CubeZoom: dissolve old over new
+            // Fade / Merge / CubeZoom (crossfade alias): dissolve old over new
             cb->rect[0] = 0.0f;
             cb->rect[1] = 0.0f;
             cb->rect[2] = 1.0f;

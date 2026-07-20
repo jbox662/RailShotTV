@@ -31,6 +31,7 @@
 #include <QPointer>
 #include <QJsonObject>
 #include <QHostAddress>
+#include <QMenu>
 #include <functional>
 
 namespace railshot {
@@ -151,10 +152,15 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     auto* modTab = new QWidget(tabs);
     auto* modLay = new QVBoxLayout(modTab);
     modLay->setContentsMargins(16, 16, 16, 16);
-    auto makeToggle = [&](const QString& label, const QString& color) {
+    auto* modNote = new QLabel(QStringLiteral("Twitch Helix — re-auth after Wave 4 to pick up mod scopes."), modTab);
+    modNote->setWordWrap(true);
+    modNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+    modLay->addWidget(modNote);
+
+    auto makeToggle = [&](const QString& label, const QString& color, const QString& tip) {
         auto* b = new QPushButton(label, modTab);
         b->setCheckable(true);
-        b->setToolTip(QStringLiteral("Requires platform moderation API (local UI state only for now)"));
+        b->setToolTip(tip);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
             "border:1px solid %1;color:%1;padding:8px;border-radius:3px;font-weight:800;}"
@@ -163,15 +169,54 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
         modLay->addWidget(b);
         return b;
     };
-    makeToggle(QStringLiteral("Slow Mode (local)"), QStringLiteral("#FBBF24"));
-    makeToggle(QStringLiteral("Subscribers Only (local)"), QStringLiteral("#A855F7"));
-    makeToggle(QStringLiteral("Emote Only (local)"), QStringLiteral("#22D3EE"));
-    makeToggle(QStringLiteral("Mute Alerts (local)"), QStringLiteral("#FF5A2C"));
-    auto* clearChat = new QPushButton(QStringLiteral("Clear Local Chat"), modTab);
-    clearChat->setObjectName(QStringLiteral("chromeBtnBrand"));
-    clearChat->setToolTip(QStringLiteral("Clears the local feed only"));
-    connect(clearChat, &QPushButton::clicked, this, [list] { list->clear(); });
-    modLay->addWidget(clearChat);
+    auto* slowBtn = makeToggle(QStringLiteral("Slow Mode (30s)"), QStringLiteral("#FBBF24"),
+                               QStringLiteral("Twitch Helix: slow_mode 30s"));
+    auto* subBtn = makeToggle(QStringLiteral("Subscribers Only"), QStringLiteral("#A855F7"),
+                              QStringLiteral("Twitch Helix: subscriber_mode"));
+    auto* emoteBtn = makeToggle(QStringLiteral("Emote Only"), QStringLiteral("#22D3EE"),
+                                QStringLiteral("Twitch Helix: emote_mode"));
+    auto* muteAlerts = makeToggle(QStringLiteral("Mute Alerts (local)"), QStringLiteral("#FF5A2C"),
+                                  QStringLiteral("Hides alert-like lines in the local feed only"));
+    bool* muteAlertsOn = new bool(false);
+
+    auto pushTwitchSettings = [=] {
+        if (!chat->isTwitchConnected()) {
+            QMessageBox::information(this, QStringLiteral("Moderation"),
+                                     QStringLiteral("Connect Twitch first (with mod scopes)."));
+            return;
+        }
+        chat->setTwitchClientId(clientId->text().trimmed());
+        TwitchChatSettings s;
+        s.slowMode = slowBtn->isChecked();
+        s.slowWaitSec = 30;
+        s.subscriberMode = subBtn->isChecked();
+        s.emoteMode = emoteBtn->isChecked();
+        QString err;
+        if (!chat->applyTwitchChatSettings(s, &err))
+            QMessageBox::warning(this, QStringLiteral("Moderation"), err);
+    };
+    connect(slowBtn, &QPushButton::clicked, this, pushTwitchSettings);
+    connect(subBtn, &QPushButton::clicked, this, pushTwitchSettings);
+    connect(emoteBtn, &QPushButton::clicked, this, pushTwitchSettings);
+    connect(muteAlerts, &QPushButton::toggled, this, [muteAlertsOn](bool on) { *muteAlertsOn = on; });
+
+    auto* clearTwitch = new QPushButton(QStringLiteral("Clear Twitch Chat"), modTab);
+    clearTwitch->setObjectName(QStringLiteral("chromeBtnBrand"));
+    clearTwitch->setToolTip(QStringLiteral("Helix DELETE /moderation/chat"));
+    connect(clearTwitch, &QPushButton::clicked, this, [=] {
+        chat->setTwitchClientId(clientId->text().trimmed());
+        QString err;
+        if (!chat->clearTwitchChat(&err))
+            QMessageBox::warning(this, QStringLiteral("Moderation"), err);
+        else
+            list->clear();
+    });
+    modLay->addWidget(clearTwitch);
+
+    auto* clearLocal = new QPushButton(QStringLiteral("Clear Local Feed"), modTab);
+    clearLocal->setObjectName(QStringLiteral("chromeBtn"));
+    connect(clearLocal, &QPushButton::clicked, this, [list] { list->clear(); });
+    modLay->addWidget(clearLocal);
     modLay->addStretch();
     tabs->addTab(modTab, QStringLiteral("Moderation"));
 
@@ -257,6 +302,7 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
             applyError(QStringLiteral("Empty OAuth token"));
             return;
         }
+        chat->setTwitchClientId(clientId->text().trimmed());
         const QString secretId = SecretStore::makeTokenId(plat, QStringLiteral("default"));
         SecretStore::store(secretId, token);
         QString err;
@@ -399,12 +445,19 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     connect(chat, &ChatService::messageReceived, this, [=](const ChatMessage& m) {
         if (!filterAll->isChecked() && !filterPlatform->isEmpty() && m.platform != *filterPlatform)
             return;
+        const bool alertish = m.user == QLatin1String("system")
+                              || m.text.contains(QStringLiteral("subscribed"), Qt::CaseInsensitive)
+                              || m.text.contains(QStringLiteral("raid"), Qt::CaseInsensitive)
+                              || m.text.startsWith(QLatin1Char('!'));
+        if (*muteAlertsOn && alertish)
+            return;
         QString accent = QStringLiteral("#C8CAD0");
         if (m.platform == QLatin1String("twitch")) accent = QStringLiteral("#9146FF");
         else if (m.platform == QLatin1String("youtube")) accent = QStringLiteral("#FF0000");
         else if (m.platform == QLatin1String("facebook")) accent = QStringLiteral("#1877F2");
         auto* item = new QListWidgetItem(QStringLiteral("[%1] %2: %3").arg(m.platform, m.user, m.text));
         item->setData(Qt::UserRole, m.platform);
+        item->setData(Qt::UserRole + 1, m.user);
         item->setForeground(QColor(accent));
         if (m.text.contains(QLatin1Char('@')))
             item->setBackground(QColor(QStringLiteral("#FBBF2420")));
@@ -416,7 +469,36 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
         if (m.text.contains(QStringLiteral("!"), Qt::CaseInsensitive) || m.text.size() > 80) {
             highlights->insertItem(0, QStringLiteral("%1: %2").arg(m.user, m.text.left(48)));
         }
-        activity->addItem(QStringLiteral("%1 joined conversation").arg(m.user));
+        activity->addItem(QStringLiteral("%1 · %2").arg(m.user, m.text.left(48)));
+    });
+
+    list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(list, &QListWidget::customContextMenuRequested, this, [=](const QPoint& pos) {
+        auto* item = list->itemAt(pos);
+        if (!item) return;
+        if (item->data(Qt::UserRole).toString() != QLatin1String("twitch")) return;
+        const QString user = item->data(Qt::UserRole + 1).toString();
+        if (user.isEmpty() || user == QLatin1String("system") || user == QLatin1String("you"))
+            return;
+        QMenu menu(list);
+        auto* t10 = menu.addAction(QStringLiteral("Timeout %1 (10m)").arg(user));
+        auto* t1h = menu.addAction(QStringLiteral("Timeout %1 (1h)").arg(user));
+        auto* ban = menu.addAction(QStringLiteral("Ban %1").arg(user));
+        QAction* chosen = menu.exec(list->mapToGlobal(pos));
+        if (!chosen) return;
+        chat->setTwitchClientId(clientId->text().trimmed());
+        QString err;
+        int sec = 0;
+        if (chosen == t10) sec = 600;
+        else if (chosen == t1h) sec = 3600;
+        if (!chat->timeoutTwitchUser(user, sec, &err))
+            QMessageBox::warning(this, QStringLiteral("Moderation"), err);
+    });
+
+    connect(chat, &ChatService::moderationResult, this, [=](bool ok, const QString& detail) {
+        activity->addItem(ok ? QStringLiteral("✓ %1").arg(detail)
+                             : QStringLiteral("✗ %1").arg(detail));
+        activity->scrollToBottom();
     });
 
     connect(filterAll, &QCheckBox::toggled, this, [=](bool all) {

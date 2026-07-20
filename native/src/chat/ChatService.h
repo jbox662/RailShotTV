@@ -8,6 +8,9 @@
 #include <QTimer>
 #include <QSet>
 
+class QNetworkReply;
+class QNetworkRequest;
+
 namespace railshot {
 
 struct ChatMessage {
@@ -19,11 +22,23 @@ struct ChatMessage {
     bool pinned = false;
 };
 
+struct TwitchChatSettings {
+    bool slowMode = false;
+    int slowWaitSec = 30;
+    bool subscriberMode = false;
+    bool emoteMode = false;
+};
+
 class ChatService : public QObject {
     Q_OBJECT
 public:
     explicit ChatService(QObject* parent = nullptr);
     ~ChatService() override;
+
+    void setTwitchClientId(const QString& clientId) { m_twitchClientId = clientId.trimmed(); }
+    QString twitchClientId() const { return m_twitchClientId; }
+    QString twitchChannel() const { return m_twitchChannel; }
+    bool isTwitchConnected() const { return m_connected.contains(QLatin1String("twitch")); }
 
     /// Twitch: channel name. YouTube: liveChatId or videoId. Facebook: live video id.
     bool connectPlatform(const QString& platform,
@@ -35,9 +50,15 @@ public:
     QVector<ChatMessage> messages() const { return m_messages; }
     QStringList connectedPlatforms() const { return m_connected; }
 
+    /// Helix moderation (requires Twitch connected + Client-Id + mod scopes).
+    bool applyTwitchChatSettings(const TwitchChatSettings& settings, QString* error = nullptr);
+    bool clearTwitchChat(QString* error = nullptr);
+    bool timeoutTwitchUser(const QString& userLogin, int durationSec, QString* error = nullptr);
+
 signals:
     void messageReceived(const ChatMessage& msg);
     void connectionChanged();
+    void moderationResult(bool ok, const QString& detail);
 
 private slots:
     void onTwitchReady();
@@ -54,6 +75,9 @@ private:
     bool connectYouTube(const QString& token, const QString& liveChatOrVideoId, QString* error);
     bool connectFacebook(const QString& token, const QString& liveVideoId, QString* error);
     void resolveYouTubeLiveChatId(const QString& token, const QString& videoId);
+    bool resolveTwitchBroadcasterId(QString* error);
+    QNetworkRequest helixRequest(const QUrl& url) const;
+    bool helixWait(QNetworkReply* reply, QByteArray* body, QString* error, int timeoutMs = 8000);
 
     QNetworkAccessManager m_nam;
     QVector<ChatMessage> m_messages;
@@ -64,6 +88,9 @@ private:
     QString m_twitchNick;
     QString m_twitchChannel;
     QString m_twitchToken;
+    QString m_twitchClientId;
+    QString m_twitchUserId;
+    QString m_twitchBroadcasterId;
     QByteArray m_twitchBuf;
 
     QTimer m_youtubePoll;

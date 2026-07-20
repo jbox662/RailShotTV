@@ -228,7 +228,9 @@ void AnalyticsPage::refreshFromHistory()
                                      .arg(maxUptime)
                                      .arg(m_rangeMinutes));
     }
-    m_audiencePanel->setText(QStringLiteral("Followers / revenue need platform APIs.\nLocal stream health history is active."));
+    m_audiencePanel->setText(QStringLiteral(
+        "Followers / revenue deferred (platform APIs).\n"
+        "Local stream health history is active."));
 }
 
 } // namespace railshot

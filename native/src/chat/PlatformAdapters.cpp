@@ -64,7 +64,9 @@ QString PlatformAdapters::authorizeUrl(const QString& platform,
 
     if (platform == QLatin1String("twitch")) {
         url = QUrl(QStringLiteral("https://id.twitch.tv/oauth2/authorize"));
-        q.addQueryItem(QStringLiteral("scope"), QStringLiteral("chat:read chat:edit"));
+        q.addQueryItem(QStringLiteral("scope"),
+                       QStringLiteral("chat:read chat:edit moderator:manage:chat_settings "
+                                      "moderator:manage:chat_messages moderator:manage:banned_users"));
     } else if (platform == QLatin1String("youtube")) {
         url = QUrl(QStringLiteral("https://accounts.google.com/o/oauth2/v2/auth"));
         q.addQueryItem(QStringLiteral("scope"), QStringLiteral("https://www.googleapis.com/auth/youtube.force-ssl"));
