@@ -50,7 +50,12 @@ void SceneGraph::setPreviewSceneId(const QString& id)
     {
         QMutexLocker lock(&m_mutex);
         m_project.previewSceneId = id;
-        m_project.activeSceneId = id;
+        // Arming Preview also selects the edit scene (OBS current scene).
+        // Clearing Preview must NOT wipe activeSceneId — sources still need a home.
+        if (!id.isEmpty())
+            m_project.activeSceneId = id;
+        else if (m_project.activeSceneId.isEmpty() && !m_project.scenes.isEmpty())
+            m_project.activeSceneId = m_project.scenes.first().id;
     }
     emit previewChanged(id);
     emit projectChanged();

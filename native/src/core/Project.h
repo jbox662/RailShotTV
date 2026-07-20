@@ -33,6 +33,12 @@ public:
     const SceneItem* findScene(const QString& id) const;
     SourceItem* findSource(const QString& sceneId, const QString& sourceId);
 
+    /// OBS "current scene" for editing: Preview if armed, else active, else first.
+    QString editSceneId() const;
+    SourceItem* findSourceInEditScene(const QString& sourceId);
+    const SourceItem* findSourceAnywhere(const QString& sourceId) const;
+    SourceItem* findSourceAnywhere(const QString& sourceId);
+
     QString addScene(const QString& name = QString());
     bool removeScene(const QString& id);
     QString duplicateScene(const QString& id);

@@ -136,6 +136,44 @@ SourceItem* Project::findSource(const QString& sceneId, const QString& sourceId)
     return nullptr;
 }
 
+QString Project::editSceneId() const
+{
+    if (!previewSceneId.isEmpty() && findScene(previewSceneId))
+        return previewSceneId;
+    if (!activeSceneId.isEmpty() && findScene(activeSceneId))
+        return activeSceneId;
+    if (!scenes.isEmpty())
+        return scenes.first().id;
+    return {};
+}
+
+SourceItem* Project::findSourceInEditScene(const QString& sourceId)
+{
+    return findSource(editSceneId(), sourceId);
+}
+
+const SourceItem* Project::findSourceAnywhere(const QString& sourceId) const
+{
+    for (const auto& sc : scenes) {
+        for (const auto& src : sc.sources) {
+            if (src.id == sourceId)
+                return &src;
+        }
+    }
+    return nullptr;
+}
+
+SourceItem* Project::findSourceAnywhere(const QString& sourceId)
+{
+    for (auto& sc : scenes) {
+        for (auto& src : sc.sources) {
+            if (src.id == sourceId)
+                return &src;
+        }
+    }
+    return nullptr;
+}
+
 void Project::ensureDefaults()
 {
     if (scenes.isEmpty()) {
@@ -146,8 +184,11 @@ void Project::ensureDefaults()
         activeSceneId = sc.id;
         previewSceneId = sc.id;
     }
-    if (activeSceneId.isEmpty())
+    if (activeSceneId.isEmpty() || !findScene(activeSceneId))
         activeSceneId = scenes.first().id;
+    // Keep a valid Preview target so newly added sources are visible (OBS current-scene).
+    if (previewSceneId.isEmpty() || !findScene(previewSceneId))
+        previewSceneId = activeSceneId;
 }
 
 QString Project::addScene(const QString& name)

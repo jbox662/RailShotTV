@@ -106,9 +106,14 @@ bool EngineController::initialize(QString* error)
         QVector<const SceneItem*> scenes;
         if (const auto* preview = project.findScene(project.previewSceneId))
             scenes.push_back(preview);
+        else if (const auto* edit = project.findScene(project.editSceneId()))
+            scenes.push_back(edit);
         if (const auto* program = project.findScene(project.programSceneId)) {
-            if (project.programSceneId != project.previewSceneId)
-                scenes.push_back(program);
+            bool listed = false;
+            for (const auto* s : scenes) {
+                if (s == program) { listed = true; break; }
+            }
+            if (!listed) scenes.push_back(program);
         }
         m_capture->syncWithScenes(scenes);
         m_capture->poll();
@@ -120,8 +125,12 @@ bool EngineController::initialize(QString* error)
             activeType = m_transition->type();
         }
 
-        if (const auto* preview = project.findScene(project.previewSceneId))
-            m_compositor->compose(*preview, m_capture->frameBus(), false, 1.0f);
+        // Preview paints the Preview scene; if cleared, fall back to edit scene (OBS current).
+        const SceneItem* previewScene = project.findScene(project.previewSceneId);
+        if (!previewScene)
+            previewScene = project.findScene(project.editSceneId());
+        if (previewScene)
+            m_compositor->compose(*previewScene, m_capture->frameBus(), false, 1.0f);
         if (const auto* program = project.findScene(project.programSceneId)) {
             // Crossfade: compose new program at full, then blend hold on top
             const bool cross = m_transition && m_transition->isActive() && m_transition->isCrossfade()
@@ -276,8 +285,17 @@ QString EngineController::addSource(SourceType type, const QString& name, const 
 {
     QString id;
     m_sceneGraph->mutate([&](Project& p) {
-        id = p.addSource(p.activeSceneId, type, name);
-        if (auto* s = p.findSource(p.activeSceneId, id)) {
+        p.ensureDefaults();
+        // OBS adds to the current (Preview) scene so the item paints immediately.
+        const QString sceneId = p.editSceneId();
+        if (sceneId.isEmpty())
+            return;
+        if (p.previewSceneId.isEmpty())
+            p.previewSceneId = sceneId;
+        if (p.activeSceneId.isEmpty())
+            p.activeSceneId = sceneId;
+        id = p.addSource(sceneId, type, name);
+        if (auto* s = p.findSource(sceneId, id)) {
             if (type == SourceType::Scoreboard)
                 s->settings = m_scoreboard->state().toJson();
             else if (type == SourceType::LowerThird) {
@@ -287,18 +305,28 @@ QString EngineController::addSource(SourceType type, const QString& name, const 
                 s->settings.insert(QStringLiteral("title"), QStringLiteral("Alert"));
                 s->settings.insert(QStringLiteral("body"), QStringLiteral("New follower"));
             }
-            // Caller settings win / merge on top of type defaults.
             for (auto it = settings.begin(); it != settings.end(); ++it)
                 s->settings.insert(it.key(), it.value());
+            s->visible = true;
         }
     });
+    if (!id.isEmpty())
+        rebuildSourcesForActiveScenes();
     return id;
 }
 
 void EngineController::removeSource(const QString& sourceId)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        p.removeSource(p.activeSceneId, sourceId);
+        // Remove from whichever scene owns it (usually the edit scene).
+        for (auto& sc : p.scenes) {
+            for (int i = 0; i < sc.sources.size(); ++i) {
+                if (sc.sources[i].id == sourceId) {
+                    sc.sources.removeAt(i);
+                    return;
+                }
+            }
+        }
     });
     m_capture->detachSource(sourceId);
 }
@@ -306,7 +334,7 @@ void EngineController::removeSource(const QString& sourceId)
 void EngineController::setSourceVisible(const QString& sourceId, bool visible)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSource(p.activeSceneId, sourceId))
+        if (auto* s = p.findSourceAnywhere(sourceId))
             s->visible = visible;
     });
 }
@@ -314,7 +342,7 @@ void EngineController::setSourceVisible(const QString& sourceId, bool visible)
 void EngineController::setSourceName(const QString& sourceId, const QString& name)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSource(p.activeSceneId, sourceId))
+        if (auto* s = p.findSourceAnywhere(sourceId))
             s->name = name;
     });
 }
@@ -322,7 +350,7 @@ void EngineController::setSourceName(const QString& sourceId, const QString& nam
 void EngineController::setSourceLocked(const QString& sourceId, bool locked)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSource(p.activeSceneId, sourceId))
+        if (auto* s = p.findSourceAnywhere(sourceId))
             s->locked = locked;
     });
 }
@@ -330,7 +358,15 @@ void EngineController::setSourceLocked(const QString& sourceId, bool locked)
 void EngineController::moveSourceZOrder(const QString& sourceId, int delta)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        p.moveSource(p.activeSceneId, sourceId, delta);
+        // Prefer scene that owns the source
+        for (const auto& sc : p.scenes) {
+            for (const auto& src : sc.sources) {
+                if (src.id == sourceId) {
+                    p.moveSource(sc.id, sourceId, delta);
+                    return;
+                }
+            }
+        }
     });
 }
 
@@ -345,18 +381,15 @@ std::optional<SourceItem> EngineController::selectedSource() const
 {
     if (m_selectedSourceId.isEmpty() || !m_sceneGraph) return std::nullopt;
     const auto p = m_sceneGraph->snapshot();
-    if (const auto* sc = p.findScene(p.activeSceneId)) {
-        for (const auto& src : sc->sources) {
-            if (src.id == m_selectedSourceId) return src;
-        }
-    }
+    if (const auto* src = p.findSourceAnywhere(m_selectedSourceId))
+        return *src;
     return std::nullopt;
 }
 
 void EngineController::updateSourceTransform(const QString& sourceId, const Transform& t)
 {
     m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSource(p.activeSceneId, sourceId))
+        if (auto* s = p.findSourceAnywhere(sourceId))
             s->transform = t;
     });
 }
@@ -366,7 +399,7 @@ void EngineController::updateSourceSettings(const QString& sourceId, const QJson
     SourceItem updated;
     bool found = false;
     m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSource(p.activeSceneId, sourceId)) {
+        if (auto* s = p.findSourceAnywhere(sourceId)) {
             s->settings = settings;
             updated = *s;
             found = true;

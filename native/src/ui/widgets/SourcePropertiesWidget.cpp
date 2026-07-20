@@ -112,7 +112,7 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
             settings.insert(QStringLiteral("categoryColor"), c);
             m_engine->updateSourceSettings(src->id, settings);
             m_engine->sceneGraph()->mutate([&](Project& p) {
-                if (auto* s = p.findSource(p.activeSceneId, src->id))
+                if (auto* s = p.findSourceAnywhere(src->id))
                     s->colorHex = c;
             });
         });

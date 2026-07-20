@@ -211,7 +211,7 @@ bool BrowserSource::start(ID3D11Device* device, QString* error)
 #endif
     }
     if (!m_texture) {
-        // Create transparent placeholder so compositor has something.
+        // Visible placeholder so Preview shows the source even before the helper paints.
         D3D11_TEXTURE2D_DESC desc{};
         desc.Width = static_cast<UINT>(m_width);
         desc.Height = static_cast<UINT>(m_height);
@@ -220,10 +220,18 @@ bool BrowserSource::start(ID3D11Device* device, QString* error)
         desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
         desc.SampleDesc.Count = 1;
         desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
         ComPtr<ID3D11Texture2D> tex;
-        if (SUCCEEDED(m_device->CreateTexture2D(&desc, nullptr, &tex)))
+        if (SUCCEEDED(m_device->CreateTexture2D(&desc, nullptr, &tex))) {
+            ComPtr<ID3D11RenderTargetView> rtv;
+            if (SUCCEEDED(m_device->CreateRenderTargetView(tex.Get(), nullptr, &rtv))) {
+                ComPtr<ID3D11DeviceContext> ctx;
+                m_device->GetImmediateContext(&ctx);
+                const float clear[4] = {0.08f, 0.14f, 0.28f, 1.0f}; // readable slate blue
+                ctx->ClearRenderTargetView(rtv.Get(), clear);
+            }
             m_texture = tex.Detach();
+        }
     }
     m_running = true;
     return true;
@@ -257,7 +265,7 @@ bool BrowserSource::acquireLatest(VideoFrame& out)
     out.width = m_width;
     out.height = m_height;
     out.sourceId = m_id;
-    out.opaque = false;
+    out.opaque = true;
     return true;
 }
 
