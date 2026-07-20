@@ -233,8 +233,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         const QString id = m_engine->addSource(r.type, r.name);
         if (!id.isEmpty() && !r.settings.isEmpty())
             m_engine->updateSourceSettings(id, r.settings);
+        // Select the new input on the dashboard; open settings only via gear / context menu.
         m_engine->setSelectedSourceId(id);
-        openDrawer();
     });
 
     connect(m_toolbar, &BottomToolbar::goLiveRequested, this, [this] {
