@@ -64,7 +64,7 @@ Handle hitHandle(const QRectF& r, const QPointF& p, qreal pad = 8.0)
     return Handle::None;
 }
 
-/** Paints stage border + L-brackets in layout margins around the D3D HWND (overlays on HWND don't show). */
+/** Thin accent frame around the D3D HWND (no corner L-brackets). */
 class StageChrome : public QWidget {
 public:
     StageChrome(bool program, QWidget* parent = nullptr)
@@ -90,31 +90,17 @@ protected:
         const int a = m_program ? (m_live ? 255 : 180) : 220;
         QColor border = accent;
         border.setAlpha(a);
-        p.setPen(QPen(border, 3));
+        p.setPen(QPen(border, 2));
         p.setBrush(Qt::NoBrush);
-        // Outer frame in the margin ring
         p.drawRect(rect().adjusted(1, 1, -2, -2));
 
-        const int L = 22;
-        const int inset = 5;
-        p.setPen(QPen(accent, 4, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
-        auto corner = [&](int x, int y, int dx, int dy) {
-            p.drawLine(x, y, x + dx * L, y);
-            p.drawLine(x, y, x, y + dy * L);
-        };
-        corner(inset, inset, 1, 1);
-        corner(width() - inset - 1, inset, -1, 1);
-        corner(inset, height() - inset - 1, 1, -1);
-        corner(width() - inset - 1, height() - inset - 1, -1, -1);
-
-        // ON AIR only when live (header already has PREVIEW/PROGRAM chip — avoid duplicate)
         if (m_program && m_live) {
             QFont f = p.font();
             f.setFamily(QStringLiteral("DM Sans"));
             f.setBold(true);
             f.setPointSize(8);
             p.setFont(f);
-            const QRect air(12, 6, 54, 16);
+            const QRect air(10, 4, 54, 16);
             p.setBrush(QColor(QStringLiteral("#FF5A2C")));
             p.setPen(Qt::NoPen);
             p.drawRoundedRect(air, 2, 2);
@@ -366,7 +352,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     // Stage chrome: brackets in margins; label chip lives in header only
     stage = new StageChrome(program, this);
     auto* stageLay = new QVBoxLayout(stage);
-    stageLay->setContentsMargins(10, m_program ? 24 : 10, 10, 10);
+    stageLay->setContentsMargins(3, m_program ? 20 : 3, 3, 3);
     stageLay->setSpacing(0);
 
     auto* stackHost = new QWidget(stage);
