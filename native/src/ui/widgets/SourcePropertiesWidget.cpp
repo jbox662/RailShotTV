@@ -39,6 +39,7 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     root->setSpacing(0);
 
     auto* header = new QWidget(this);
+    m_header = header;
     header->setFixedHeight(42);
     header->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.55 transparent);"
@@ -47,13 +48,13 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     headerLay->setContentsMargins(14, 0, 10, 0);
     m_title = new QLabel(QStringLiteral("INPUT SETTINGS"), header);
     m_title->setObjectName(QStringLiteral("panelTitleBlue"));
-    auto* closeBtn = new QPushButton(QStringLiteral("✕"), header);
-    closeBtn->setFixedSize(28, 24);
-    closeBtn->setCursor(Qt::PointingHandCursor);
-    connect(closeBtn, &QPushButton::clicked, this, &SourcePropertiesWidget::closeRequested);
+    m_closeBtn = new QPushButton(QStringLiteral("✕"), header);
+    m_closeBtn->setFixedSize(28, 24);
+    m_closeBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_closeBtn, &QPushButton::clicked, this, &SourcePropertiesWidget::closeRequested);
     headerLay->addWidget(m_title);
     headerLay->addStretch();
-    headerLay->addWidget(closeBtn);
+    headerLay->addWidget(m_closeBtn);
     root->addWidget(header);
 
     m_empty = new QLabel(QStringLiteral("Select a source to edit its settings"), this);
@@ -223,6 +224,7 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     formLay->addWidget(m_tabs, 1);
 
     auto* footer = new QWidget(m_formHost);
+    m_footer = footer;
     footer->setFixedHeight(48);
     footer->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #16181E,stop:1 #0F1114);"
@@ -298,6 +300,43 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     rebuild();
 }
 
+void SourcePropertiesWidget::setDialogMode(bool on)
+{
+    m_dialogMode = on;
+    if (on) {
+        setMinimumWidth(420);
+        setMaximumWidth(16777215);
+        setObjectName(QStringLiteral("inputSettingsDialogBody"));
+        setStyleSheet(QStringLiteral(
+            "QWidget#inputSettingsDialogBody {"
+            "  background:#12151A; border:none;"
+            "}"
+            "QTabBar::tab { background:#12151A; color:#8892A4; padding:9px 12px; font-size:10px; font-weight:800;"
+            "  border:1px solid #2A2D35; border-bottom:2px solid transparent; }"
+            "QTabBar::tab:selected { color:#7AB8FF; border-bottom:2px solid #4F9EFF; background:#0C1830; }"
+            "QLineEdit, QDoubleSpinBox { background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8;"
+            "  border-radius:3px; padding:5px 7px; font-size:11px; }"
+            "QLineEdit:focus, QDoubleSpinBox:focus { border:2px solid #4F9EFF; }"
+            "QLabel#sectionTitle { color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px; }"));
+        if (m_header) {
+            m_header->setStyleSheet(QStringLiteral(
+                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.22),stop:0.55 transparent);"
+                "border-bottom:1px solid #3A3D45;"));
+        }
+        if (m_closeBtn) m_closeBtn->hide();
+        if (m_footer) m_footer->hide();
+    } else {
+        setFixedWidth(460);
+        if (m_closeBtn) m_closeBtn->show();
+        if (m_footer) m_footer->show();
+    }
+}
+
+void SourcePropertiesWidget::applyAndClose()
+{
+    applyAll();
+}
+
 void SourcePropertiesWidget::applyTransformFromUi()
 {
     if (m_block || !m_engine) return;
@@ -344,7 +383,9 @@ void SourcePropertiesWidget::rebuild()
     m_empty->setVisible(!has);
     m_formHost->setVisible(has);
     if (has) {
-        m_title->setText(QStringLiteral("INPUT SETTINGS — %1").arg(src->name.toUpper()));
+        m_title->setText(m_dialogMode
+                             ? QStringLiteral("PROPERTIES — %1").arg(src->name.toUpper())
+                             : QStringLiteral("INPUT SETTINGS — %1").arg(src->name.toUpper()));
         m_name->setText(src->name);
         m_visible->setChecked(src->visible);
         m_locked->setChecked(src->locked);

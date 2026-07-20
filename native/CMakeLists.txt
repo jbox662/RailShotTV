@@ -311,6 +311,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/SidebarRail.cpp
     src/ui/widgets/SourcePropertiesWidget.h
     src/ui/widgets/SourcePropertiesWidget.cpp
+    src/ui/widgets/SourcePropertiesDialog.h
+    src/ui/widgets/SourcePropertiesDialog.cpp
     src/ui/widgets/AddSourceDialog.h
     src/ui/widgets/AddSourceDialog.cpp
     src/ui/widgets/StreamStatusWidget.h

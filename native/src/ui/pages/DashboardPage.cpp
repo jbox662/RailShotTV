@@ -6,7 +6,7 @@
 #include "ui/widgets/AudioMixerWidget.h"
 #include "ui/widgets/BottomToolbar.h"
 #include "ui/widgets/GoLiveDialog.h"
-#include "ui/widgets/SourcePropertiesWidget.h"
+#include "ui/widgets/SourcePropertiesDialog.h"
 #include "ui/widgets/AddSourceDialog.h"
 #include "ui/widgets/MultiCorderPanel.h"
 #include "ui/widgets/PlayListPanel.h"
@@ -343,9 +343,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_drawerBackdrop->hide();
     m_drawerBackdrop->setAttribute(Qt::WA_TransparentForMouseEvents, false);
 
-    m_props = new SourcePropertiesWidget(engine, this);
-    m_props->hide();
-    connect(m_props, &SourcePropertiesWidget::closeRequested, this, [this] { closeDrawer(); });
+    // Input settings open as an OBS-style floating dialog (not a fullscreen/side drawer).
+    m_props = nullptr;
 
     m_multi = new MultiCorderPanel(engine, this);
     m_multi->hide();
@@ -361,8 +360,10 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         m_engine->setSelectedSourceId(id);
     });
 
-    connect(m_tiles, &InputTilesWidget::configureSourceRequested, this, [this](const QString&) {
-        openDrawer();
+    connect(m_tiles, &InputTilesWidget::configureSourceRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        SourcePropertiesDialog dlg(m_engine, id, this);
+        dlg.exec();
     });
 
     connect(m_toolbar, &BottomToolbar::addInputRequested, this, [this] {
@@ -550,27 +551,19 @@ void DashboardPage::setBasicMode(bool on)
 
 void DashboardPage::openDrawer()
 {
-    setMultiCorderOpen(false);
-    setPlayListOpen(false);
-    layoutDrawer();
-    m_drawerBackdrop->show();
-    m_drawerBackdrop->raise();
-    m_props->show();
-    m_props->raise();
+    // Legacy side-drawer path removed — input settings use SourcePropertiesDialog.
 }
 
 void DashboardPage::closeDrawer()
 {
-    m_props->hide();
     if (!m_multi->isVisible() && !m_playlist->isVisible())
         m_drawerBackdrop->hide();
 }
 
 void DashboardPage::layoutDrawer()
 {
-    if (!m_drawerBackdrop || !m_props) return;
+    if (!m_drawerBackdrop) return;
     m_drawerBackdrop->setGeometry(0, 0, width(), height());
-    m_props->setGeometry(width() - 460, 0, 460, height());
 }
 
 void DashboardPage::setMultiCorderOpen(bool open)
@@ -586,7 +579,7 @@ void DashboardPage::setMultiCorderOpen(bool open)
         m_multi->refresh();
     } else {
         m_multi->hide();
-        if (!m_playlist->isVisible() && !m_props->isVisible())
+        if (!m_playlist->isVisible())
             m_drawerBackdrop->hide();
     }
 }
@@ -604,7 +597,7 @@ void DashboardPage::setPlayListOpen(bool open)
         m_playlist->refresh();
     } else {
         m_playlist->hide();
-        if (!m_multi->isVisible() && !m_props->isVisible())
+        if (!m_multi->isVisible())
             m_drawerBackdrop->hide();
     }
 }
@@ -622,8 +615,6 @@ void DashboardPage::layoutSidePanels()
 void DashboardPage::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    if (m_props && m_props->isVisible())
-        layoutDrawer();
     if ((m_multi && m_multi->isVisible()) || (m_playlist && m_playlist->isVisible()))
         layoutSidePanels();
 }

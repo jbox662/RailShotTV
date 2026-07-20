@@ -7,6 +7,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QTabWidget;
 class QSlider;
+class QPushButton;
 
 namespace railshot {
 class EngineController;
@@ -15,6 +16,11 @@ class SourcePropertiesWidget : public QWidget {
     Q_OBJECT
 public:
     explicit SourcePropertiesWidget(EngineController* engine, QWidget* parent = nullptr);
+
+    /// When true, hide drawer chrome / internal footer (host dialog provides OK/Cancel).
+    void setDialogMode(bool on);
+    void applyAndClose();
+    void reload() { rebuild(); }
 
 signals:
     void closeRequested();
@@ -29,6 +35,9 @@ private:
     QLabel* m_empty = nullptr;
     QTabWidget* m_tabs = nullptr;
     QWidget* m_formHost = nullptr;
+    QWidget* m_header = nullptr;
+    QWidget* m_footer = nullptr;
+    QPushButton* m_closeBtn = nullptr;
 
     QLineEdit* m_name = nullptr;
     QCheckBox* m_visible = nullptr;
@@ -52,6 +61,7 @@ private:
     QSlider* m_volume = nullptr;
     QCheckBox* m_audioMute = nullptr;
     bool m_block = false;
+    bool m_dialogMode = false;
 };
 
 } // namespace railshot
