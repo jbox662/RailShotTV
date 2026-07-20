@@ -84,14 +84,17 @@ QPixmap thumbFor(const OverlayTemplateInfo& t, int w = 160, int h = 90)
 OverlayLibraryWidget::OverlayLibraryWidget(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("overlayLibrary"));
     setFixedWidth(240);
-    setStyleSheet(QStringLiteral("background:#141928; border-left:1px solid #2A3350;"));
+    setStyleSheet(QStringLiteral(
+        "QWidget#overlayLibrary{background:#141928; border-left:2px solid #4F9EFF66;}"));
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(8, 8, 8, 8);
     root->setSpacing(6);
 
     auto* title = new QLabel(QStringLiteral("OVERLAY LIBRARY"), this);
-    title->setStyleSheet(QStringLiteral("color:#8892A4; font-weight:800; font-size:10px; letter-spacing:1.5px;"));
+    title->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-weight:900; font-size:10px; letter-spacing:1.5px; background:transparent;"));
     root->addWidget(title);
 
     auto* cats = new QHBoxLayout();
@@ -112,8 +115,9 @@ OverlayLibraryWidget::OverlayLibraryWidget(QWidget* parent)
         b->setFixedHeight(22);
         b->setProperty("catId", QString::fromLatin1(c.id));
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1E2640;border:1px solid #2A3350;color:%1;font-size:9px;font-weight:700;padding:2px 4px;}"
-            "QPushButton:checked{border-color:%1;}").arg(QString::fromLatin1(c.color)));
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A3550,stop:1 #1A2035);"
+            "border:1px solid #4A4D55;color:%1;font-size:9px;font-weight:800;padding:2px 4px;}"
+            "QPushButton:checked{border:2px solid %1;background:#122033;}").arg(QString::fromLatin1(c.color)));
         if (QString::fromLatin1(c.id) == QLatin1String("all")) b->setChecked(true);
         group->addButton(b);
         cats->addWidget(b);

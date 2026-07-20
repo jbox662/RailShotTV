@@ -17,8 +17,8 @@ PlayListPanel::PlayListPanel(EngineController* engine, QWidget* parent)
     setFixedWidth(300);
     setStyleSheet(QStringLiteral(
         "QFrame#playListPanel {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #13151A, stop:1 #0F1114);"
-        "  border-left: 1px solid #2A2D35;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #16181E, stop:1 #0F1114);"
+        "  border-left: 2px solid #A855F7;"
         "}"));
 
     auto* root = new QVBoxLayout(this);
@@ -26,17 +26,19 @@ PlayListPanel::PlayListPanel(EngineController* engine, QWidget* parent)
     root->setSpacing(0);
 
     auto* header = new QWidget(this);
+    header->setObjectName(QStringLiteral("playListHeader"));
     header->setFixedHeight(36);
     header->setStyleSheet(
-        QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;")
+        QStringLiteral("QWidget#playListHeader{background:#0F1114; border-bottom:1px solid #3A3D45;}")
         + theme::panelHeaderStyle(theme::PanelAccent::Violet));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(12, 0, 8, 0);
     auto* title = new QLabel(QStringLiteral("PLAYLIST"), header);
     title->setStyleSheet(QStringLiteral(
-        "color:#D8B4FE; font-weight:800; font-size:11px; letter-spacing:1.5px; background:transparent;"));
+        "color:#C084FC; font-weight:900; font-size:11px; letter-spacing:1.5px; background:transparent;"));
     auto* close = new QPushButton(QStringLiteral("✕"), header);
-    close->setFixedSize(28, 24);
+    close->setObjectName(QStringLiteral("chromeBtn"));
+    close->setFixedSize(26, 22);
     connect(close, &QPushButton::clicked, this, &PlayListPanel::closeRequested);
     h->addWidget(title);
     h->addStretch();
@@ -46,19 +48,17 @@ PlayListPanel::PlayListPanel(EngineController* engine, QWidget* parent)
     m_list = new QListWidget(this);
     m_list->setStyleSheet(QStringLiteral(
         "QListWidget{background:#0A0C0F;border:none;}"
-        "QListWidget::item{padding:10px 12px;border-bottom:1px solid #15181E;color:#C8CAD0;}"
-        "QListWidget::item:selected{background:#1A1228;color:#D8B4FE;}"));
+        "QListWidget::item{padding:10px 12px;border-bottom:1px solid #2A2D35;color:#E0E2E8;}"
+        "QListWidget::item:selected{background:#1A1228;color:#D8B4FE;border-left:3px solid #A855F7;}"));
     connect(m_list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
         m_engine->setPreviewScene(item->data(Qt::UserRole).toString());
     });
     root->addWidget(m_list, 1);
 
     auto* go = new QPushButton(QStringLiteral("▶  GO (Preview → Program)"), this);
-    go->setMinimumHeight(40);
+    go->setObjectName(QStringLiteral("chromeBtnSuccess"));
+    go->setMinimumHeight(36);
     go->setCursor(Qt::PointingHandCursor);
-    go->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#22C55E;color:#000;font-weight:800;border:none;border-radius:0;}"
-        "QPushButton:hover{background:#4ADE80;}"));
     connect(go, &QPushButton::clicked, this, [this] {
         if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
             m_engine->go();

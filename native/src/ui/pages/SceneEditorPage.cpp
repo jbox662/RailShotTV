@@ -75,8 +75,7 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
     auto* header = theme::makePageHeader(QStringLiteral("Scene Editor"), theme::PanelAccent::Blue, this);
     auto* headerLay = qobject_cast<QHBoxLayout*>(header->layout());
     auto* back = new QPushButton(QStringLiteral("← Dashboard"), header);
-    back->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#1E2640;border:1px solid #2A3350;color:#4F9EFF;font-weight:700;padding:6px 12px;}"));
+    back->setObjectName(QStringLiteral("chromeBtnPrimary"));
     connect(back, &QPushButton::clicked, this, &SceneEditorPage::backToDashboard);
     if (headerLay) headerLay->addWidget(back);
     root->addWidget(header);
@@ -87,15 +86,16 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
 
     // Left: scenes
     auto* left = new QFrame(this);
+    left->setObjectName(QStringLiteral("sceneEditorLeft"));
     left->setFixedWidth(180);
-    left->setStyleSheet(QStringLiteral("background:#0A0C0F; border-right:1px solid #2A2D35;"));
     auto* leftLay = new QVBoxLayout(left);
     leftLay->setContentsMargins(0, 0, 0, 0);
     auto* scenesHead = new QLabel(QStringLiteral("  SCENES"), left);
     scenesHead->setFixedHeight(28);
     scenesHead->setStyleSheet(QStringLiteral(
-        "color:#4F9EFF; font-weight:800; font-size:10px; letter-spacing:1.5px;"
-        "background:#0F1114; border-bottom:1px solid #1A1D24;"));
+        "color:#4F9EFF; font-weight:900; font-size:10px; letter-spacing:2px;"
+        "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.55 transparent);"
+        "border-bottom:1px solid #3A3D45; border-left:3px solid #4F9EFF;"));
     leftLay->addWidget(scenesHead);
     leftLay->addWidget(new SceneListWidget(engine, left), 1);
     body->addWidget(left);
@@ -108,20 +108,21 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
     auto* hostLay = new QVBoxLayout(m_canvasHost);
     hostLay->setContentsMargins(12, 12, 12, 12);
     m_canvas = new PreviewWidget(engine, false, m_canvasHost);
-    m_canvas->setStyleSheet(QStringLiteral("background:transparent; border:1px solid #1A2A3A;"));
+    m_canvas->setStyleSheet(QStringLiteral("background:transparent; border:2px solid #3A3D45;"));
     hostLay->addWidget(m_canvas, 1);
     canvasCol->addWidget(m_canvasHost, 1);
 
     // Transitions rail
     auto* trans = new QFrame(this);
-    trans->setFixedHeight(44);
-    trans->setStyleSheet(QStringLiteral("background:#141619; border-top:1px solid #2A2D35;"));
+    trans->setObjectName(QStringLiteral("sceneTransRail"));
+    trans->setFixedHeight(40);
     auto* tLay = new QHBoxLayout(trans);
     tLay->setContentsMargins(8, 4, 8, 4);
     const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Wipe"),
                                QStringLiteral("Slide"), QStringLiteral("Stinger")};
     for (const auto& t : types) {
         auto* b = new QPushButton(t, trans);
+        b->setObjectName(QStringLiteral("chromeBtn"));
         b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, [this, t] {
             TransitionType ty = TransitionType::Cut;
@@ -137,6 +138,7 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
     tLay->addStretch();
     auto* go = new QPushButton(QStringLiteral("GO"), trans);
     go->setObjectName(QStringLiteral("goButton"));
+    go->setMinimumWidth(72);
     connect(go, &QPushButton::clicked, this, [this] { m_engine->go(); });
     tLay->addWidget(go);
     canvasCol->addWidget(trans);

@@ -40,13 +40,13 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
 
     // ── Left: Connections ─────────────────────────────────────────────────
     auto* left = new QFrame(this);
+    left->setObjectName(QStringLiteral("chatLeftRail"));
     left->setFixedWidth(220);
-    left->setStyleSheet(QStringLiteral("background:#0F1114; border-right:1px solid #2A2D35;"));
     auto* leftLay = new QVBoxLayout(left);
     leftLay->setContentsMargins(12, 12, 12, 12);
     leftLay->setSpacing(8);
     auto* connTitle = new QLabel(QStringLiteral("CONNECTIONS"), left);
-    connTitle->setStyleSheet(QStringLiteral("color:#A855F7; font-weight:800; font-size:10px; letter-spacing:1.5px;"));
+    connTitle->setStyleSheet(QStringLiteral("color:#C084FC; font-weight:900; font-size:10px; letter-spacing:1.5px; background:transparent;"));
     leftLay->addWidget(connTitle);
 
     auto* platform = new QComboBox(left);
@@ -75,9 +75,9 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     leftLay->addLayout(statusRow);
 
     auto* oauthBtn = new QPushButton(QStringLiteral("Open OAuth"), left);
+    oauthBtn->setObjectName(QStringLiteral("chromeBtn"));
     auto* connectBtn = new QPushButton(QStringLiteral("Connect"), left);
-    connectBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#9146FF;color:white;font-weight:700;border:none;border-radius:4px;padding:8px;}"));
+    connectBtn->setObjectName(QStringLiteral("chromeBtnViolet"));
     leftLay->addWidget(oauthBtn);
     leftLay->addWidget(connectBtn);
 
@@ -115,13 +115,14 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     chatLay->setContentsMargins(8, 8, 8, 8);
     auto* list = new QListWidget(chatTab);
     list->setStyleSheet(QStringLiteral(
-        "QListWidget{background:#0A0C0F;border:1px solid #2A2D35;border-radius:4px;}"
-        "QListWidget::item{padding:8px;border-bottom:1px solid #15181E;}"));
+        "QListWidget{background:#0A0C0F;border:1px solid #4A4D55;border-radius:4px;}"
+        "QListWidget::item{padding:8px;border-bottom:1px solid #2A2D35;}"));
     chatLay->addWidget(list, 1);
     auto* sendRow = new QHBoxLayout();
     auto* input = new QLineEdit(chatTab);
     input->setPlaceholderText(QStringLiteral("Send a message…"));
     auto* send = new QPushButton(QStringLiteral("Send"), chatTab);
+    send->setObjectName(QStringLiteral("chromeBtnPrimary"));
     sendRow->addWidget(input, 1);
     sendRow->addWidget(send);
     chatLay->addLayout(sendRow);
@@ -139,8 +140,10 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
         auto* b = new QPushButton(label, modTab);
         b->setCheckable(true);
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid %1;color:%1;padding:10px;border-radius:4px;font-weight:700;}"
-            "QPushButton:checked{background:%120;}").arg(color));
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
+            "border:1px solid %1;color:%1;padding:8px;border-radius:3px;font-weight:800;}"
+            "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 %120,stop:1 #12151A);"
+            "border:2px solid %1;color:#FFFFFF;}").arg(color));
         modLay->addWidget(b);
         return b;
     };
@@ -149,8 +152,7 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     makeToggle(QStringLiteral("Emote Only"), QStringLiteral("#22D3EE"));
     makeToggle(QStringLiteral("Mute Alerts"), QStringLiteral("#FF5A2C"));
     auto* clearChat = new QPushButton(QStringLiteral("Clear All Chat"), modTab);
-    clearChat->setStyleSheet(QStringLiteral(
-        "QPushButton{background:rgba(255,90,44,0.12);border:1px solid #FF5A2C;color:#FF5A2C;padding:10px;font-weight:700;}"));
+    clearChat->setObjectName(QStringLiteral("chromeBtnBrand"));
     connect(clearChat, &QPushButton::clicked, this, [list] { list->clear(); });
     modLay->addWidget(clearChat);
     modLay->addStretch();
@@ -161,8 +163,8 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
 
     // ── Right: pinned / highlights ─────────────────────────────────────────
     auto* right = new QFrame(this);
+    right->setObjectName(QStringLiteral("chatRightRail"));
     right->setFixedWidth(220);
-    right->setStyleSheet(QStringLiteral("background:#0F1114; border-left:1px solid #2A2D35;"));
     auto* rightLay = new QVBoxLayout(right);
     rightLay->setContentsMargins(12, 12, 12, 12);
     auto* pinTitle = new QLabel(QStringLiteral("PINNED"), right);
@@ -201,8 +203,9 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
             channel->setPlaceholderText(QStringLiteral("twitch channel"));
         }
         connectBtn->setStyleSheet(QStringLiteral(
-            "QPushButton{background:%1;color:white;font-weight:700;border:none;border-radius:4px;padding:8px;}")
-                                      .arg(color));
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 %1,stop:1 #1A1E26);"
+            "color:white;font-weight:800;border:1px solid %1;border-radius:3px;padding:7px 12px;}"
+            "QPushButton:hover{border-color:#FFFFFF;}").arg(color));
     };
     connect(platform, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updatePlatformAccent);
     updatePlatformAccent();

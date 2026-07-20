@@ -40,14 +40,15 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     body->setSpacing(0);
 
     auto* rail = new QFrame(this);
+    rail->setObjectName(QStringLiteral("settingsRail"));
     rail->setFixedWidth(168);
-    rail->setStyleSheet(QStringLiteral("background:#1A2035; border-right:1px solid #2A3350;"));
     auto* railLay = new QVBoxLayout(rail);
     railLay->setContentsMargins(0, 8, 0, 8);
     railLay->setSpacing(0);
 
     auto* stack = new QStackedWidget(this);
-    stack->setStyleSheet(QStringLiteral("background:#141928;"));
+    stack->setObjectName(QStringLiteral("settingsStack"));
+    stack->setStyleSheet(QStringLiteral("QStackedWidget#settingsStack{background:#141928; border:none;}"));
     auto* tabGroup = new QButtonGroup(this);
     tabGroup->setExclusive(true);
 
@@ -71,7 +72,7 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         auto* scroll = new QScrollArea(stack);
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
-        scroll->setStyleSheet(QStringLiteral("background:#141928; border:none;"));
+        scroll->setStyleSheet(QStringLiteral("QScrollArea{background:#141928; border:none;}"));
         auto* host = new QWidget;
         host->setMaximumWidth(640);
         auto* hl = new QVBoxLayout(host);
@@ -293,11 +294,12 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     root->addLayout(body, 1);
 
     auto* footer = new QFrame(this);
-    footer->setFixedHeight(52);
-    footer->setStyleSheet(QStringLiteral("background:#1A2035; border-top:1px solid #2A3350;"));
+    footer->setObjectName(QStringLiteral("settingsFooter"));
+    footer->setFixedHeight(48);
     auto* foot = new QHBoxLayout(footer);
     foot->setContentsMargins(16, 8, 16, 8);
     auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
+    cancel->setObjectName(QStringLiteral("chromeBtn"));
     foot->addStretch();
     foot->addWidget(cancel);
     foot->addWidget(saveBtn);

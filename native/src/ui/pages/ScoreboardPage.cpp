@@ -62,15 +62,11 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
     auto* overlayBtn = new QPushButton(QStringLiteral("OVERLAY ON"), header);
     overlayBtn->setCheckable(true);
     overlayBtn->setChecked(true);
-    overlayBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#0A1A0A;border:1px solid #22C55E;color:#22C55E;font-weight:800;padding:6px 12px;}"
-        "QPushButton:!checked{border-color:#606878;color:#606878;}"));
+    overlayBtn->setObjectName(QStringLiteral("chromeBtnSuccess"));
     auto* savePreset = new QPushButton(QStringLiteral("SAVE PRESET"), header);
-    savePreset->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#122033;border:1px solid #4F9EFF;color:#4F9EFF;font-weight:700;padding:6px 12px;}"));
+    savePreset->setObjectName(QStringLiteral("chromeBtnPrimary"));
     auto* loadPreset = new QPushButton(QStringLiteral("LOAD PRESET"), header);
-    loadPreset->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#1A1228;border:1px solid #A855F7;color:#A855F7;font-weight:700;padding:6px 12px;}"));
+    loadPreset->setObjectName(QStringLiteral("chromeBtnViolet"));
     if (headerLay) {
         headerLay->addWidget(overlayBtn);
         headerLay->addWidget(savePreset);
@@ -84,8 +80,8 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
 
     // Left controls
     auto* left = new QFrame(this);
+    left->setObjectName(QStringLiteral("scoreboardLeft"));
     left->setFixedWidth(280);
-    left->setStyleSheet(QStringLiteral("background:#0F1114; border-right:1px solid #2A2D35;"));
     auto* leftLay = new QVBoxLayout(left);
     leftLay->setContentsMargins(12, 12, 12, 12);
 
@@ -103,8 +99,10 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
         auto* b = new QPushButton(sp, left);
         b->setCheckable(true);
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid #2A2D35;color:#8892A4;font-size:9px;padding:6px;}"
-            "QPushButton:checked{border-color:#F59E0B;color:#F59E0B;background:#1A1508;}"));
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
+            "border:1px solid #3A3D45;color:#A0A8B8;font-size:9px;padding:5px;font-weight:700;}"
+            "QPushButton:checked{border:2px solid #F59E0B;color:#FBBF24;"
+            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2010,stop:1 #1A1508);}"));
         if (sp == QLatin1String("Pool / Billiards")) {
             b->setChecked(true);
             activeSportBtn = b;
@@ -165,7 +163,8 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
         auto* b = new QPushButton(t, left);
         b->setFixedSize(36, 36);
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:%120;border:1px solid %1;color:%1;font-weight:800;font-size:16px;}").arg(color));
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
+            "border:1px solid %1;color:%1;font-weight:900;font-size:16px;border-radius:3px;}").arg(color));
         return b;
     };
     auto* aMinus = makeScoreBtn(QStringLiteral("−"), QStringLiteral("#FF5A2C"));
@@ -180,10 +179,11 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
     leftLay->addLayout(scoreRow);
 
     auto* reset = new QPushButton(QStringLiteral("Reset Scores"), left);
+    reset->setObjectName(QStringLiteral("chromeBtn"));
     auto* swap = new QPushButton(QStringLiteral("Swap Sides"), left);
+    swap->setObjectName(QStringLiteral("chromeBtn"));
     auto* push = new QPushButton(QStringLiteral("Push to Program"), left);
-    push->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#22C55E;color:#000;font-weight:800;border:none;padding:8px;border-radius:4px;}"));
+    push->setObjectName(QStringLiteral("chromeBtnSuccess"));
     leftLay->addWidget(reset);
     leftLay->addWidget(swap);
     leftLay->addWidget(push);
@@ -198,13 +198,16 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
     preview->setMinimumHeight(280);
     preview->setAlignment(Qt::AlignCenter);
     preview->setStyleSheet(QStringLiteral(
-        "background:#0A0B0F; border:1px solid #2A2D35; font-size:28px; font-weight:800;"
+        "background:#0A0B0F; border:2px solid #3A3D45; font-size:28px; font-weight:800;"
         "font-family:'Bebas Neue'; letter-spacing:1px;"));
     centerLay->addWidget(preview, 1);
 
     auto* timerBar = new QFrame(center);
-    timerBar->setFixedHeight(56);
-    timerBar->setStyleSheet(QStringLiteral("background:#0F1114; border:1px solid #2A2D35; border-radius:4px;"));
+    timerBar->setObjectName(QStringLiteral("chromeElevated"));
+    timerBar->setFixedHeight(52);
+    timerBar->setStyleSheet(QStringLiteral(
+        "QFrame{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1D22,stop:1 #0F1114);"
+        "border:1px solid #4A4D55; border-radius:4px;}"));
     auto* timerLay = new QHBoxLayout(timerBar);
     auto* clockLbl = new QLabel(QStringLiteral("00:00"), timerBar);
     clockLbl->setStyleSheet(QStringLiteral(
@@ -212,6 +215,7 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
     auto* clockRun = new QCheckBox(QStringLiteral("Match clock"), timerBar);
     clockRun->setChecked(model->state().clockRunning);
     auto* clockReset = new QPushButton(QStringLiteral("Reset"), timerBar);
+    clockReset->setObjectName(QStringLiteral("chromeBtn"));
     timerLay->addWidget(clockLbl);
     timerLay->addStretch();
     timerLay->addWidget(clockRun);
@@ -230,8 +234,8 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
 
     // Right style
     auto* right = new QFrame(this);
+    right->setObjectName(QStringLiteral("scoreboardRight"));
     right->setFixedWidth(240);
-    right->setStyleSheet(QStringLiteral("background:#0F1114; border-left:1px solid #2A2D35;"));
     auto* rightLay = new QVBoxLayout(right);
     rightLay->setContentsMargins(12, 12, 12, 12);
     auto* layLab = new QLabel(QStringLiteral("LAYOUT"), right);

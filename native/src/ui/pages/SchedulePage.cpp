@@ -54,9 +54,7 @@ SchedulePage::SchedulePage(QWidget* parent)
     countdown->setStyleSheet(QStringLiteral(
         "font-family:'Bebas Neue'; font-size:32px; color:#4F9EFF; background:transparent;"));
     auto* startStream = new QPushButton(QStringLiteral("Start Stream"), banner);
-    startStream->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FF5A2C,stop:1 #FF8C42);"
-        "color:white;font-weight:800;border:none;border-radius:4px;padding:10px 18px;}"));
+    startStream->setObjectName(QStringLiteral("chromeBtnBrand"));
     banLay->addLayout(banCol, 1);
     banLay->addWidget(countdown);
     banLay->addWidget(startStream);
@@ -103,8 +101,11 @@ SchedulePage::SchedulePage(QWidget* parent)
 
     auto* row = new QHBoxLayout();
     auto* add = new QPushButton(QStringLiteral("Add Event"), this);
+    add->setObjectName(QStringLiteral("chromeBtnPrimary"));
     auto* edit = new QPushButton(QStringLiteral("Edit"), this);
+    edit->setObjectName(QStringLiteral("chromeBtn"));
     auto* remove = new QPushButton(QStringLiteral("Remove"), this);
+    remove->setObjectName(QStringLiteral("chromeBtnBrand"));
     row->addWidget(add);
     row->addWidget(edit);
     row->addWidget(remove);
@@ -281,6 +282,7 @@ SchedulePage::SchedulePage(QWidget* parent)
         form->addRow(QStringLiteral("Tags"), tags);
         form->addRow(remind);
         auto* ok = new QPushButton(QStringLiteral("Save"), &dlg);
+        ok->setObjectName(QStringLiteral("chromeBtnPrimary"));
         form->addRow(ok);
         connect(ok, &QPushButton::clicked, &dlg, &QDialog::accept);
         if (dlg.exec() != QDialog::Accepted) return false;
