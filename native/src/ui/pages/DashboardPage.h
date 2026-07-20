@@ -47,7 +47,7 @@ private:
     QFrame* m_drawerBackdrop = nullptr;
     MultiCorderPanel* m_multi = nullptr;
     PlayListPanel* m_playlist = nullptr;
-    bool m_mixerOpen = false;
+    bool m_mixerOpen = true;
 };
 
 } // namespace railshot

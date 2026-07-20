@@ -11,7 +11,6 @@
 #include "ui/widgets/MultiCorderPanel.h"
 #include "ui/widgets/PlayListPanel.h"
 #include "ui/Theme.h"
-#include "ui/Motion.h"
 #include "core/EngineController.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
@@ -27,9 +26,9 @@
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
-#include <QPropertyAnimation>
 #include <QResizeEvent>
 #include <QEvent>
+#include <QFrame>
 
 namespace railshot {
 
@@ -187,6 +186,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     root->addLayout(inputsRow);
 
     m_toolbar = new BottomToolbar(engine, this);
+    m_toolbar->setMixerOpen(true);
     root->addWidget(m_toolbar);
 
     m_drawerBackdrop = new QFrame(this);
@@ -235,8 +235,9 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         dlg.exec();
     });
 
+    // Mixer stays visible; toolbar button reflects open state only
     connect(m_toolbar, &BottomToolbar::mixerToggleRequested, this, [this] {
-        setMixerOpen(!m_mixerOpen);
+        m_toolbar->setMixerOpen(true);
     });
 
     connect(m_toolbar, &BottomToolbar::multiCorderRequested, this, [this] {
@@ -272,34 +273,20 @@ void DashboardPage::setBasicMode(bool on)
     if (on) {
         setMultiCorderOpen(false);
         setPlayListOpen(false);
-        if (m_mixerOpen)
-            setMixerOpen(false);
     }
 }
 
 void DashboardPage::setMixerOpen(bool open)
 {
-    m_mixerOpen = open;
-    m_toolbar->setMixerOpen(open);
-    const int target = open ? 320 : 0;
-    auto* anim = new QPropertyAnimation(m_mixer, "maximumWidth", this);
-    anim->setDuration(250);
-    anim->setStartValue(m_mixer->width());
-    anim->setEndValue(target);
-    anim->setEasingCurve(motion::themeEasing());
-    m_mixer->setMinimumWidth(0);
-    if (open)
-        m_mixer->setMaximumWidth(320);
-    connect(anim, &QPropertyAnimation::valueChanged, this, [this](const QVariant& v) {
-        m_mixer->setMaximumWidth(v.toInt());
-        m_mixer->setMinimumWidth(0);
-    });
-    connect(anim, &QPropertyAnimation::finished, this, [this, target, anim] {
-        m_mixer->setMaximumWidth(target);
-        m_mixer->setMinimumWidth(0);
-        anim->deleteLater();
-    });
-    anim->start();
+    // Keep mixer permanently visible in the inputs strip.
+    Q_UNUSED(open);
+    m_mixerOpen = true;
+    if (m_toolbar)
+        m_toolbar->setMixerOpen(true);
+    if (m_mixer) {
+        m_mixer->setMinimumWidth(280);
+        m_mixer->setMaximumWidth(360);
+    }
 }
 
 void DashboardPage::openDrawer()

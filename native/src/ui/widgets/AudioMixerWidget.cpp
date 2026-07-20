@@ -17,8 +17,8 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("audioMixer"));
-    setMinimumWidth(0);
-    setMaximumWidth(0);
+    setMinimumWidth(280);
+    setMaximumWidth(360);
     setMinimumHeight(160);
     setStyleSheet(QStringLiteral(
         "QWidget#audioMixer {"
