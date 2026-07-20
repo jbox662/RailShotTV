@@ -1,5 +1,7 @@
 #pragma once
 #include "compositor/PreviewSurface.h"
+#include <QKeyEvent>
+#include <QFocusEvent>
 
 class QEvent;
 
@@ -15,9 +17,12 @@ public:
 
 signals:
     void sourceSelected(const QString& sourceId);
+    void configureSourceRequested(const QString& sourceId);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
 
 private:
     class CanvasOverlay;

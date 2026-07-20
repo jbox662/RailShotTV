@@ -2,32 +2,43 @@
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "compositor/D3D11Compositor.h"
+#include "ui/widgets/SourcePropertiesDialog.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QMouseEvent>
+#include <QKeyEvent>
+#include <QFocusEvent>
 #include <QStackedLayout>
 #include <QEvent>
+#include <QMenu>
+#include <QCursor>
 #include <cmath>
-#include <QFontMetrics>
+#include <algorithm>
 
 namespace railshot {
 
 namespace {
+
 enum class Handle {
     None,
     Move,
     ResizeTL,
+    ResizeTC,
     ResizeTR,
+    ResizeCL,
+    ResizeCR,
     ResizeBL,
-    ResizeBR
+    ResizeBC,
+    ResizeBR,
+    Rotate
 };
 
-QRectF normToWidget(const Transform& t, const QSize& sz)
-{
-    return QRectF(t.x * sz.width(), t.y * sz.height(), t.w * sz.width(), t.h * sz.height());
-}
+constexpr double kMinSize = 0.02;
+constexpr double kSnapDist = 0.012; // ~1.2% of canvas
+constexpr qreal kHandlePad = 8.0;
+constexpr qreal kRotateOffset = 28.0;
 
 QRect letterboxRect(const QSize& sz)
 {
@@ -42,26 +53,196 @@ QRect letterboxRect(const QSize& sz)
     return QRect(0, (sz.height() - h) / 2, sz.width(), h);
 }
 
-Transform widgetDeltaToNorm(const QPointF& delta, const QSize& sz)
+/** Widget pixel → normalized canvas (0..1). Outside letterbox returns nullopt-ish via ok=false. */
+bool widgetToNorm(const QPointF& widgetPt, const QSize& widgetSz, QPointF* outNorm)
 {
-    Transform d;
-    d.x = sz.width() > 0 ? delta.x() / sz.width() : 0;
-    d.y = sz.height() > 0 ? delta.y() / sz.height() : 0;
-    return d;
+    const QRect lb = letterboxRect(widgetSz);
+    if (lb.width() <= 0 || lb.height() <= 0 || !outNorm) return false;
+    if (!lb.contains(widgetPt.toPoint()) && !lb.adjusted(-2, -2, 2, 2).contains(widgetPt.toPoint()))
+        return false;
+    outNorm->setX((widgetPt.x() - lb.x()) / qreal(lb.width()));
+    outNorm->setY((widgetPt.y() - lb.y()) / qreal(lb.height()));
+    return true;
 }
 
-Handle hitHandle(const QRectF& r, const QPointF& p, qreal pad = 8.0)
+QPointF normDeltaFromWidgetDelta(const QPointF& widgetDelta, const QSize& widgetSz)
 {
-    const QRectF tl(r.topLeft() - QPointF(pad, pad), QSizeF(pad * 2, pad * 2));
-    const QRectF tr(r.topRight() - QPointF(pad, pad), QSizeF(pad * 2, pad * 2));
-    const QRectF bl(r.bottomLeft() - QPointF(pad, pad), QSizeF(pad * 2, pad * 2));
-    const QRectF br(r.bottomRight() - QPointF(pad, pad), QSizeF(pad * 2, pad * 2));
-    if (tl.contains(p)) return Handle::ResizeTL;
-    if (tr.contains(p)) return Handle::ResizeTR;
-    if (bl.contains(p)) return Handle::ResizeBL;
-    if (br.contains(p)) return Handle::ResizeBR;
+    const QRect lb = letterboxRect(widgetSz);
+    if (lb.width() <= 0 || lb.height() <= 0) return {};
+    return QPointF(widgetDelta.x() / qreal(lb.width()), widgetDelta.y() / qreal(lb.height()));
+}
+
+QRectF transformToNormRect(const Transform& t)
+{
+    // Support negative w/h (flip): normalize to positive AABB for hit-test chrome.
+    QRectF r(t.x, t.y, t.w, t.h);
+    return r.normalized();
+}
+
+Transform snapTransform(Transform t, bool snapX, bool snapY, double dist)
+{
+    auto snapEdge = [dist](double& v, double size, bool enable) {
+        if (!enable) return;
+        if (std::abs(v) < dist) v = 0.0;
+        if (std::abs(v + size - 1.0) < dist) v = 1.0 - size;
+        if (std::abs(v + size * 0.5 - 0.5) < dist) v = 0.5 - size * 0.5;
+    };
+    snapEdge(t.x, t.w, snapX);
+    snapEdge(t.y, t.h, snapY);
+    return t;
+}
+
+void lockAspect(Transform& t, const Transform& start, Handle h, bool lock)
+{
+    if (!lock) return;
+    const double aspect = (std::abs(start.h) > 1e-9) ? (std::abs(start.w) / std::abs(start.h)) : 1.0;
+    const double signW = start.w < 0 ? -1.0 : 1.0;
+    const double signH = start.h < 0 ? -1.0 : 1.0;
+
+    switch (h) {
+    case Handle::ResizeBR:
+    case Handle::ResizeTR:
+    case Handle::ResizeBL:
+    case Handle::ResizeTL: {
+        // Prefer width as driver; recompute height from aspect
+        const double aw = std::abs(t.w);
+        const double ah = aw / aspect;
+        const double cx = start.x + start.w * 0.5;
+        const double cy = start.y + start.h * 0.5;
+        // Keep the opposite corner fixed based on handle
+        if (h == Handle::ResizeBR) {
+            t.w = signW * aw;
+            t.h = signH * ah;
+            t.x = start.x;
+            t.y = start.y;
+        } else if (h == Handle::ResizeTR) {
+            t.w = signW * aw;
+            t.h = signH * ah;
+            t.x = start.x;
+            t.y = start.y + start.h - t.h;
+        } else if (h == Handle::ResizeBL) {
+            t.w = signW * aw;
+            t.h = signH * ah;
+            t.x = start.x + start.w - t.w;
+            t.y = start.y;
+        } else { // TL
+            t.w = signW * aw;
+            t.h = signH * ah;
+            t.x = start.x + start.w - t.w;
+            t.y = start.y + start.h - t.h;
+        }
+        Q_UNUSED(cx);
+        Q_UNUSED(cy);
+        break;
+    }
+    case Handle::ResizeCR:
+    case Handle::ResizeCL: {
+        const double aw = std::abs(t.w);
+        const double ah = aw / aspect;
+        const double cy = start.y + start.h * 0.5;
+        t.h = signH * ah;
+        t.y = cy - t.h * 0.5;
+        break;
+    }
+    case Handle::ResizeTC:
+    case Handle::ResizeBC: {
+        const double ah = std::abs(t.h);
+        const double aw = ah * aspect;
+        const double cx = start.x + start.w * 0.5;
+        t.w = signW * aw;
+        t.x = cx - t.w * 0.5;
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+Handle hitHandleNorm(const QRectF& r, const QPointF& p, qreal padNormX, qreal padNormY)
+{
+    const QPointF tl = r.topLeft();
+    const QPointF tr = r.topRight();
+    const QPointF bl = r.bottomLeft();
+    const QPointF br = r.bottomRight();
+    const QPointF tc((tl.x() + tr.x()) * 0.5, tl.y());
+    const QPointF bc((bl.x() + br.x()) * 0.5, bl.y());
+    const QPointF cl(tl.x(), (tl.y() + bl.y()) * 0.5);
+    const QPointF cr(tr.x(), (tr.y() + br.y()) * 0.5);
+
+    auto nearPt = [&](const QPointF& c) {
+        return std::abs(p.x() - c.x()) <= padNormX && std::abs(p.y() - c.y()) <= padNormY;
+    };
+
+    if (nearPt(tl)) return Handle::ResizeTL;
+    if (nearPt(tr)) return Handle::ResizeTR;
+    if (nearPt(bl)) return Handle::ResizeBL;
+    if (nearPt(br)) return Handle::ResizeBR;
+    if (nearPt(tc)) return Handle::ResizeTC;
+    if (nearPt(bc)) return Handle::ResizeBC;
+    if (nearPt(cl)) return Handle::ResizeCL;
+    if (nearPt(cr)) return Handle::ResizeCR;
     if (r.contains(p)) return Handle::Move;
     return Handle::None;
+}
+
+Handle hitHandleOnCanvas(const Transform& t, const QPointF& normPt, const QSize& widgetSz)
+{
+    const QRect lb = letterboxRect(widgetSz);
+    if (lb.width() <= 0 || lb.height() <= 0) return Handle::None;
+
+    const QRectF r = transformToNormRect(t);
+    const qreal padX = kHandlePad / qreal(lb.width());
+    const qreal padY = kHandlePad / qreal(lb.height());
+
+    const QPointF tc((r.left() + r.right()) * 0.5, r.top());
+    const qreal rotOffY = kRotateOffset / qreal(lb.height());
+    const QPointF rotPt(tc.x(), tc.y() - rotOffY);
+    if (std::abs(normPt.x() - rotPt.x()) <= padX * 1.4 && std::abs(normPt.y() - rotPt.y()) <= padY * 1.4)
+        return Handle::Rotate;
+
+    return hitHandleNorm(r, normPt, padX, padY);
+}
+
+Qt::CursorShape cursorForHandle(Handle h)
+{
+    switch (h) {
+    case Handle::ResizeTL:
+    case Handle::ResizeBR:
+        return Qt::SizeFDiagCursor;
+    case Handle::ResizeTR:
+    case Handle::ResizeBL:
+        return Qt::SizeBDiagCursor;
+    case Handle::ResizeTC:
+    case Handle::ResizeBC:
+        return Qt::SizeVerCursor;
+    case Handle::ResizeCL:
+    case Handle::ResizeCR:
+        return Qt::SizeHorCursor;
+    case Handle::Rotate:
+        return Qt::OpenHandCursor;
+    case Handle::Move:
+        return Qt::SizeAllCursor;
+    default:
+        return Qt::ArrowCursor;
+    }
+}
+
+double angleDegFromCenter(const QPointF& center, const QPointF& p)
+{
+    return std::atan2(p.y() - center.y(), p.x() - center.x()) * 180.0 / 3.14159265358979323846;
+}
+
+double snapAngle(double deg, bool shift, bool ctrl)
+{
+    if (ctrl && !shift) return deg;
+    const double step = shift ? 15.0 : 45.0;
+    const double soft = 5.0;
+    // Soft snap to multiples
+    const double nearest = std::round(deg / step) * step;
+    if (std::abs(deg - nearest) <= soft || shift)
+        return nearest;
+    // Also soft-snap to original multiples of 45 when not shift
+    return deg;
 }
 
 /** Thin accent frame around the D3D HWND (no corner L-brackets). */
@@ -113,11 +294,12 @@ private:
     bool m_program = false;
     bool m_live = false;
 };
+
 } // namespace
 
 class PreviewWidget::CanvasOverlay : public QObject {
 public:
-    CanvasOverlay(EngineController* engine, PreviewWidget* owner, QWidget* surface, bool program)
+    CanvasOverlay(EngineController* engine, PreviewWidget* owner, PreviewSurface* surface, bool program)
         : QObject(owner), m_engine(engine), m_owner(owner), m_surface(surface), m_program(program)
     {
         if (m_surface) {
@@ -130,9 +312,57 @@ public:
             });
             m_live = engine->telemetrySnapshot().streaming;
         }
+        if (engine) {
+            connect(engine, &EngineController::selectedSourceChanged, this, [this](const QString&) {
+                refreshChrome();
+            });
+            connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this] {
+                refreshChrome();
+            });
+        }
     }
 
     void setInteractive(bool on) { m_interactive = on; }
+
+    void refreshChrome()
+    {
+        if (!m_surface || m_program) {
+            if (m_surface) m_surface->setEditChrome({});
+            return;
+        }
+        PreviewEditChrome chrome;
+        if (!m_engine) {
+            m_surface->setEditChrome(chrome);
+            return;
+        }
+        const auto src = m_engine->selectedSource();
+        if (!src || !src->visible) {
+            m_surface->setEditChrome(chrome);
+            return;
+        }
+        chrome.visible = true;
+        chrome.cropping = m_dragging && m_cropping;
+        chrome.rect = transformToNormRect(src->transform);
+        chrome.rotationDeg = src->transform.rotation;
+        chrome.cropLeft = src->transform.cropLeft;
+        chrome.cropRight = src->transform.cropRight;
+        chrome.cropTop = src->transform.cropTop;
+        chrome.cropBottom = src->transform.cropBottom;
+        chrome.color = QColor(QStringLiteral("#22C55E"));
+        m_surface->setEditChrome(chrome);
+    }
+
+    void nudgeSelected(double dx, double dy)
+    {
+        if (!m_engine || !m_interactive) return;
+        auto src = m_engine->selectedSource();
+        if (!src || src->locked) return;
+        Transform t = src->transform;
+        t.x += dx;
+        t.y += dy;
+        m_engine->updateSourceTransform(src->id, t);
+        refreshChrome();
+    }
 
     bool eventFilter(QObject* watched, QEvent* event) override
     {
@@ -146,12 +376,23 @@ public:
             handleMove(static_cast<QMouseEvent*>(event));
             return m_dragging;
         case QEvent::MouseButtonRelease:
-            if (m_dragging) {
-                m_dragging = false;
-                m_handle = Handle::None;
-                return true;
+            if (event->type() == QEvent::MouseButtonRelease) {
+                auto* me = static_cast<QMouseEvent*>(event);
+                if (me->button() == Qt::RightButton)
+                    return handleContextMenu(me);
+                if (m_dragging && me->button() == Qt::LeftButton) {
+                    m_dragging = false;
+                    m_cropping = false;
+                    m_handle = Handle::None;
+                    if (m_surface)
+                        m_surface->unsetCursor();
+                    refreshChrome();
+                    return true;
+                }
             }
             break;
+        case QEvent::KeyPress:
+            return handleKey(static_cast<QKeyEvent*>(event));
         default:
             break;
         }
@@ -164,100 +405,458 @@ private:
         return m_surface ? m_surface->size() : QSize();
     }
 
+    const SceneItem* previewScene() const
+    {
+        if (!m_engine) return nullptr;
+        const auto p = m_engine->projectSnapshot();
+        return p.findScene(p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
+    }
+
+    bool handleKey(QKeyEvent* e)
+    {
+        if (!m_interactive) return false;
+        const bool shift = e->modifiers() & Qt::ShiftModifier;
+        const double step = shift ? (10.0 / 1920.0) : (1.0 / 1920.0);
+        switch (e->key()) {
+        case Qt::Key_Left:
+            nudgeSelected(-step, 0);
+            return true;
+        case Qt::Key_Right:
+            nudgeSelected(step, 0);
+            return true;
+        case Qt::Key_Up:
+            nudgeSelected(0, -step);
+            return true;
+        case Qt::Key_Down:
+            nudgeSelected(0, step);
+            return true;
+        default:
+            break;
+        }
+        return false;
+    }
+
+    bool handleContextMenu(QMouseEvent* e)
+    {
+        QPointF norm;
+        if (!widgetToNorm(e->position(), surfaceSize(), &norm)) {
+            // Still allow menu on empty / letterbox
+        }
+
+        // Select under cursor if any
+        if (const auto* sc = previewScene()) {
+            for (int i = sc->sources.size() - 1; i >= 0; --i) {
+                const auto& src = sc->sources[i];
+                if (!src.visible) continue;
+                if (transformToNormRect(src.transform).contains(norm)) {
+                    m_engine->setSelectedSourceId(src.id);
+                    emit m_owner->sourceSelected(src.id);
+                    break;
+                }
+            }
+        }
+
+        auto src = m_engine->selectedSource();
+        QMenu menu(m_owner);
+        menu.setStyleSheet(QStringLiteral(
+            "QMenu { background:#1A1E26; color:#E8ECF4; border:1px solid #2A3140; }"
+            "QMenu::item:selected { background:#2A3140; }"));
+
+        QAction* props = menu.addAction(QStringLiteral("Properties"));
+        props->setEnabled(src.has_value());
+        menu.addSeparator();
+
+        auto* transform = menu.addMenu(QStringLiteral("Transform"));
+        QAction* reset = transform->addAction(QStringLiteral("Reset Transform"));
+        QAction* rotCw = transform->addAction(QStringLiteral("Rotate 90° Clockwise"));
+        QAction* rotCcw = transform->addAction(QStringLiteral("Rotate 90° Counterclockwise"));
+        QAction* rot180 = transform->addAction(QStringLiteral("Rotate 180°"));
+        transform->addSeparator();
+        QAction* flipH = transform->addAction(QStringLiteral("Flip Horizontal"));
+        QAction* flipV = transform->addAction(QStringLiteral("Flip Vertical"));
+        transform->addSeparator();
+        QAction* fit = transform->addAction(QStringLiteral("Fit to Screen"));
+        QAction* stretch = transform->addAction(QStringLiteral("Stretch to Screen"));
+        QAction* center = transform->addAction(QStringLiteral("Center to Screen"));
+        transform->setEnabled(src.has_value() && !src->locked);
+
+        QAction* chosen = menu.exec(e->globalPosition().toPoint());
+        if (!chosen || !src) return true;
+
+        if (chosen == props) {
+            emit m_owner->configureSourceRequested(src->id);
+            return true;
+        }
+
+        Transform t = src->transform;
+        if (chosen == reset) {
+            t = Transform{};
+            t.w = 1.0;
+            t.h = 1.0;
+        } else if (chosen == rotCw) {
+            t.rotation = std::fmod(t.rotation + 90.0, 360.0);
+        } else if (chosen == rotCcw) {
+            t.rotation = std::fmod(t.rotation - 90.0 + 360.0, 360.0);
+        } else if (chosen == rot180) {
+            t.rotation = std::fmod(t.rotation + 180.0, 360.0);
+        } else if (chosen == flipH) {
+            t.x = t.x + t.w;
+            t.w = -t.w;
+        } else if (chosen == flipV) {
+            t.y = t.y + t.h;
+            t.h = -t.h;
+        } else if (chosen == fit) {
+            const double aw = std::abs(t.w);
+            const double ah = std::abs(t.h);
+            const double aspect = ah > 1e-9 ? aw / ah : 1.0;
+            double nw = 1.0;
+            double nh = 1.0;
+            if (aspect >= 1.0) {
+                nw = 1.0;
+                nh = 1.0 / aspect;
+            } else {
+                nh = 1.0;
+                nw = aspect;
+            }
+            const double sw = t.w < 0 ? -1.0 : 1.0;
+            const double sh = t.h < 0 ? -1.0 : 1.0;
+            t.w = sw * nw;
+            t.h = sh * nh;
+            t.x = 0.5 - t.w * 0.5;
+            t.y = 0.5 - t.h * 0.5;
+        } else if (chosen == stretch) {
+            const double sw = t.w < 0 ? -1.0 : 1.0;
+            const double sh = t.h < 0 ? -1.0 : 1.0;
+            t.w = sw;
+            t.h = sh;
+            t.x = 0.5 - t.w * 0.5;
+            t.y = 0.5 - t.h * 0.5;
+        } else if (chosen == center) {
+            t.x = 0.5 - t.w * 0.5;
+            t.y = 0.5 - t.h * 0.5;
+        } else {
+            return true;
+        }
+        m_engine->updateSourceTransform(src->id, t);
+        refreshChrome();
+        return true;
+    }
+
     bool handlePress(QMouseEvent* e)
     {
+        if (e->button() == Qt::RightButton)
+            return handleContextMenu(e);
         if (e->button() != Qt::LeftButton)
             return false;
-        const auto p = m_engine->projectSnapshot();
-        const auto* sc = p.findScene(p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
+
+        if (m_surface)
+            m_surface->setFocus(Qt::MouseFocusReason);
+
+        QPointF norm;
+        if (!widgetToNorm(e->position(), surfaceSize(), &norm)) {
+            m_engine->setSelectedSourceId({});
+            emit m_owner->sourceSelected({});
+            refreshChrome();
+            return true;
+        }
+
+        const auto* sc = previewScene();
         if (!sc) return false;
 
         Handle hit = Handle::None;
         QString hitId;
-        const QSize sz = surfaceSize();
-        for (int i = sc->sources.size() - 1; i >= 0; --i) {
-            const auto& src = sc->sources[i];
-            if (!src.visible) continue;
-            const QRectF r = normToWidget(src.transform, sz);
-            hit = hitHandle(r, e->position());
-            if (hit != Handle::None) {
-                hitId = src.id;
-                break;
+
+        // Prefer handles on currently selected source first
+        if (auto cur = m_engine->selectedSource()) {
+            if (cur->visible) {
+                hit = hitHandleOnCanvas(cur->transform, norm, surfaceSize());
+                if (hit != Handle::None)
+                    hitId = cur->id;
             }
         }
+
+        if (hitId.isEmpty()) {
+            for (int i = sc->sources.size() - 1; i >= 0; --i) {
+                const auto& src = sc->sources[i];
+                if (!src.visible) continue;
+                hit = hitHandleOnCanvas(src.transform, norm, surfaceSize());
+                if (hit != Handle::None) {
+                    hitId = src.id;
+                    break;
+                }
+            }
+        }
+
         if (hitId.isEmpty()) {
             m_engine->setSelectedSourceId({});
             emit m_owner->sourceSelected({});
+            refreshChrome();
             return true;
         }
+
         m_engine->setSelectedSourceId(hitId);
         emit m_owner->sourceSelected(hitId);
         const auto src = m_engine->selectedSource();
+        refreshChrome();
         if (!src || src->locked)
             return true;
+
         m_dragging = true;
         m_handle = hit;
+        m_cropping = (e->modifiers() & Qt::AltModifier) && hit != Handle::Move && hit != Handle::Rotate
+                     && hit != Handle::None;
         m_dragStart = e->position();
+        m_dragStartNorm = norm;
         m_startTransform = src->transform;
+        m_startAngle = src->transform.rotation;
+        const QRectF rr = transformToNormRect(src->transform);
+        m_startCenter = rr.center();
+        if (m_surface)
+            m_surface->setCursor(m_cropping ? Qt::CrossCursor
+                                            : (hit == Handle::Rotate ? Qt::ClosedHandCursor
+                                                                     : cursorForHandle(hit)));
         return true;
     }
 
     void handleMove(QMouseEvent* e)
     {
-        if (!m_dragging) return;
+        if (!m_dragging) {
+            // Hover cursor
+            QPointF norm;
+            if (widgetToNorm(e->position(), surfaceSize(), &norm)) {
+                Handle h = Handle::None;
+                if (auto src = m_engine->selectedSource(); src && src->visible && !src->locked)
+                    h = hitHandleOnCanvas(src->transform, norm, surfaceSize());
+                if (h == Handle::None) {
+                    if (const auto* sc = previewScene()) {
+                        for (int i = sc->sources.size() - 1; i >= 0; --i) {
+                            if (!sc->sources[i].visible) continue;
+                            if (transformToNormRect(sc->sources[i].transform).contains(norm)) {
+                                h = Handle::Move;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (m_surface)
+                    m_surface->setCursor(cursorForHandle(h));
+            } else if (m_surface) {
+                m_surface->unsetCursor();
+            }
+            return;
+        }
+
         auto src = m_engine->selectedSource();
         if (!src || src->locked) return;
 
-        const QPointF delta = e->position() - m_dragStart;
-        const auto d = widgetDeltaToNorm(delta, surfaceSize());
+        const QPointF d = normDeltaFromWidgetDelta(e->position() - m_dragStart, surfaceSize());
+        QPointF norm;
+        widgetToNorm(e->position(), surfaceSize(), &norm);
+
+        const bool shift = e->modifiers() & Qt::ShiftModifier;
+        const bool ctrl = e->modifiers() & Qt::ControlModifier;
+        const bool alt = e->modifiers() & Qt::AltModifier;
+        m_cropping = alt && m_handle != Handle::Move && m_handle != Handle::Rotate;
+
         Transform t = m_startTransform;
-        constexpr double kMin = 0.02;
+
+        if (m_handle == Handle::Rotate) {
+            const double a0 = angleDegFromCenter(m_startCenter, m_dragStartNorm);
+            const double a1 = angleDegFromCenter(m_startCenter, norm);
+            double deg = m_startAngle + (a1 - a0);
+            // Soft-snap relative to absolute angle
+            deg = snapAngle(deg, shift, ctrl);
+            // Also soft-snap delta to 0
+            if (!ctrl && std::abs((a1 - a0)) < 5.0 && !shift)
+                deg = m_startAngle;
+            t.rotation = deg;
+            m_engine->updateSourceTransform(src->id, t);
+            refreshChrome();
+            return;
+        }
+
+        if (m_cropping) {
+            applyCrop(t, d);
+            m_engine->updateSourceTransform(src->id, t);
+            refreshChrome();
+            return;
+        }
 
         switch (m_handle) {
         case Handle::Move:
-            t.x = m_startTransform.x + d.x;
-            t.y = m_startTransform.y + d.y;
+            t.x = m_startTransform.x + d.x();
+            t.y = m_startTransform.y + d.y();
+            if (!ctrl)
+                t = snapTransform(t, true, true, kSnapDist);
             break;
         case Handle::ResizeBR:
-            t.w = qMax(kMin, m_startTransform.w + d.x);
-            t.h = qMax(kMin, m_startTransform.h + d.y);
+            t.w = m_startTransform.w + d.x();
+            t.h = m_startTransform.h + d.y();
+            clampMin(t, m_startTransform, Handle::ResizeBR);
+            lockAspect(t, m_startTransform, Handle::ResizeBR, !shift);
             break;
         case Handle::ResizeTR:
-            t.y = m_startTransform.y + d.y;
-            t.w = qMax(kMin, m_startTransform.w + d.x);
-            t.h = qMax(kMin, m_startTransform.h - d.y);
-            if (t.h < kMin) { t.y = m_startTransform.y + m_startTransform.h - kMin; t.h = kMin; }
+            t.y = m_startTransform.y + d.y();
+            t.w = m_startTransform.w + d.x();
+            t.h = m_startTransform.h - d.y();
+            clampMin(t, m_startTransform, Handle::ResizeTR);
+            lockAspect(t, m_startTransform, Handle::ResizeTR, !shift);
             break;
         case Handle::ResizeBL:
-            t.x = m_startTransform.x + d.x;
-            t.w = qMax(kMin, m_startTransform.w - d.x);
-            t.h = qMax(kMin, m_startTransform.h + d.y);
-            if (t.w < kMin) { t.x = m_startTransform.x + m_startTransform.w - kMin; t.w = kMin; }
+            t.x = m_startTransform.x + d.x();
+            t.w = m_startTransform.w - d.x();
+            t.h = m_startTransform.h + d.y();
+            clampMin(t, m_startTransform, Handle::ResizeBL);
+            lockAspect(t, m_startTransform, Handle::ResizeBL, !shift);
             break;
         case Handle::ResizeTL:
-            t.x = m_startTransform.x + d.x;
-            t.y = m_startTransform.y + d.y;
-            t.w = qMax(kMin, m_startTransform.w - d.x);
-            t.h = qMax(kMin, m_startTransform.h - d.y);
-            if (t.w < kMin) { t.x = m_startTransform.x + m_startTransform.w - kMin; t.w = kMin; }
-            if (t.h < kMin) { t.y = m_startTransform.y + m_startTransform.h - kMin; t.h = kMin; }
+            t.x = m_startTransform.x + d.x();
+            t.y = m_startTransform.y + d.y();
+            t.w = m_startTransform.w - d.x();
+            t.h = m_startTransform.h - d.y();
+            clampMin(t, m_startTransform, Handle::ResizeTL);
+            lockAspect(t, m_startTransform, Handle::ResizeTL, !shift);
+            break;
+        case Handle::ResizeCR:
+            t.w = m_startTransform.w + d.x();
+            clampMin(t, m_startTransform, Handle::ResizeCR);
+            lockAspect(t, m_startTransform, Handle::ResizeCR, !shift);
+            break;
+        case Handle::ResizeCL:
+            t.x = m_startTransform.x + d.x();
+            t.w = m_startTransform.w - d.x();
+            clampMin(t, m_startTransform, Handle::ResizeCL);
+            lockAspect(t, m_startTransform, Handle::ResizeCL, !shift);
+            break;
+        case Handle::ResizeBC:
+            t.h = m_startTransform.h + d.y();
+            clampMin(t, m_startTransform, Handle::ResizeBC);
+            lockAspect(t, m_startTransform, Handle::ResizeBC, !shift);
+            break;
+        case Handle::ResizeTC:
+            t.y = m_startTransform.y + d.y();
+            t.h = m_startTransform.h - d.y();
+            clampMin(t, m_startTransform, Handle::ResizeTC);
+            lockAspect(t, m_startTransform, Handle::ResizeTC, !shift);
             break;
         default:
             break;
         }
+
+        if (!ctrl && m_handle != Handle::Move) {
+            // Snap edges of resized box
+            Transform snapped = t;
+            const QRectF r = transformToNormRect(snapped);
+            if (std::abs(r.left()) < kSnapDist) {
+                const double dxs = -r.left();
+                snapped.x += dxs;
+                if (m_handle == Handle::ResizeCL || m_handle == Handle::ResizeTL || m_handle == Handle::ResizeBL)
+                    snapped.w -= dxs;
+            }
+            if (std::abs(r.right() - 1.0) < kSnapDist) {
+                const double dxs = 1.0 - r.right();
+                if (m_handle == Handle::ResizeCR || m_handle == Handle::ResizeTR || m_handle == Handle::ResizeBR)
+                    snapped.w += dxs;
+            }
+            if (std::abs(r.top()) < kSnapDist) {
+                const double dys = -r.top();
+                snapped.y += dys;
+                if (m_handle == Handle::ResizeTC || m_handle == Handle::ResizeTL || m_handle == Handle::ResizeTR)
+                    snapped.h -= dys;
+            }
+            if (std::abs(r.bottom() - 1.0) < kSnapDist) {
+                const double dys = 1.0 - r.bottom();
+                if (m_handle == Handle::ResizeBC || m_handle == Handle::ResizeBL || m_handle == Handle::ResizeBR)
+                    snapped.h += dys;
+            }
+            t = snapped;
+        }
+
         m_engine->updateSourceTransform(src->id, t);
+        refreshChrome();
+    }
+
+    static void clampMin(Transform& t, const Transform& start, Handle h)
+    {
+        const double minW = kMinSize;
+        const double minH = kMinSize;
+        if (std::abs(t.w) < minW) {
+            const double sign = start.w < 0 ? -1.0 : 1.0;
+            if (h == Handle::ResizeCL || h == Handle::ResizeTL || h == Handle::ResizeBL)
+                t.x = start.x + start.w - sign * minW;
+            t.w = sign * minW;
+        }
+        if (std::abs(t.h) < minH) {
+            const double sign = start.h < 0 ? -1.0 : 1.0;
+            if (h == Handle::ResizeTC || h == Handle::ResizeTL || h == Handle::ResizeTR)
+                t.y = start.y + start.h - sign * minH;
+            t.h = sign * minH;
+        }
+    }
+
+    void applyCrop(Transform& t, const QPointF& d)
+    {
+        // Map handle drag into crop fractions; shrink box accordingly for edge crops.
+        auto clampCrop = [](double v) { return std::clamp(v, 0.0, 0.49); };
+
+        switch (m_handle) {
+        case Handle::ResizeCR:
+        case Handle::ResizeBR:
+        case Handle::ResizeTR:
+            t.cropRight = clampCrop(m_startTransform.cropRight + d.x());
+            t.w = m_startTransform.w - (t.cropRight - m_startTransform.cropRight);
+            break;
+        case Handle::ResizeCL:
+        case Handle::ResizeBL:
+        case Handle::ResizeTL:
+            t.cropLeft = clampCrop(m_startTransform.cropLeft - d.x());
+            {
+                const double dc = t.cropLeft - m_startTransform.cropLeft;
+                t.x = m_startTransform.x + dc;
+                t.w = m_startTransform.w - dc;
+            }
+            break;
+        default:
+            break;
+        }
+
+        switch (m_handle) {
+        case Handle::ResizeBC:
+        case Handle::ResizeBR:
+        case Handle::ResizeBL:
+            t.cropBottom = clampCrop(m_startTransform.cropBottom + d.y());
+            t.h = m_startTransform.h - (t.cropBottom - m_startTransform.cropBottom);
+            break;
+        case Handle::ResizeTC:
+        case Handle::ResizeTR:
+        case Handle::ResizeTL:
+            t.cropTop = clampCrop(m_startTransform.cropTop - d.y());
+            {
+                const double dc = t.cropTop - m_startTransform.cropTop;
+                t.y = m_startTransform.y + dc;
+                t.h = m_startTransform.h - dc;
+            }
+            break;
+        default:
+            break;
+        }
+        clampMin(t, m_startTransform, m_handle);
     }
 
     EngineController* m_engine = nullptr;
     PreviewWidget* m_owner = nullptr;
-    QWidget* m_surface = nullptr;
+    PreviewSurface* m_surface = nullptr;
     bool m_program = false;
     bool m_interactive = false;
     bool m_live = false;
     bool m_dragging = false;
+    bool m_cropping = false;
     Handle m_handle = Handle::None;
     QPointF m_dragStart;
+    QPointF m_dragStartNorm;
+    QPointF m_startCenter;
     Transform m_startTransform;
+    double m_startAngle = 0.0;
 };
 
 PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* parent)
@@ -265,6 +864,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 {
     const QString accent = program ? QStringLiteral("#FF5A2C") : QStringLiteral("#22C55E");
 
+    setFocusPolicy(program ? Qt::NoFocus : Qt::StrongFocus);
     setStyleSheet(QStringLiteral(
         "background: #0D0F12;"
         "border-right: 2px solid %1;")
@@ -320,7 +920,6 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
             connect(engine, &EngineController::telemetryUpdated, this,
                     [live, tc, title](const TelemetrySnapshot& s) {
                         live->setVisible(s.streaming);
-                        // Keep PROGRAM chip solid orange; only LIVE badge toggles
                         title->setStyleSheet(QStringLiteral(
                             "color:#FFFFFF; font-weight:800; font-size:10px; letter-spacing:1px;"
                             "background:#FF5A2C; border-radius:2px; padding:2px 8px;"));
@@ -349,7 +948,6 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     h->addWidget(clearBtn);
     col->addWidget(header);
 
-    // Stage chrome: brackets in margins; label chip lives in header only
     stage = new StageChrome(program, this);
     auto* stageLay = new QVBoxLayout(stage);
     stageLay->setContentsMargins(3, m_program ? 20 : 3, 3, 3);
@@ -364,13 +962,10 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     m_surface = new PreviewSurface(stackHost);
     if (engine && engine->graphicsDevice())
         m_surface->setDevice(engine->graphicsDevice());
-    // Don't paint a second PROGRAM/PREVIEW chip on the surface — header chip is enough
     m_surface->setLabel({}, QColor(accent));
     m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
 
-    // Hit-testing lives as an event filter on the D3D surface. Never stack a Qt
-    // sibling over the HWND — that covers composed frames (Preview-only blank bug).
     m_overlay = new CanvasOverlay(engine, this, m_surface, program);
     m_overlay->setInteractive(!program);
     stageLay->addWidget(stackHost, 1);
@@ -397,6 +992,14 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
         sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
         clearBtn->setVisible(!id.isEmpty());
     }
+
+    if (!program) {
+        connect(this, &PreviewWidget::configureSourceRequested, this, [this](const QString& id) {
+            if (!m_engine || id.isEmpty()) return;
+            SourcePropertiesDialog dlg(m_engine, id, this);
+            dlg.exec();
+        });
+    }
 }
 
 void PreviewWidget::tick()
@@ -404,10 +1007,26 @@ void PreviewWidget::tick()
     if (!m_engine || !m_engine->compositor()) return;
     if (m_engine->graphicsDevice())
         m_surface->setDevice(m_engine->graphicsDevice());
+    if (m_overlay)
+        m_overlay->refreshChrome();
     auto* tex = m_program ? m_engine->compositor()->programTexture()
                           : m_engine->compositor()->previewTexture();
     if (tex)
         m_surface->presentTexture(tex);
+}
+
+void PreviewWidget::keyPressEvent(QKeyEvent* event)
+{
+    if (!m_program && m_overlay && m_overlay->eventFilter(m_surface, event))
+        return;
+    QWidget::keyPressEvent(event);
+}
+
+void PreviewWidget::focusInEvent(QFocusEvent* event)
+{
+    QWidget::focusInEvent(event);
+    if (!m_program && m_surface)
+        m_surface->setFocus(Qt::OtherFocusReason);
 }
 
 bool PreviewWidget::eventFilter(QObject* watched, QEvent* event)

@@ -2,6 +2,8 @@
 #include "compositor/D3D11Device.h"
 #include <QPainter>
 #include <QPaintEvent>
+#include <cmath>
+#include <algorithm>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -12,12 +14,40 @@
 #endif
 #include <windows.h>
 #include <d3d11.h>
+#include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 #endif
 
 namespace railshot {
+
+namespace {
+
+#ifdef _WIN32
+void clearRect(ID3D11DeviceContext1* ctx, ID3D11RenderTargetView* rtv, const float color[4],
+               int x0, int y0, int x1, int y1, int maxW, int maxH)
+{
+    if (!ctx || !rtv) return;
+    x0 = std::max(0, std::min(x0, maxW));
+    y0 = std::max(0, std::min(y0, maxH));
+    x1 = std::max(0, std::min(x1, maxW));
+    y1 = std::max(0, std::min(y1, maxH));
+    if (x1 <= x0 || y1 <= y0) return;
+    D3D11_RECT r{x0, y0, x1, y1};
+    ctx->ClearView(rtv, color, &r, 1);
+}
+
+void fillHandle(ID3D11DeviceContext1* ctx, ID3D11RenderTargetView* rtv, const float color[4],
+                float cx, float cy, int hs, int maxW, int maxH)
+{
+    const int x0 = int(std::lround(cx)) - hs;
+    const int y0 = int(std::lround(cy)) - hs;
+    clearRect(ctx, rtv, color, x0, y0, x0 + hs * 2, y0 + hs * 2, maxW, maxH);
+}
+#endif
+
+} // namespace
 
 PreviewSurface::PreviewSurface(QWidget* parent)
     : QWidget(parent)
@@ -26,6 +56,7 @@ PreviewSurface::PreviewSurface(QWidget* parent)
     setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_NoSystemBackground);
     setMinimumSize(160, 90);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 PreviewSurface::~PreviewSurface()
@@ -53,6 +84,11 @@ void PreviewSurface::setEmptyMessage(const QString& msg)
 {
     m_empty = msg;
     update();
+}
+
+void PreviewSurface::setEditChrome(const PreviewEditChrome& chrome)
+{
+    m_chrome = chrome;
 }
 
 void PreviewSurface::releaseSwapChain()
@@ -89,7 +125,6 @@ bool PreviewSurface::ensureSwapChain(unsigned width, unsigned height)
         return false;
 
     // Buffer size matches the compositor canvas; DXGI_SCALING_STRETCH scales to the HWND.
-    // CopyResource requires identical dimensions — widget-sized buffers would always fail at 1920x1080.
     DXGI_SWAP_CHAIN_DESC1 scd{};
     scd.Width = static_cast<UINT>(width);
     scd.Height = static_cast<UINT>(height);
@@ -121,6 +156,76 @@ bool PreviewSurface::ensureSwapChain(unsigned width, unsigned height)
 #endif
 }
 
+void PreviewSurface::drawEditChrome()
+{
+#ifdef _WIN32
+    if (!m_chrome.visible || !m_rtv || !m_device || m_swapW == 0 || m_swapH == 0)
+        return;
+
+    ComPtr<ID3D11DeviceContext1> ctx1;
+    if (FAILED(m_device->context()->QueryInterface(IID_PPV_ARGS(&ctx1))) || !ctx1)
+        return;
+
+    const int W = int(m_swapW);
+    const int H = int(m_swapH);
+    const float accent[4] = {
+        m_chrome.color.redF(),
+        m_chrome.color.greenF(),
+        m_chrome.color.blueF(),
+        1.0f
+    };
+    const float cropCol[4] = {0.2f, 0.95f, 0.45f, 1.0f};
+    const float* lineCol = (m_chrome.cropping || m_chrome.cropLeft > 0.001 || m_chrome.cropRight > 0.001
+                            || m_chrome.cropTop > 0.001 || m_chrome.cropBottom > 0.001)
+                               ? cropCol
+                               : accent;
+
+    // Axis-aligned bounds in canvas pixels (rotation drawn as AABB + rotate knob).
+    const QRectF nr = m_chrome.rect.normalized();
+    const int x0 = int(std::lround(nr.left() * W));
+    const int y0 = int(std::lround(nr.top() * H));
+    const int x1 = int(std::lround(nr.right() * W));
+    const int y1 = int(std::lround(nr.bottom() * H));
+    if (x1 <= x0 + 2 || y1 <= y0 + 2)
+        return;
+
+    constexpr int kLine = 2;
+    clearRect(ctx1.Get(), m_rtv, lineCol, x0, y0, x1, y0 + kLine, W, H);
+    clearRect(ctx1.Get(), m_rtv, lineCol, x0, y1 - kLine, x1, y1, W, H);
+    clearRect(ctx1.Get(), m_rtv, lineCol, x0, y0, x0 + kLine, y1, W, H);
+    clearRect(ctx1.Get(), m_rtv, lineCol, x1 - kLine, y0, x1, y1, W, H);
+
+    // Crop edge emphasis (thicker inner marks)
+    if (m_chrome.cropLeft > 0.001)
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x0 + 4, y1, W, H);
+    if (m_chrome.cropRight > 0.001)
+        clearRect(ctx1.Get(), m_rtv, cropCol, x1 - 4, y0, x1, y1, W, H);
+    if (m_chrome.cropTop > 0.001)
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x1, y0 + 4, W, H);
+    if (m_chrome.cropBottom > 0.001)
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y1 - 4, x1, y1, W, H);
+
+    constexpr int kHs = 5;
+    const float cx = (x0 + x1) * 0.5f;
+    const float cy = (y0 + y1) * 0.5f;
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x0), float(y0), kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, cx, float(y0), kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x1), float(y0), kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x0), cy, kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x1), cy, kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x0), float(y1), kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, cx, float(y1), kHs, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, float(x1), float(y1), kHs, W, H);
+
+    // Rotate knob above top-center
+    const float rotY = float(y0) - 28.0f;
+    clearRect(ctx1.Get(), m_rtv, accent, int(cx) - 1, int(rotY) + 6, int(cx) + 1, y0, W, H);
+    fillHandle(ctx1.Get(), m_rtv, accent, cx, rotY, kHs + 1, W, H);
+#else
+    (void)0;
+#endif
+}
+
 void PreviewSurface::presentTexture(ID3D11Texture2D* texture)
 {
 #ifdef _WIN32
@@ -135,13 +240,13 @@ void PreviewSurface::presentTexture(ID3D11Texture2D* texture)
     if (FAILED(m_swap->GetBuffer(0, IID_PPV_ARGS(&back))))
         return;
 
-    // Same size as compositor target → CopyResource succeeds; Present stretches to the widget.
     m_device->context()->CopyResource(back.Get(), texture);
+    drawEditChrome();
     if (FAILED(m_swap->Present(1, 0)))
         return;
     if (!m_hasFrame) {
         m_hasFrame = true;
-        update(); // drop empty-state QPainter fill
+        update();
     }
 #else
     Q_UNUSED(texture);
@@ -150,8 +255,6 @@ void PreviewSurface::presentTexture(ID3D11Texture2D* texture)
 
 void PreviewSurface::paintEvent(QPaintEvent*)
 {
-    // When native present is active we still overlay labels via a secondary pass.
-    // If no frame yet, fill with dark background message using GDI-compatible paint.
     if (m_hasFrame) return;
     QPainter p(this);
     p.fillRect(rect(), QColor(8, 10, 13));
@@ -181,8 +284,6 @@ void PreviewSurface::paintEvent(QPaintEvent*)
 void PreviewSurface::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    // HWND size changed; keep canvas-sized buffers — DXGI stretch handles the window.
-    // Recreate only if the HWND was recreated (winId change); otherwise Present scales.
 }
 
 } // namespace railshot
