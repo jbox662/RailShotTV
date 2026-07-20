@@ -12,6 +12,7 @@
 #include "ui/widgets/PlayListPanel.h"
 #include "ui/Theme.h"
 #include "core/EngineController.h"
+#include "core/SettingsStore.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -28,8 +29,12 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QHideEvent>
 #include <QEvent>
 #include <QFrame>
+#include <QMainWindow>
+#include <QDockWidget>
+#include <QByteArray>
 
 namespace railshot {
 
@@ -126,6 +131,48 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
                          0.2, 0.25, 0.6, 0.4);
     });
 }
+
+constexpr const char* kDockHostStyle = R"(
+QMainWindow#dashboardDockHost {
+  background: #0A0C0F;
+  border-top: 1px solid #3A3D45;
+}
+QMainWindow#dashboardDockHost QDockWidget {
+  color: #E0E2E8;
+  font-family: 'DM Sans';
+  font-size: 10px;
+  font-weight: 800;
+  titlebar-close-icon: none;
+}
+QMainWindow#dashboardDockHost QDockWidget::title {
+  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+    stop:0 rgba(79,158,255,0.28), stop:0.55 transparent);
+  border-bottom: 1px solid #3A3D45;
+  border-left: 3px solid #4F9EFF;
+  padding-left: 10px;
+  text-align: left;
+  height: 28px;
+}
+QMainWindow#dashboardDockHost QDockWidget#sourcesDock::title {
+  border-left-color: #FF5A2C;
+  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+    stop:0 rgba(255,90,44,0.22), stop:0.55 transparent);
+}
+QMainWindow#dashboardDockHost QDockWidget#mixerDock::title {
+  border-left-color: #A855F7;
+  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+    stop:0 rgba(168,85,247,0.22), stop:0.55 transparent);
+}
+QMainWindow#dashboardDockHost QDockWidget > QWidget {
+  background: #0A0C0F;
+  border: 1px solid #2A2D35;
+}
+QMainWindow#dashboardDockHost QSplitter::handle {
+  background: #3A3D45;
+  width: 3px;
+  height: 3px;
+}
+)";
 } // namespace
 
 DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
@@ -144,54 +191,76 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     monitors->addWidget(m_preview, 1);
     monitors->addWidget(transitions);
     monitors->addWidget(m_program, 1);
-    root->addLayout(monitors, 1);
+    root->addLayout(monitors, 3);
 
-    auto* inputsRow = new QHBoxLayout();
-    inputsRow->setContentsMargins(0, 0, 0, 0);
-    inputsRow->setSpacing(0);
+    // Nested QMainWindow hosts OBS-style docks (must be Qt::Widget, not a top-level window).
+    m_dockHost = new QMainWindow(this);
+    m_dockHost->setObjectName(QStringLiteral("dashboardDockHost"));
+    m_dockHost->setWindowFlags(Qt::Widget);
+    m_dockHost->setDockNestingEnabled(true);
+    m_dockHost->setDockOptions(QMainWindow::AnimatedDocks
+                               | QMainWindow::AllowNestedDocks
+                               | QMainWindow::AllowTabbedDocks
+                               | QMainWindow::GroupedDragging);
+    m_dockHost->setStyleSheet(QString::fromLatin1(kDockHostStyle));
+    m_dockHost->setMinimumHeight(180);
+    m_dockHost->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_dockHost, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QMenu menu(this);
+        menu.addAction(QStringLiteral("Reset desk layout"), this, &DashboardPage::resetDockLayout);
+        if (m_scenesDock)
+            menu.addAction(m_scenesDock->toggleViewAction());
+        if (m_sourcesDock)
+            menu.addAction(m_sourcesDock->toggleViewAction());
+        if (m_mixerDock)
+            menu.addAction(m_mixerDock->toggleViewAction());
+        menu.exec(m_dockHost->mapToGlobal(pos));
+    });
 
-    auto* scenesCol = new QWidget(this);
-    scenesCol->setFixedWidth(188);
+    auto* centralStub = new QWidget(m_dockHost);
+    centralStub->setFixedHeight(0);
+    centralStub->setMaximumHeight(0);
+    m_dockHost->setCentralWidget(centralStub);
+
+    // Scenes content
+    auto* scenesCol = new QWidget;
     scenesCol->setObjectName(QStringLiteral("chromePanel"));
-    scenesCol->setStyleSheet(QStringLiteral(
-        "background:#0A0C0F; border-right: 2px solid #4F9EFF66; border-top: 1px solid #3A3D45;"));
+    scenesCol->setMinimumWidth(140);
     auto* scenesLay = new QVBoxLayout(scenesCol);
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
-    auto* scenesHeader = new QWidget(scenesCol);
-    scenesHeader->setFixedHeight(30);
-    scenesHeader->setStyleSheet(
-        QStringLiteral(
-            "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(79,158,255,0.32), stop:0.55 transparent);"
-            "border-bottom:1px solid #3A3D45; border-left:3px solid #4F9EFF;"));
-    auto* scenesHeaderLay = new QHBoxLayout(scenesHeader);
-    scenesHeaderLay->setContentsMargins(10, 0, 8, 0);
-    auto* scenesTitle = new QLabel(QStringLiteral("SCENES"), scenesHeader);
-    scenesTitle->setObjectName(QStringLiteral("panelTitleBlue"));
-    scenesTitle->setStyleSheet(QStringLiteral(
-        "color:#4F9EFF; font-weight:900; font-size:10px; letter-spacing:2px; background:transparent;"));
-    auto* addScene = new QPushButton(QStringLiteral("+"), scenesHeader);
+    auto* scenesTools = new QWidget(scenesCol);
+    scenesTools->setFixedHeight(28);
+    scenesTools->setStyleSheet(QStringLiteral("background:#0F1218; border-bottom:1px solid #2A2D35;"));
+    auto* scenesToolsLay = new QHBoxLayout(scenesTools);
+    scenesToolsLay->setContentsMargins(8, 0, 6, 0);
+    auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
     addScene->setObjectName(QStringLiteral("panelAddButton"));
     addScene->setFixedSize(24, 22);
     addScene->setCursor(Qt::PointingHandCursor);
+    addScene->setToolTip(QStringLiteral("Add scene"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
-    scenesHeaderLay->addWidget(scenesTitle);
-    scenesHeaderLay->addStretch();
-    scenesHeaderLay->addWidget(addScene);
-    scenesLay->addWidget(scenesHeader);
+    scenesToolsLay->addStretch();
+    scenesToolsLay->addWidget(addScene);
+    scenesLay->addWidget(scenesTools);
+    scenesLay->addWidget(new SceneListWidget(engine, scenesCol), 1);
 
-    auto* scenes = new SceneListWidget(engine, scenesCol);
-    scenesLay->addWidget(scenes, 1);
-    inputsRow->addWidget(scenesCol);
+    m_tiles = new InputTilesWidget(engine, nullptr);
+    m_tiles->setMinimumWidth(200);
+    m_mixer = new AudioMixerWidget(engine, nullptr);
 
-    m_tiles = new InputTilesWidget(engine, this);
-    inputsRow->addWidget(m_tiles, 1);
+    m_scenesDock = makeDock(QStringLiteral("Scenes"), QStringLiteral("scenesDock"), scenesCol);
+    m_sourcesDock = makeDock(QStringLiteral("Sources"), QStringLiteral("sourcesDock"), m_tiles);
+    m_mixerDock = makeDock(QStringLiteral("Audio Mixer"), QStringLiteral("mixerDock"), m_mixer);
 
-    m_mixer = new AudioMixerWidget(engine, this);
-    inputsRow->addWidget(m_mixer);
-    root->addLayout(inputsRow);
+    applyDefaultDockLayout();
+    m_defaultDockState = m_dockHost->saveState();
+    restoreDockState();
+    m_dockStateReady = true;
+
+    root->addWidget(m_dockHost, 2);
 
     m_toolbar = new BottomToolbar(engine, this);
     root->addWidget(m_toolbar);
@@ -200,7 +269,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_drawerBackdrop->setObjectName(QStringLiteral("drawerBackdrop"));
     m_drawerBackdrop->hide();
     m_drawerBackdrop->setAttribute(Qt::WA_TransparentForMouseEvents, false);
-    connect(m_drawerBackdrop, &QFrame::destroyed, this, [] {});
 
     m_props = new SourcePropertiesWidget(engine, this);
     m_props->hide();
@@ -214,7 +282,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_playlist->hide();
     connect(m_playlist, &PlayListPanel::closeRequested, this, [this] { setPlayListOpen(false); });
 
-    // Click backdrop to close — use event filter via mouse
     m_drawerBackdrop->installEventFilter(this);
 
     connect(m_preview, &PreviewWidget::sourceSelected, this, [this](const QString& id) {
@@ -233,7 +300,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         const QString id = m_engine->addSource(r.type, r.name);
         if (!id.isEmpty() && !r.settings.isEmpty())
             m_engine->updateSourceSettings(id, r.settings);
-        // Select the new input on the dashboard; open settings only via gear / context menu.
         m_engine->setSelectedSourceId(id);
     });
 
@@ -255,6 +321,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     connect(m_toolbar, &BottomToolbar::overlayMenuRequested, this, [this](const QPoint& globalPos) {
         QMenu menu(this);
         populateOverlayMenu(&menu, m_engine, this);
+        menu.addSeparator();
+        menu.addAction(QStringLiteral("Reset desk layout"), this, &DashboardPage::resetDockLayout);
         menu.exec(globalPos);
     });
 
@@ -266,6 +334,115 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     tick->start(16);
 
     setFocusPolicy(Qt::StrongFocus);
+}
+
+DashboardPage::~DashboardPage()
+{
+    saveDockState();
+}
+
+QDockWidget* DashboardPage::makeDock(const QString& title, const QString& objectName, QWidget* content)
+{
+    auto* dock = new QDockWidget(title, m_dockHost);
+    dock->setObjectName(objectName);
+    dock->setWidget(content);
+    dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    dock->setFeatures(QDockWidget::DockWidgetMovable
+                      | QDockWidget::DockWidgetFloatable
+                      | QDockWidget::DockWidgetClosable);
+    dock->setMinimumWidth(120);
+    dock->setMinimumHeight(120);
+    dock->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(dock, &QDockWidget::customContextMenuRequested, this, [this, dock](const QPoint& pos) {
+        QMenu menu(dock);
+        menu.addAction(QStringLiteral("Reset desk layout"), this, &DashboardPage::resetDockLayout);
+        menu.addAction(dock->toggleViewAction());
+        menu.exec(dock->mapToGlobal(pos));
+    });
+    connect(dock, &QDockWidget::dockLocationChanged, this, [this](Qt::DockWidgetArea) {
+        scheduleSaveDockState();
+    });
+    connect(dock, &QDockWidget::topLevelChanged, this, [this](bool) {
+        scheduleSaveDockState();
+    });
+    connect(dock, &QDockWidget::visibilityChanged, this, [this](bool) {
+        scheduleSaveDockState();
+    });
+    return dock;
+}
+
+void DashboardPage::applyDefaultDockLayout()
+{
+    if (!m_dockHost || !m_scenesDock || !m_sourcesDock || !m_mixerDock)
+        return;
+
+    // Clear any prior docking then place Scenes | Sources | Mixer along the bottom.
+    m_dockHost->removeDockWidget(m_scenesDock);
+    m_dockHost->removeDockWidget(m_sourcesDock);
+    m_dockHost->removeDockWidget(m_mixerDock);
+
+    m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_scenesDock);
+    m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_sourcesDock);
+    m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_mixerDock);
+    m_dockHost->splitDockWidget(m_scenesDock, m_sourcesDock, Qt::Horizontal);
+    m_dockHost->splitDockWidget(m_sourcesDock, m_mixerDock, Qt::Horizontal);
+
+    m_scenesDock->show();
+    m_sourcesDock->show();
+    m_mixerDock->show();
+
+    // Prefer Sources wider than Scenes/Mixer.
+    m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock},
+                            {180, 520, 300}, Qt::Horizontal);
+}
+
+void DashboardPage::scheduleSaveDockState()
+{
+    if (!m_dockStateReady) return;
+    QTimer::singleShot(250, this, [this] { saveDockState(); });
+}
+
+void DashboardPage::saveDockState()
+{
+    if (!m_dockHost || !m_engine || !m_engine->settings()) return;
+    auto ui = m_engine->settings()->uiState();
+    ui.insert(QStringLiteral("dashboardDockState"),
+              QString::fromLatin1(m_dockHost->saveState().toBase64()));
+    m_engine->settings()->setUiState(ui);
+    m_engine->settings()->sync();
+}
+
+void DashboardPage::restoreDockState()
+{
+    if (!m_dockHost || !m_engine || !m_engine->settings()) return;
+    const auto ui = m_engine->settings()->uiState();
+    const QString b64 = ui.value(QStringLiteral("dashboardDockState")).toString();
+    if (b64.isEmpty()) return;
+    const QByteArray state = QByteArray::fromBase64(b64.toLatin1());
+    if (!state.isEmpty())
+        m_dockHost->restoreState(state);
+}
+
+void DashboardPage::resetDockLayout()
+{
+    m_dockStateReady = false;
+    if (!m_defaultDockState.isEmpty() && m_dockHost)
+        m_dockHost->restoreState(m_defaultDockState);
+    else
+        applyDefaultDockLayout();
+    if (m_engine && m_engine->settings()) {
+        auto ui = m_engine->settings()->uiState();
+        ui.remove(QStringLiteral("dashboardDockState"));
+        m_engine->settings()->setUiState(ui);
+        m_engine->settings()->sync();
+    }
+    m_dockStateReady = true;
+}
+
+void DashboardPage::hideEvent(QHideEvent* event)
+{
+    saveDockState();
+    QWidget::hideEvent(event);
 }
 
 void DashboardPage::setBasicMode(bool on)
