@@ -135,59 +135,66 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
 
 constexpr const char* kDockHostStyle = R"(
 QMainWindow#dashboardDockHost {
-  background: #1A1D21;
-  border-top: 1px solid #2F333A;
+  background: #0A0C0F;
+  border-top: 2px solid #3A3D45;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:horizontal {
-  background: #2F333A;
-  width: 1px;
+  background: #2A2D35;
+  width: 2px;
   margin: 0px;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:horizontal:hover {
-  background: #4A5058;
-  width: 2px;
+  background: #4F9EFF;
+  width: 3px;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:vertical {
-  background: #2F333A;
-  height: 1px;
+  background: #2A2D35;
+  height: 2px;
 }
 QMainWindow#dashboardDockHost QDockWidget {
-  border: none;
-  background: #1A1D21;
+  border: 1px solid #3A3D45;
+  background: #0D0F12;
+  titlebar-close-icon: none;
+  titlebar-normal-icon: none;
 }
 )";
 
 class DockTitleBar : public QWidget {
 public:
-    DockTitleBar(QDockWidget* dock, const QString& title, const QString& /*accent*/, QWidget* parent = nullptr)
+    DockTitleBar(QDockWidget* dock, const QString& title, const QString& accent, QWidget* parent = nullptr)
         : QWidget(parent), m_dock(dock)
     {
-        setFixedHeight(22);
+        setFixedHeight(26);
         setCursor(Qt::SizeAllCursor);
         setObjectName(QStringLiteral("dockTitleBar"));
+        // Chromatic Command panel header: accent bar + tinted gradient wash
         setStyleSheet(QStringLiteral(
             "QWidget#dockTitleBar {"
-            "  background: #252830;"
-            "  border-bottom: 1px solid #2F333A;"
-            "}"));
+            "  border-left: 3px solid %1;"
+            "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "    stop:0 %2, stop:0.45 transparent);"
+            "  border-bottom: 1px solid #3A3D45;"
+            "}")
+                          .arg(accent, tintForAccent(accent)));
 
         auto* lay = new QHBoxLayout(this);
-        lay->setContentsMargins(8, 0, 2, 0);
+        lay->setContentsMargins(10, 0, 4, 0);
         lay->setSpacing(2);
 
-        auto* lab = new QLabel(title, this);
+        auto* lab = new QLabel(title.toUpper(), this);
         lab->setStyleSheet(QStringLiteral(
-            "color:#C8CCD4; font-family:'Segoe UI'; font-size:11px; font-weight:600;"
-            "background:transparent;"));
+            "color:#F0F0F0; font-family:'DM Sans','Segoe UI'; font-size:11px; font-weight:800;"
+            "letter-spacing:1.2px; background:transparent;"));
         lay->addWidget(lab, 1);
 
         const QString btnStyle = QStringLiteral(
-            "QPushButton{background:transparent;border:none;color:#6B7280;font-size:10px;"
-            "padding:0px;min-width:18px;max-width:18px;}"
-            "QPushButton:hover{color:#E5E7EB;background:#3A3F48;}");
+            "QPushButton{background:transparent;border:1px solid transparent;color:%1;"
+            "font-size:11px;font-weight:700;padding:0px;min-width:20px;max-width:20px;border-radius:2px;}"
+            "QPushButton:hover{color:#F8F8FF;background:rgba(255,255,255,0.08);border-color:#3A3D45;}")
+                                     .arg(accent);
 
         auto* floatBtn = new QPushButton(QStringLiteral("□"), this);
-        floatBtn->setFixedSize(18, 18);
+        floatBtn->setFixedSize(20, 20);
         floatBtn->setCursor(Qt::PointingHandCursor);
         floatBtn->setToolTip(QStringLiteral("Float / dock"));
         floatBtn->setStyleSheet(btnStyle);
@@ -196,7 +203,7 @@ public:
         });
 
         auto* hideBtn = new QPushButton(QStringLiteral("×"), this);
-        hideBtn->setFixedSize(18, 18);
+        hideBtn->setFixedSize(20, 20);
         hideBtn->setCursor(Qt::PointingHandCursor);
         hideBtn->setToolTip(QStringLiteral("Hide panel"));
         hideBtn->setStyleSheet(btnStyle);
@@ -217,6 +224,13 @@ protected:
     }
 
 private:
+    static QString tintForAccent(const QString& accent)
+    {
+        if (accent.contains(QLatin1String("FF5A"))) return QStringLiteral("rgba(255,90,44,0.32)");
+        if (accent.contains(QLatin1String("A855"))) return QStringLiteral("rgba(168,85,247,0.32)");
+        if (accent.contains(QLatin1String("22C5"))) return QStringLiteral("rgba(34,197,94,0.32)");
+        return QStringLiteral("rgba(79,158,255,0.32)");
+    }
     QDockWidget* m_dock = nullptr;
 };
 } // namespace
@@ -268,27 +282,32 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     centralStub->setMaximumHeight(0);
     m_dockHost->setCentralWidget(centralStub);
 
-    // Scenes content — quiet OBS-like list chrome.
+    // Scenes content — Chromatic Command blue panel
     auto* scenesCol = new QWidget;
     scenesCol->setObjectName(QStringLiteral("chromePanel"));
     scenesCol->setMinimumWidth(150);
-    scenesCol->setStyleSheet(QStringLiteral("background:#1A1D21;"));
+    scenesCol->setStyleSheet(QStringLiteral(
+        "QWidget#chromePanel{background:#0A0C0F; border-right:1px solid #2A2D35;}"));
     auto* scenesLay = new QVBoxLayout(scenesCol);
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
     auto* scenesTools = new QWidget(scenesCol);
-    scenesTools->setFixedHeight(24);
-    scenesTools->setStyleSheet(QStringLiteral("background:#1A1D21; border-bottom:1px solid #2F333A;"));
+    scenesTools->setFixedHeight(28);
+    scenesTools->setStyleSheet(QStringLiteral(
+        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1D22,stop:1 #0D0F12);"
+        "border-bottom:1px solid #2A2D35;"));
     auto* scenesToolsLay = new QHBoxLayout(scenesTools);
-    scenesToolsLay->setContentsMargins(4, 2, 4, 2);
-    auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
-    addScene->setFixedSize(22, 20);
+    scenesToolsLay->setContentsMargins(6, 3, 6, 3);
+    auto* addScene = new QPushButton(QStringLiteral("+ Add Scene"), scenesTools);
+    addScene->setFixedHeight(22);
     addScene->setCursor(Qt::PointingHandCursor);
     addScene->setToolTip(QStringLiteral("Add scene"));
     addScene->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#2A2E36;border:1px solid #3A3F48;color:#C8CCD4;"
-        "font-size:12px;font-weight:600;border-radius:2px;}"
-        "QPushButton:hover{background:#343944;border-color:#4A5058;}"));
+        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1A3AFF);"
+        "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:10px;"
+        "font-weight:800;border-radius:3px;padding:0 10px;}"
+        "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);"
+        "border-color:#8AB4FF;}"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
