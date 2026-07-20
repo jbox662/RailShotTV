@@ -98,6 +98,8 @@ add_library(railshot_capture STATIC
     src/capture/WindowsGraphicsCapture.cpp
     src/capture/DesktopDuplicationCapture.h
     src/capture/DesktopDuplicationCapture.cpp
+    src/capture/WindowEnumerator.h
+    src/capture/WindowEnumerator.cpp
     src/capture/ImageSource.h
     src/capture/ImageSource.cpp
     src/capture/TextSource.h
@@ -114,6 +116,8 @@ add_library(railshot_capture STATIC
     src/capture/OverlaySource.cpp
     src/capture/BrowserSource.h
     src/capture/BrowserSource.cpp
+    src/capture/AudioSource.h
+    src/capture/AudioSource.cpp
     src/browser/BrowserIpc.h
     src/capture/CaptureManager.h
     src/capture/CaptureManager.cpp
@@ -123,6 +127,14 @@ target_link_libraries(railshot_capture PUBLIC
     Qt6::Gui
     Qt6::Network
 )
+if(WIN32)
+    target_link_libraries(railshot_capture PUBLIC
+        windowsapp
+        dwmapi
+        gdi32
+        user32
+    )
+endif()
 railshot_link_ffmpeg(railshot_capture)
 
 # ── Compositor ──────────────────────────────────────────────────────────────
@@ -159,6 +171,8 @@ add_library(railshot_audio STATIC
 target_link_libraries(railshot_audio PUBLIC
     railshot_platform
 )
+# Capture uses AudioGraph for AudioInput/Output sources (declared after audio target).
+target_link_libraries(railshot_capture PUBLIC railshot_audio)
 
 # ── Encoding / Streaming / Recording ────────────────────────────────────────
 add_library(railshot_encoding STATIC
@@ -317,6 +331,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/SourcePropertiesDialog.cpp
     src/ui/widgets/AddSourceDialog.h
     src/ui/widgets/AddSourceDialog.cpp
+    src/ui/widgets/properties/SourcePropertiesPanel.h
+    src/ui/widgets/properties/SourcePropertiesPanel.cpp
     src/ui/widgets/StreamStatusWidget.h
     src/ui/widgets/StreamStatusWidget.cpp
     src/ui/widgets/OverlayLibraryWidget.h
