@@ -2,6 +2,8 @@
 #include "compositor/D3D11Device.h"
 #include "compositor/Shaders.h"
 #include "core/Logger.h"
+#include <algorithm>
+#include <cmath>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -21,9 +23,14 @@ using Microsoft::WRL::ComPtr;
 namespace railshot {
 
 struct alignas(16) CBData {
-    float rect[4];
-    float opacity;
-    float pad[3];
+    float rect[4];       // 0
+    float opacity;       // 16
+    float rotation;      // 20
+    float cropMin[2];    // 24
+    float cropMax[2];    // 32
+    float _padCrop[2];   // 40 — HLSL packs next float4 at 48
+    float colorMul[4];   // 48
+    float colorAdd[4];   // 64
 };
 
 D3D11Compositor::D3D11Compositor(D3D11Device* device, QObject* parent)
@@ -212,6 +219,29 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->rect[2] = static_cast<float>(src.transform.w);
         cb->rect[3] = static_cast<float>(src.transform.h);
         cb->opacity = static_cast<float>(src.transform.opacity);
+        cb->rotation = static_cast<float>(src.transform.rotation * 3.14159265358979323846 / 180.0);
+        const float cl = static_cast<float>(std::clamp(src.transform.cropLeft, 0.0, 1.0));
+        const float cr = static_cast<float>(std::clamp(src.transform.cropRight, 0.0, 1.0));
+        const float ct = static_cast<float>(std::clamp(src.transform.cropTop, 0.0, 1.0));
+        const float cb_ = static_cast<float>(std::clamp(src.transform.cropBottom, 0.0, 1.0));
+        cb->cropMin[0] = cl;
+        cb->cropMin[1] = ct;
+        cb->cropMax[0] = 1.0f - cr;
+        cb->cropMax[1] = 1.0f - cb_;
+        const float brightness = static_cast<float>(src.settings.value(QStringLiteral("brightness")).toDouble(0.0));
+        const float contrast = static_cast<float>(src.settings.value(QStringLiteral("contrast")).toDouble(1.0));
+        const float saturation = static_cast<float>(src.settings.value(QStringLiteral("saturation")).toDouble(1.0));
+        // Approximate colour matrix: contrast * saturation scale + brightness bias
+        const float sat = std::clamp(saturation, 0.0f, 3.0f);
+        const float con = std::clamp(contrast, 0.0f, 3.0f);
+        cb->colorMul[0] = con * sat;
+        cb->colorMul[1] = con * sat;
+        cb->colorMul[2] = con * sat;
+        cb->colorMul[3] = 1.0f;
+        cb->colorAdd[0] = brightness;
+        cb->colorAdd[1] = brightness;
+        cb->colorAdd[2] = brightness;
+        cb->colorAdd[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);

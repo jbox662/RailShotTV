@@ -84,25 +84,38 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     };
 
     // General
+    QComboBox* generalTheme = nullptr;
+    QComboBox* generalLang = nullptr;
+    QCheckBox* generalConfirmQuit = nullptr;
+    QCheckBox* generalRestoreProject = nullptr;
     {
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
-        auto* theme = new QComboBox(w);
-        theme->addItems({QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("System")});
-        auto* lang = new QComboBox(w);
-        lang->addItems({QStringLiteral("English"), QStringLiteral("Español"), QStringLiteral("Français")});
-        auto* startLive = new QCheckBox(QStringLiteral("Confirm before quitting while live"), w);
-        startLive->setChecked(true);
-        auto* autoProject = new QCheckBox(QStringLiteral("Restore last project on startup"), w);
-        autoProject->setChecked(true);
-        f->addRow(QStringLiteral("Theme"), theme);
-        f->addRow(QStringLiteral("Language"), lang);
-        f->addRow(startLive);
-        f->addRow(autoProject);
-        connect(theme, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
-        connect(lang, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
-        connect(startLive, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
-        connect(autoProject, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        generalTheme = new QComboBox(w);
+        generalTheme->addItems({QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("System")});
+        generalLang = new QComboBox(w);
+        generalLang->addItems({QStringLiteral("English"), QStringLiteral("Español"), QStringLiteral("Français")});
+        generalConfirmQuit = new QCheckBox(QStringLiteral("Confirm before quitting while live"), w);
+        generalConfirmQuit->setChecked(true);
+        generalRestoreProject = new QCheckBox(QStringLiteral("Restore last project on startup"), w);
+        generalRestoreProject->setChecked(true);
+        const auto ui0 = engine->settings()->uiState();
+        if (ui0.contains(QStringLiteral("theme")))
+            generalTheme->setCurrentText(ui0.value(QStringLiteral("theme")).toString());
+        if (ui0.contains(QStringLiteral("language")))
+            generalLang->setCurrentText(ui0.value(QStringLiteral("language")).toString());
+        if (ui0.contains(QStringLiteral("confirmQuitWhileLive")))
+            generalConfirmQuit->setChecked(ui0.value(QStringLiteral("confirmQuitWhileLive")).toBool());
+        if (ui0.contains(QStringLiteral("restoreLastProject")))
+            generalRestoreProject->setChecked(ui0.value(QStringLiteral("restoreLastProject")).toBool());
+        f->addRow(QStringLiteral("Theme"), generalTheme);
+        f->addRow(QStringLiteral("Language"), generalLang);
+        f->addRow(generalConfirmQuit);
+        f->addRow(generalRestoreProject);
+        connect(generalTheme, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(generalLang, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(generalConfirmQuit, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        connect(generalRestoreProject, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
         addScrollPage(w);
     }
 
@@ -123,12 +136,13 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         enc->setCurrentText(profile.encoderPreference);
         auto* rate = new QComboBox(w);
         rate->addItems({QStringLiteral("CBR"), QStringLiteral("VBR"), QStringLiteral("CQP")});
+        rate->setCurrentText(profile.rateControl.isEmpty() ? QStringLiteral("CBR") : profile.rateControl);
         auto* bitrate = new QSpinBox(w);
         bitrate->setRange(500, 50000);
         bitrate->setValue(profile.videoBitrateKbps);
         auto* kf = new QSpinBox(w);
         kf->setRange(1, 10);
-        kf->setValue(2);
+        kf->setValue(profile.keyframeIntervalSec > 0 ? profile.keyframeIntervalSec : 2);
         f->addRow(QStringLiteral("Platform"), plat);
         f->addRow(QStringLiteral("Stream Key"), key);
         f->addRow(QStringLiteral("Encoder"), enc);
@@ -136,13 +150,18 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         f->addRow(QStringLiteral("Bitrate (kbps)"), bitrate);
         f->addRow(QStringLiteral("Keyframe (s)"), kf);
         connect(enc, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(rate, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
         connect(bitrate, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(kf, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
         // stash widgets for save via properties
         enc->setObjectName(QStringLiteral("settingsEncoder"));
         bitrate->setObjectName(QStringLiteral("settingsBitrate"));
         addScrollPage(w);
         m_streamEnc = enc;
         m_streamBitrate = bitrate;
+        m_streamRate = rate;
+        m_streamKeyframe = kf;
+        m_streamPlatform = plat;
     }
 
     // Output
@@ -319,7 +338,9 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         if (m_outH) p.height = m_outH->value();
         if (m_streamBitrate) p.videoBitrateKbps = m_streamBitrate->value();
         if (m_streamEnc) p.encoderPreference = m_streamEnc->currentText();
-        if (m_videoFps) p.fps = m_videoFps->currentText().toInt();
+        if (m_streamRate) p.rateControl = m_streamRate->currentText();
+        if (m_streamKeyframe) p.keyframeIntervalSec = m_streamKeyframe->value();
+        if (m_videoFps) p.fps = m_videoFps->currentText().toDouble();
         if (m_videoRes) {
             const QString r = m_videoRes->currentText();
             if (r.contains(QLatin1String("720"))) { p.width = 1280; p.height = 720; }
@@ -333,13 +354,18 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
             m_engine->compositor()->resize(p.width, p.height);
         if (m_outDir && !m_outDir->text().isEmpty())
             m_engine->settings()->setRecordingDirectory(m_outDir->text());
+        auto ui = m_engine->settings()->uiState();
         if (m_replaySec) {
             if (m_engine->replayBuffer())
                 m_engine->replayBuffer()->setCapacitySeconds(m_replaySec->value());
-            auto ui = m_engine->settings()->uiState();
             ui.insert(QStringLiteral("replaySeconds"), m_replaySec->value());
-            m_engine->settings()->setUiState(ui);
         }
+        if (generalTheme) ui.insert(QStringLiteral("theme"), generalTheme->currentText());
+        if (generalLang) ui.insert(QStringLiteral("language"), generalLang->currentText());
+        if (generalConfirmQuit) ui.insert(QStringLiteral("confirmQuitWhileLive"), generalConfirmQuit->isChecked());
+        if (generalRestoreProject) ui.insert(QStringLiteral("restoreLastProject"), generalRestoreProject->isChecked());
+        if (m_streamPlatform) ui.insert(QStringLiteral("streamPlatform"), m_streamPlatform->currentText());
+        m_engine->settings()->setUiState(ui);
         if (m_hotkeyEdits) {
             QJsonObject o;
             for (auto it = m_hotkeyEdits->begin(); it != m_hotkeyEdits->end(); ++it) {
@@ -348,6 +374,7 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
             }
             m_engine->settings()->setHotkeys(o);
         }
+        m_engine->settings()->sync();
         *dirty = false;
         saveBtn->setEnabled(false);
         saveBtn->setObjectName(QString());

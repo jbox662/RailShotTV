@@ -29,6 +29,8 @@ private:
     void navigateTo(const QString& pageId);
     void openProjectDialog();
     void saveProjectDialog();
+    void saveProjectAsDialog();
+    void openLastProject();
     void updateLiveChrome(bool streaming);
 
     EngineController* m_engine = nullptr;

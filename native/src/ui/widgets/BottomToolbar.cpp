@@ -183,8 +183,17 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     auto* external = new QPushButton(QStringLiteral("External"), this);
     external->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    external->setEnabled(false);
+    external->setCheckable(true);
+    external->setCursor(Qt::PointingHandCursor);
     external->setFixedHeight(22);
+    external->setToolTip(QStringLiteral("Send Program to External (Virtual Camera)"));
+    connect(external, &QPushButton::toggled, this, [this, external](bool on) {
+        QString err;
+        if (!m_engine->setExternalOutputEnabled(on, &err)) {
+            QMessageBox::warning(this, QStringLiteral("External"), err);
+            external->setChecked(false);
+        }
+    });
     row->addWidget(external);
 
     m_streamBtn = new StreamGlowButton(QStringLiteral("● Stream"), this);
@@ -285,9 +294,20 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         m_recordBtn->style()->polish(m_recordBtn);
 
         m_statusPill->setText(
-            QStringLiteral("<span style='color:#22C55E;font-weight:900;'>1080p60</span>"
-                           "  ·  <span style='color:#E0E2E8;'>%1 FPS</span>"
-                           "  ·  ENC %2  ·  GPU %3%  ·  CPU %4%")
+            QStringLiteral("<span style='color:#22C55E;font-weight:900;'>%1p%2</span>"
+                           "  ·  <span style='color:#E0E2E8;'>%3 FPS</span>"
+                           "  ·  ENC %4  ·  GPU %5%  ·  CPU %6%")
+                .arg([&] {
+                    auto profile = m_engine->projectSnapshot().output;
+                    if (profile.width <= 0) profile = m_engine->settings()->outputProfile();
+                    return profile.height > 0 ? profile.height : 1080;
+                }())
+                .arg([&] {
+                    auto profile = m_engine->projectSnapshot().output;
+                    if (profile.width <= 0) profile = m_engine->settings()->outputProfile();
+                    const double fps = profile.fps > 0 ? profile.fps : 59.94;
+                    return QString::number(fps, 'f', fps == int(fps) ? 0 : 2);
+                }())
                 .arg(int(s.fpsRender))
                 .arg(int(s.fpsEncode))
                 .arg(int(s.gpuPercent))

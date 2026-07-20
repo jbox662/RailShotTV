@@ -87,6 +87,7 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     auto* filterAll = new QCheckBox(QStringLiteral("Show all platforms"), left);
     filterAll->setChecked(true);
     leftLay->addWidget(filterAll);
+    QString* filterPlatform = new QString(); // empty = all
 
     auto* statsTitle = new QLabel(QStringLiteral("SESSION"), left);
     statsTitle->setStyleSheet(QStringLiteral("color:#8892A4; font-weight:800; font-size:10px; letter-spacing:1.5px; padding-top:12px;"));
@@ -139,6 +140,7 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     auto makeToggle = [&](const QString& label, const QString& color) {
         auto* b = new QPushButton(label, modTab);
         b->setCheckable(true);
+        b->setToolTip(QStringLiteral("Requires platform moderation API (local UI state only for now)"));
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
             "border:1px solid %1;color:%1;padding:8px;border-radius:3px;font-weight:800;}"
@@ -147,12 +149,13 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
         modLay->addWidget(b);
         return b;
     };
-    makeToggle(QStringLiteral("Slow Mode"), QStringLiteral("#FBBF24"));
-    makeToggle(QStringLiteral("Subscribers Only"), QStringLiteral("#A855F7"));
-    makeToggle(QStringLiteral("Emote Only"), QStringLiteral("#22D3EE"));
-    makeToggle(QStringLiteral("Mute Alerts"), QStringLiteral("#FF5A2C"));
-    auto* clearChat = new QPushButton(QStringLiteral("Clear All Chat"), modTab);
+    makeToggle(QStringLiteral("Slow Mode (local)"), QStringLiteral("#FBBF24"));
+    makeToggle(QStringLiteral("Subscribers Only (local)"), QStringLiteral("#A855F7"));
+    makeToggle(QStringLiteral("Emote Only (local)"), QStringLiteral("#22D3EE"));
+    makeToggle(QStringLiteral("Mute Alerts (local)"), QStringLiteral("#FF5A2C"));
+    auto* clearChat = new QPushButton(QStringLiteral("Clear Local Chat"), modTab);
     clearChat->setObjectName(QStringLiteral("chromeBtnBrand"));
+    clearChat->setToolTip(QStringLiteral("Clears the local feed only"));
     connect(clearChat, &QPushButton::clicked, this, [list] { list->clear(); });
     modLay->addWidget(clearChat);
     modLay->addStretch();
@@ -254,11 +257,14 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     });
 
     connect(chat, &ChatService::messageReceived, this, [=](const ChatMessage& m) {
+        if (!filterAll->isChecked() && !filterPlatform->isEmpty() && m.platform != *filterPlatform)
+            return;
         QString accent = QStringLiteral("#C8CAD0");
         if (m.platform == QLatin1String("twitch")) accent = QStringLiteral("#9146FF");
         else if (m.platform == QLatin1String("youtube")) accent = QStringLiteral("#FF0000");
         else if (m.platform == QLatin1String("facebook")) accent = QStringLiteral("#1877F2");
         auto* item = new QListWidgetItem(QStringLiteral("[%1] %2: %3").arg(m.platform, m.user, m.text));
+        item->setData(Qt::UserRole, m.platform);
         item->setForeground(QColor(accent));
         if (m.text.contains(QLatin1Char('@')))
             item->setBackground(QColor(QStringLiteral("#FBBF2420")));
@@ -271,6 +277,25 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
             highlights->insertItem(0, QStringLiteral("%1: %2").arg(m.user, m.text.left(48)));
         }
         activity->addItem(QStringLiteral("%1 joined conversation").arg(m.user));
+    });
+
+    connect(filterAll, &QCheckBox::toggled, this, [=](bool all) {
+        *filterPlatform = all ? QString() : platform->currentData().toString();
+        for (int i = 0; i < list->count(); ++i) {
+            auto* item = list->item(i);
+            const QString plat = item->data(Qt::UserRole).toString();
+            item->setHidden(!all && !plat.isEmpty() && plat != *filterPlatform);
+        }
+    });
+    connect(platform, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int) {
+        if (!filterAll->isChecked()) {
+            *filterPlatform = platform->currentData().toString();
+            for (int i = 0; i < list->count(); ++i) {
+                auto* item = list->item(i);
+                const QString plat = item->data(Qt::UserRole).toString();
+                item->setHidden(!plat.isEmpty() && plat != *filterPlatform);
+            }
+        }
     });
 
     connect(send, &QPushButton::clicked, this, [chat, platform, input] {

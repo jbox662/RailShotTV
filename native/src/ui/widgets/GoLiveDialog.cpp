@@ -1,6 +1,9 @@
 #include "ui/widgets/GoLiveDialog.h"
 #include "core/EngineController.h"
 #include "core/SecretStore.h"
+#include "core/SettingsStore.h"
+#include "encoding/EncoderFactory.h"
+#include "audio/AudioGraph.h"
 #include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -8,6 +11,7 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <QFrame>
+#include <functional>
 
 namespace railshot {
 
@@ -187,6 +191,20 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     motion::playModalEnter(this);
 }
 
+void GoLiveDialog::setPrefill(const QString& title, const QString& platform)
+{
+    if (m_title && !title.isEmpty())
+        m_title->setText(title);
+    if (platform.isEmpty()) return;
+    m_platform = platform.toLower();
+    for (auto* b : m_platformBtns) {
+        const bool match = b->property("platformId").toString() == m_platform;
+        b->setChecked(match);
+        if (match)
+            emit b->clicked(true);
+    }
+}
+
 void GoLiveDialog::showStep(int step)
 {
     m_stack->setCurrentIndex(step);
@@ -202,27 +220,80 @@ void GoLiveDialog::runChecks()
 {
     showStep(1);
     m_checkIndex = 0;
+
+    struct Check {
+        QString label;
+        QString color;
+        std::function<QString()> probe; // empty = pass
+    };
+
+    QVector<Check> checks;
+    checks.push_back({QStringLiteral("Stream key"), QStringLiteral("#FBBF24"), [this] {
+        if (m_key->text().trimmed().isEmpty())
+            return QStringLiteral("Enter a stream key before going live");
+        return QString();
+    }});
+    checks.push_back({QStringLiteral("RTMP URL"), QStringLiteral("#22D3EE"), [this] {
+        if (m_url->text().trimmed().isEmpty())
+            return QStringLiteral("RTMP URL is empty");
+        return QString();
+    }});
+    checks.push_back({QStringLiteral("Active scene"), QStringLiteral("#4F9EFF"), [this] {
+        const auto p = m_engine->projectSnapshot();
+        const auto* scene = p.findScene(p.programSceneId.isEmpty() ? p.activeSceneId : p.programSceneId);
+        if (!scene)
+            return QStringLiteral("No program scene");
+        bool any = false;
+        for (const auto& s : scene->sources) {
+            if (s.visible) { any = true; break; }
+        }
+        if (!any)
+            return QStringLiteral("Program scene has no visible sources");
+        return QString();
+    }});
+    checks.push_back({QStringLiteral("Audio devices"), QStringLiteral("#A855F7"), [this] {
+        if (!m_engine->audio())
+            return QStringLiteral("Audio graph unavailable");
+        return QString();
+    }});
+    checks.push_back({QStringLiteral("Video encoder"), QStringLiteral("#22C55E"), [this] {
+        OutputProfile profile = m_engine->projectSnapshot().output;
+        if (profile.width <= 0)
+            profile = m_engine->settings()->outputProfile();
+        QString name;
+        auto enc = EncoderFactory::createVideo(profile, &name);
+        if (!enc)
+            return QStringLiteral("No video encoder available");
+        QString err;
+        if (!enc->open(profile, &err))
+            return err.isEmpty() ? QStringLiteral("Encoder failed to open") : err;
+        enc->close();
+        return QString();
+    }});
+
     auto* t = new QTimer(this);
-    connect(t, &QTimer::timeout, this, [this, t] {
-        static const struct { const char* label; const char* color; } checks[] = {
-            {"Audio devices", "#A855F7"},
-            {"Active scene", "#4F9EFF"},
-            {"Video encoder", "#22C55E"},
-            {"Network", "#22D3EE"},
-            {"Stream key", "#FBBF24"},
-        };
-        if (m_checkIndex < 5) {
-            m_checkStatus->setText(QStringLiteral("✓  %1").arg(QString::fromLatin1(checks[m_checkIndex].label)));
-            m_checkStatus->setStyleSheet(QStringLiteral("font-size:14px; color:%1; padding-top:24px;")
-                                             .arg(QString::fromLatin1(checks[m_checkIndex].color)));
-            ++m_checkIndex;
-        } else {
+    connect(t, &QTimer::timeout, this, [this, t, checks]() mutable {
+        if (m_checkIndex >= checks.size()) {
             t->stop();
             t->deleteLater();
             startCountdown();
+            return;
         }
+        const auto& c = checks[m_checkIndex];
+        const QString fail = c.probe();
+        if (!fail.isEmpty()) {
+            t->stop();
+            t->deleteLater();
+            m_checkStatus->setText(QStringLiteral("✗  %1 — %2").arg(c.label, fail));
+            m_checkStatus->setStyleSheet(QStringLiteral("font-size:14px; color:#FF5A2C; padding-top:24px;"));
+            QTimer::singleShot(1600, this, [this] { showStep(0); });
+            return;
+        }
+        m_checkStatus->setText(QStringLiteral("✓  %1").arg(c.label));
+        m_checkStatus->setStyleSheet(QStringLiteral("font-size:14px; color:%1; padding-top:24px;").arg(c.color));
+        ++m_checkIndex;
     });
-    t->start(350);
+    t->start(280);
 }
 
 void GoLiveDialog::startCountdown()

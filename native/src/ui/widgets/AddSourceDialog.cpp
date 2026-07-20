@@ -1,6 +1,7 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "core/EngineController.h"
 #include "capture/MediaFoundationCamera.h"
+#include "capture/NdiSource.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -13,6 +14,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QFrame>
+#include <QColor>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -74,21 +76,6 @@ const InputTypeEntry kInputTypes[] = {
     {"Media / Video", "#FB923C", SourceType::Media, true},
     {"NDI / OMT", "#06B6D4", SourceType::Ndi, true},
     {"Alert / Stinger", "#F59E0B", SourceType::Alert, true},
-    {"Video (file)", "#94A3B8", SourceType::Media, false},
-    {"DVD", "#94A3B8", SourceType::Unknown, false},
-    {"List", "#94A3B8", SourceType::Unknown, false},
-    {"Stream / SRT", "#94A3B8", SourceType::Unknown, false},
-    {"Instant Replay", "#94A3B8", SourceType::Unknown, false},
-    {"Image Sequence", "#94A3B8", SourceType::Image, false},
-    {"Video Delay", "#94A3B8", SourceType::Unknown, false},
-    {"Photos", "#94A3B8", SourceType::Image, false},
-    {"PowerPoint", "#94A3B8", SourceType::Unknown, false},
-    {"Audio Input", "#94A3B8", SourceType::Unknown, false},
-    {"Virtual Set", "#94A3B8", SourceType::Unknown, false},
-    {"Video Call", "#94A3B8", SourceType::Unknown, false},
-    {"Zoom", "#94A3B8", SourceType::Unknown, false},
-    {"Telestrator", "#94A3B8", SourceType::Unknown, false},
-    {"Overlay", "#94A3B8", SourceType::Browser, false},
 };
 } // namespace
 
@@ -219,10 +206,43 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     colorForm->addRow(QStringLiteral("Colour"), m_colorHex);
     m_stack->addWidget(colorPage);
 
-    m_stack->addWidget(new QLabel(QStringLiteral("Media source — configure path after add (engine Media type)."), m_stack));
-    m_stack->addWidget(new QLabel(QStringLiteral("NDI source — discovery UI coming soon."), m_stack));
+    auto* mediaPage = new QWidget(m_stack);
+    auto* mediaForm = new QFormLayout(mediaPage);
+    m_mediaPath = new QLineEdit(mediaPage);
+    auto* mediaBrowse = new QPushButton(QStringLiteral("Browse…"), mediaPage);
+    connect(mediaBrowse, &QPushButton::clicked, this, [this] {
+        const auto path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Media File"), {},
+            QStringLiteral("Media (*.mp4 *.mov *.mkv *.webm *.avi *.png *.jpg *.jpeg *.bmp *.webp)"));
+        if (!path.isEmpty()) m_mediaPath->setText(path);
+    });
+    mediaForm->addRow(QStringLiteral("Path"), m_mediaPath);
+    mediaForm->addRow(mediaBrowse);
+    m_stack->addWidget(mediaPage);
+
+    auto* ndiPage = new QWidget(m_stack);
+    auto* ndiLay = new QVBoxLayout(ndiPage);
+    m_ndiList = new QListWidget(ndiPage);
+    auto* ndiRefresh = new QPushButton(QStringLiteral("Refresh NDI Sources"), ndiPage);
+    auto refreshNdi = [this] {
+        m_ndiList->clear();
+        const auto found = NdiSource::discoverSources(1200);
+        if (found.isEmpty()) {
+            m_ndiList->addItem(QStringLiteral("(No NDI sources — install NDI Runtime if needed)"));
+            return;
+        }
+        for (const auto& n : found)
+            m_ndiList->addItem(n);
+        m_ndiList->setCurrentRow(0);
+    };
+    connect(ndiRefresh, &QPushButton::clicked, this, refreshNdi);
+    ndiLay->addWidget(new QLabel(QStringLiteral("Available NDI sources"), ndiPage));
+    ndiLay->addWidget(m_ndiList, 1);
+    ndiLay->addWidget(ndiRefresh);
+    m_stack->addWidget(ndiPage);
+    refreshNdi();
+
     m_stack->addWidget(new QLabel(QStringLiteral("Alert / stinger overlay source."), m_stack));
-    m_stack->addWidget(new QLabel(QStringLiteral("This input type is listed for catalogue parity and is not available yet."), m_stack));
 
     rightLay->addWidget(m_stack, 1);
     body->addWidget(right, 1);
@@ -294,7 +314,7 @@ void AddSourceDialog::rebuildFields()
     case SourceType::Media: m_stack->setCurrentIndex(8); break;
     case SourceType::Ndi: m_stack->setCurrentIndex(9); break;
     case SourceType::Alert: m_stack->setCurrentIndex(10); break;
-    default: m_stack->setCurrentIndex(11); break;
+    default: m_stack->setCurrentIndex(0); break;
     }
 }
 
@@ -329,6 +349,19 @@ void AddSourceDialog::acceptConfigured()
     case SourceType::Color:
         m_result.settings.insert(QStringLiteral("color"), m_colorHex->text().trimmed());
         break;
+    case SourceType::Media:
+        if (!m_mediaPath || m_mediaPath->text().trimmed().isEmpty()) return;
+        m_result.settings.insert(QStringLiteral("path"), m_mediaPath->text().trimmed());
+        m_result.settings.insert(QStringLiteral("loop"), true);
+        break;
+    case SourceType::Ndi: {
+        QString name;
+        if (m_ndiList && m_ndiList->currentItem())
+            name = m_ndiList->currentItem()->text();
+        if (name.isEmpty() || name.startsWith(QLatin1Char('('))) return;
+        m_result.settings.insert(QStringLiteral("ndiName"), name);
+        break;
+    }
     default:
         break;
     }

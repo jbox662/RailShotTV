@@ -13,6 +13,7 @@ class GoLiveDialog : public QDialog {
     Q_OBJECT
 public:
     explicit GoLiveDialog(EngineController* engine, QWidget* parent = nullptr);
+    void setPrefill(const QString& title, const QString& platform);
 
 private:
     void showStep(int step);

@@ -6,7 +6,11 @@
 #include "capture/TextSource.h"
 #include "capture/OverlaySource.h"
 #include "capture/BrowserSource.h"
+#include "capture/ColorSource.h"
+#include "capture/MediaSource.h"
+#include "capture/NdiSource.h"
 #include "core/Logger.h"
+#include <QColor>
 #include <QSet>
 
 namespace railshot {
@@ -48,6 +52,21 @@ std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& sou
         return std::make_unique<OverlaySource>(source.id, source.name, source.type, source.settings);
     case SourceType::Browser:
         return std::make_unique<BrowserSource>(source.id, source.name, source.settings);
+    case SourceType::Color: {
+        const QString hex = source.settings.value(QStringLiteral("color")).toString(QStringLiteral("#1A2035"));
+        const int w = source.settings.value(QStringLiteral("width")).toInt(1920);
+        const int h = source.settings.value(QStringLiteral("height")).toInt(1080);
+        return std::make_unique<ColorSource>(source.id, source.name, QColor(hex), w, h);
+    }
+    case SourceType::Media: {
+        const QString path = source.settings.value(QStringLiteral("path")).toString();
+        const bool loop = source.settings.value(QStringLiteral("loop")).toBool(true);
+        return std::make_unique<MediaSource>(source.id, source.name, path, loop);
+    }
+    case SourceType::Ndi: {
+        const QString ndi = source.settings.value(QStringLiteral("ndiName")).toString(source.name);
+        return std::make_unique<NdiSource>(source.id, source.name, ndi);
+    }
     default:
         return std::make_unique<TextSource>(source.id, source.name, source.name);
     }
@@ -87,6 +106,14 @@ void CaptureManager::updateSource(const SourceItem& source)
     }
     if (auto* text = dynamic_cast<TextSource*>(src)) {
         text->setText(source.settings.value(QStringLiteral("text")).toString(source.name));
+        return;
+    }
+    if (auto* color = dynamic_cast<ColorSource*>(src)) {
+        color->setColor(QColor(source.settings.value(QStringLiteral("color")).toString()));
+        return;
+    }
+    if (auto* media = dynamic_cast<MediaSource*>(src)) {
+        media->setPath(source.settings.value(QStringLiteral("path")).toString());
     }
 }
 
@@ -117,16 +144,29 @@ void CaptureManager::detachAll()
 
 void CaptureManager::syncWithScene(const SceneItem& scene)
 {
+    const SceneItem* ptr = &scene;
+    syncWithScenes({ptr});
+}
+
+void CaptureManager::syncWithScenes(const QVector<const SceneItem*>& scenes)
+{
     QSet<QString> wanted;
-    for (const auto& src : scene.sources) {
-        if (!src.visible) continue;
-        wanted.insert(src.id);
-        if (!m_sources.contains(src.id)) {
+    QHash<QString, SourceItem> items;
+    for (const SceneItem* scene : scenes) {
+        if (!scene) continue;
+        for (const auto& src : scene->sources) {
+            if (!src.visible) continue;
+            wanted.insert(src.id);
+            items.insert(src.id, src);
+        }
+    }
+    for (auto it = items.cbegin(); it != items.cend(); ++it) {
+        if (!m_sources.contains(it.key())) {
             QString err;
-            if (!attachSource(src, &err))
-                emit sourceError(src.id, err);
+            if (!attachSource(it.value(), &err))
+                emit sourceError(it.key(), err);
         } else {
-            updateSource(src);
+            updateSource(it.value());
         }
     }
     const auto existing = m_sources.keys();
@@ -149,6 +189,7 @@ QVector<QString> CaptureManager::activeSourceIds() const
 
 void CaptureManager::poll()
 {
+    if (m_paused) return;
     for (auto it = m_sources.begin(); it != m_sources.end(); ++it) {
         VideoFrame frame;
         if (it.value()->acquireLatest(frame))

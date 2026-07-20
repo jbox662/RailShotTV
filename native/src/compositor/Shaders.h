@@ -9,17 +9,25 @@ inline constexpr char kVsMain[] = R"(
 struct VSIn { float2 pos : POSITION; float2 uv : TEXCOORD0; };
 struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
 cbuffer CB : register(b0) {
-    float4 rect; // x,y,w,h in NDC-ish 0..1 mapped in VS
+    float4 rect;      // x,y,w,h in 0..1 canvas space
     float opacity;
-    float3 _pad;
+    float rotation;   // radians
+    float2 cropMin;   // UV crop min
+    float2 cropMax;   // UV crop max
+    float2 _padCrop;
+    float4 colorMul;  // rgb mul + pad
+    float4 colorAdd;  // brightness bias in rgb
 };
 VSOut main(VSIn i) {
     VSOut o;
-    float2 p = float2(rect.x + i.pos.x * rect.z, rect.y + i.pos.y * rect.w);
-    // Convert 0..1 top-left to clip space
+    float2 local = float2(i.pos.x - 0.5, i.pos.y - 0.5);
+    float s = sin(rotation);
+    float c = cos(rotation);
+    float2 rotated = float2(local.x * c - local.y * s, local.x * s + local.y * c);
+    float2 p = float2(rect.x + (rotated.x + 0.5) * rect.z, rect.y + (rotated.y + 0.5) * rect.w);
     float2 clip = float2(p.x * 2.0 - 1.0, 1.0 - p.y * 2.0);
     o.pos = float4(clip, 0, 1);
-    o.uv = i.uv;
+    o.uv = lerp(cropMin, cropMax, i.uv);
     return o;
 }
 )";
@@ -30,10 +38,16 @@ SamplerState samp : register(s0);
 cbuffer CB : register(b0) {
     float4 rect;
     float opacity;
-    float3 _pad;
+    float rotation;
+    float2 cropMin;
+    float2 cropMax;
+    float2 _padCrop;
+    float4 colorMul;
+    float4 colorAdd;
 };
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float4 c = tex.Sample(samp, uv);
+    c.rgb = c.rgb * colorMul.rgb + colorAdd.rgb;
     c.a *= opacity;
     return c;
 }

@@ -16,6 +16,8 @@ public:
 signals:
     void openProject();
     void saveProject();
+    void saveProjectAs();
+    void openLastProject();
     void newProject();
     void openSettings();
     void toggleShortcuts();

@@ -43,6 +43,8 @@ private:
     QLineEdit* m_browserUrl = nullptr;
     QLineEdit* m_name = nullptr;
     QLineEdit* m_colorHex = nullptr;
+    QLineEdit* m_mediaPath = nullptr;
+    QListWidget* m_ndiList = nullptr;
     SourceType m_selectedType = SourceType::Camera;
 };
 

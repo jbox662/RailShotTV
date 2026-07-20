@@ -44,7 +44,7 @@ MultiCorderPanel::MultiCorderPanel(EngineController* engine, QWidget* parent)
     h->addWidget(close);
     root->addWidget(header);
 
-    auto* hint = new QLabel(QStringLiteral("Per-source record arms (UI). Master Record uses the bottom toolbar."), this);
+    auto* hint = new QLabel(QStringLiteral("Arm ISO recording per source. Writes a separate MKV beside master Record."), this);
     hint->setWordWrap(true);
     hint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px; padding:10px 12px;"));
     root->addWidget(hint);
@@ -91,12 +91,26 @@ void MultiCorderPanel::refresh()
         auto* rec = new QPushButton(QStringLiteral("● REC"), row);
         rec->setCheckable(true);
         rec->setFixedWidth(72);
+        rec->setChecked(m_engine->isSourceIsoRecording(src.id));
+        if (rec->isChecked())
+            rec->setText(QStringLiteral("■ ARM"));
         rec->setStyleSheet(QStringLiteral(
             "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
             "border:1px solid #5A5E68;color:#A0A8B8;font-weight:800;font-size:10px;}"
             "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #5A1010,stop:1 #2A0A0A);"
             "border:2px solid #EF4444;color:#FECACA;}"));
-        connect(rec, &QPushButton::toggled, this, [rec](bool on) {
+        const QString sourceId = src.id;
+        connect(rec, &QPushButton::toggled, this, [this, rec, sourceId](bool on) {
+            QString err;
+            if (!m_engine->setSourceIsoRecording(sourceId, on, &err)) {
+                rec->blockSignals(true);
+                rec->setChecked(false);
+                rec->blockSignals(false);
+                rec->setText(QStringLiteral("● REC"));
+                if (!err.isEmpty())
+                    rec->setToolTip(err);
+                return;
+            }
             rec->setText(on ? QStringLiteral("■ ARM") : QStringLiteral("● REC"));
         });
         lay->addWidget(name, 1);

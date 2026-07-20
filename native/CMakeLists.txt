@@ -102,6 +102,12 @@ add_library(railshot_capture STATIC
     src/capture/ImageSource.cpp
     src/capture/TextSource.h
     src/capture/TextSource.cpp
+    src/capture/ColorSource.h
+    src/capture/ColorSource.cpp
+    src/capture/MediaSource.h
+    src/capture/MediaSource.cpp
+    src/capture/NdiSource.h
+    src/capture/NdiSource.cpp
     src/capture/OverlayRenderer.h
     src/capture/OverlayRenderer.cpp
     src/capture/OverlaySource.h
@@ -117,6 +123,7 @@ target_link_libraries(railshot_capture PUBLIC
     Qt6::Gui
     Qt6::Network
 )
+railshot_link_ffmpeg(railshot_capture)
 
 # ── Compositor ──────────────────────────────────────────────────────────────
 add_library(railshot_compositor STATIC
@@ -185,6 +192,8 @@ add_library(railshot_recording STATIC
     src/recording/MkvRecorder.cpp
     src/recording/RecordingSession.h
     src/recording/RecordingSession.cpp
+    src/recording/IsoRecordManager.h
+    src/recording/IsoRecordManager.cpp
 )
 target_link_libraries(railshot_recording PUBLIC
     railshot_encoding

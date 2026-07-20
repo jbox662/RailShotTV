@@ -52,6 +52,14 @@ public:
     void go(TransitionType type = TransitionType::Cut);
     void setTransition(TransitionType type, int durationMs);
 
+    void setInputsPaused(bool paused);
+    bool inputsPaused() const { return m_inputsPaused; }
+
+    bool setSourceIsoRecording(const QString& sourceId, bool armed, QString* error = nullptr);
+    bool isSourceIsoRecording(const QString& sourceId) const;
+    bool setExternalOutputEnabled(bool enabled, QString* error = nullptr);
+    bool externalOutputEnabled() const;
+
     QString addSource(SourceType type, const QString& name = {});
     void removeSource(const QString& sourceId);
     void setSourceVisible(const QString& sourceId, bool visible);
@@ -96,6 +104,7 @@ private slots:
 private:
     void rebuildSourcesForActiveScenes();
     void updateEngineState();
+    void tickIsoRecorders(qint64 ptsUs);
 
     std::unique_ptr<SceneGraph> m_sceneGraph;
     std::unique_ptr<SettingsStore> m_settings;
@@ -115,7 +124,9 @@ private:
     QTimer m_autosaveTimer;
     EngineState m_state = EngineState::Idle;
     bool m_initialized = false;
+    bool m_inputsPaused = false;
     QString m_selectedSourceId;
+    class IsoRecordManager* m_iso = nullptr;
 };
 
 } // namespace railshot

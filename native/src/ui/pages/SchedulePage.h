@@ -10,7 +10,7 @@ public:
     explicit SchedulePage(QWidget* parent = nullptr);
 
 signals:
-    void goLiveRequested();
+    void goLiveRequested(const QString& title, const QString& platform);
 
 private:
     ScheduleModel m_model;

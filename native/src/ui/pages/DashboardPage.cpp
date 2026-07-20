@@ -19,6 +19,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QFile>
+#include <QFileDialog>
 #include <QDir>
 #include <QUrl>
 #include <QJsonObject>
@@ -103,8 +104,16 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
     menu->addAction(QStringLiteral("Sub Alert"), page, [engine] {
         addTypedOverlay(engine, SourceType::Alert, QStringLiteral("Sub Alert"), 0.3, 0.3, 0.4, 0.3);
     });
-    menu->addAction(QStringLiteral("Logo Overlay"), page, [engine] {
-        addTypedOverlay(engine, SourceType::Image, QStringLiteral("Logo Overlay"), 0.85, 0.05, 0.12, 0.12);
+    menu->addAction(QStringLiteral("Logo Overlay"), page, [engine, page] {
+        const auto path = QFileDialog::getOpenFileName(
+            page, QStringLiteral("Logo Image"), {},
+            QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
+        if (path.isEmpty()) return;
+        const QString id = engine->addSource(SourceType::Image, QStringLiteral("Logo Overlay"));
+        engine->updateSourceSettings(id, QJsonObject{{QStringLiteral("path"), path}});
+        Transform t;
+        t.x = 0.85; t.y = 0.05; t.w = 0.12; t.h = 0.12;
+        engine->updateSourceTransform(id, t);
     });
     menu->addAction(QStringLiteral("Camera Frame"), page, [engine] {
         if (!addBrowserPreset(engine, QStringLiteral("Camera Frame"), QStringLiteral("break-and-run.html"),

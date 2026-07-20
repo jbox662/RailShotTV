@@ -10,6 +10,8 @@
 #include <QGridLayout>
 #include <QButtonGroup>
 #include <QStyle>
+#include <QInputDialog>
+#include <QMenu>
 
 namespace railshot {
 
@@ -31,7 +33,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     m_go->setCursor(Qt::PointingHandCursor);
     connect(m_go, &QPushButton::clicked, this, [this] {
         if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
-            m_engine->go();
+            m_engine->go(transitionTypeFromString(m_active));
     });
     col->addWidget(m_go);
 
@@ -68,6 +70,18 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
         opt->setFixedWidth(18);
         opt->setCursor(Qt::PointingHandCursor);
         opt->setToolTip(QStringLiteral("%1 options").arg(t));
+        connect(opt, &QPushButton::clicked, this, [this, t] {
+            bool ok = false;
+            const int ms = QInputDialog::getInt(this, QStringLiteral("%1 Duration").arg(t),
+                                                QStringLiteral("Duration (ms)"),
+                                                m_engine->projectSnapshot().transitionMs,
+                                                0, 5000, 50, &ok);
+            if (!ok) return;
+            m_active = t;
+            m_activeLabel->setText(t.toUpper());
+            m_engine->setTransition(transitionTypeFromString(t), ms);
+            restyleTypes();
+        });
         row->addWidget(b, 1);
         row->addWidget(opt);
         col->addLayout(row);

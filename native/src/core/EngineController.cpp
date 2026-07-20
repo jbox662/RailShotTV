@@ -10,6 +10,7 @@
 #include "chat/ChatService.h"
 #include "overlays/ReplayBuffer.h"
 #include "overlays/VirtualCamera.h"
+#include "recording/IsoRecordManager.h"
 #include "core/Logger.h"
 #include <QDateTime>
 #include <QDir>
@@ -31,6 +32,7 @@ EngineController::EngineController(QObject* parent)
     m_chat = std::make_unique<ChatService>();
     m_replay = std::make_unique<ReplayBuffer>();
     m_vcam = std::make_unique<VirtualCamera>();
+    m_iso = new IsoRecordManager(this);
 
     connect(&m_telemetryTimer, &QTimer::timeout, this, &EngineController::onTelemetryTick);
     connect(&m_autosaveTimer, &QTimer::timeout, this, &EngineController::onAutosave);
@@ -82,6 +84,8 @@ bool EngineController::initialize(QString* error)
     m_audio->setOutputCallback([this](const AudioBuffer& buf) {
         if (m_outputs)
             m_outputs->submitAudio(buf);
+        if (m_iso)
+            m_iso->submitAudio(buf);
         if (m_telemetry)
             m_telemetry->setAvDriftMs(m_audio->clock().driftMs(buf.ptsUs));
     });
@@ -89,10 +93,14 @@ bool EngineController::initialize(QString* error)
     auto* renderTimer = new QTimer(this);
     connect(renderTimer, &QTimer::timeout, this, [this] {
         const auto project = m_sceneGraph->snapshot();
+        QVector<const SceneItem*> scenes;
         if (const auto* preview = project.findScene(project.previewSceneId))
-            m_capture->syncWithScene(*preview);
-        if (const auto* program = project.findScene(project.programSceneId))
-            m_capture->syncWithScene(*program);
+            scenes.push_back(preview);
+        if (const auto* program = project.findScene(project.programSceneId)) {
+            if (project.programSceneId != project.previewSceneId)
+                scenes.push_back(program);
+        }
+        m_capture->syncWithScenes(scenes);
         m_capture->poll();
 
         float mix = 1.0f;
@@ -111,6 +119,8 @@ bool EngineController::initialize(QString* error)
         if (m_vcam && m_vcam->isRunning())
             m_vcam->submitFrame(m_compositor->programTexture());
 
+        tickIsoRecorders(pts);
+
         m_telemetry->noteRenderedFrame();
         if (m_outputs && m_outputs->isStreaming())
             m_telemetry->noteEncodedFrame();
@@ -121,6 +131,7 @@ bool EngineController::initialize(QString* error)
     m_autosaveTimer.start(30000);
     m_initialized = true;
     m_state = EngineState::Previewing;
+    rebuildSourcesForActiveScenes();
     Logger::info(QStringLiteral("EngineController initialized"));
     return true;
 }
@@ -130,6 +141,7 @@ void EngineController::shutdown()
     if (!m_initialized) return;
     stopStreaming();
     stopRecording();
+    if (m_iso) m_iso->stopAll();
     if (m_vcam) m_vcam->stop();
     if (m_chat) m_chat->disconnectPlatform(QStringLiteral("twitch"));
     if (m_audio) m_audio->shutdown();
@@ -148,8 +160,10 @@ bool EngineController::loadProject(const QString& path, QString* error)
 {
     auto p = Project::loadFromFile(path, error);
     if (!p) return false;
+    if (m_capture) m_capture->detachAll();
     m_sceneGraph->replace(*p);
     m_settings->setLastProjectPath(path);
+    rebuildSourcesForActiveScenes();
     emit projectLoaded(path);
     return true;
 }
@@ -169,7 +183,10 @@ bool EngineController::newProject()
 {
     Project p;
     p.ensureDefaults();
+    if (m_capture) m_capture->detachAll();
+    if (m_iso) m_iso->stopAll();
     m_sceneGraph->replace(p);
+    rebuildSourcesForActiveScenes();
     return true;
 }
 
@@ -190,12 +207,12 @@ void EngineController::go(TransitionType type)
         emit errorOccurred(QStringLiteral("Nothing in Preview"));
         return;
     }
-    Q_UNUSED(type);
-    const TransitionType use = p.transition;
+    const TransitionType effective = type;
     if (m_transition) {
-        m_transition->configure(use, p.transitionMs);
-        emit transitionStarted(use);
-        if (use == TransitionType::Cut) {
+        m_transition->configure(effective, p.transitionMs);
+        m_sceneGraph->setTransition(effective, p.transitionMs);
+        emit transitionStarted(effective);
+        if (effective == TransitionType::Cut) {
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
             emit transitionFinished();
         } else {
@@ -210,6 +227,13 @@ void EngineController::go(TransitionType type)
     } else {
         m_sceneGraph->setProgramSceneId(p.previewSceneId);
     }
+}
+
+void EngineController::setInputsPaused(bool paused)
+{
+    m_inputsPaused = paused;
+    if (m_capture)
+        m_capture->setPaused(paused);
 }
 
 void EngineController::setTransition(TransitionType type, int durationMs)
@@ -469,6 +493,71 @@ void EngineController::updateEngineState()
 
 void EngineController::rebuildSourcesForActiveScenes()
 {
+    if (!m_capture || !m_sceneGraph) return;
+    const auto project = m_sceneGraph->snapshot();
+    QVector<const SceneItem*> scenes;
+    if (const auto* preview = project.findScene(project.previewSceneId))
+        scenes.push_back(preview);
+    if (const auto* program = project.findScene(project.programSceneId)) {
+        if (project.programSceneId != project.previewSceneId)
+            scenes.push_back(program);
+    }
+    // Also keep active scene sources warm for editing
+    if (const auto* active = project.findScene(project.activeSceneId)) {
+        bool listed = false;
+        for (const auto* s : scenes) {
+            if (s == active) { listed = true; break; }
+        }
+        if (!listed) scenes.push_back(active);
+    }
+    m_capture->syncWithScenes(scenes);
+}
+
+void EngineController::tickIsoRecorders(qint64 ptsUs)
+{
+    if (!m_iso || !m_capture) return;
+    const auto ids = m_capture->activeSourceIds();
+    for (const auto& id : ids) {
+        if (!m_iso->isArmed(id)) continue;
+        auto frame = m_capture->frameBus().latest(id);
+        if (frame && frame->texture)
+            m_iso->submitVideo(id, frame->texture, ptsUs);
+    }
+}
+
+bool EngineController::setSourceIsoRecording(const QString& sourceId, bool armed, QString* error)
+{
+    if (!m_iso) {
+        if (error) *error = QStringLiteral("ISO recorder unavailable");
+        return false;
+    }
+    if (!armed) {
+        m_iso->stop(sourceId);
+        return true;
+    }
+    auto profile = m_sceneGraph->snapshot().output;
+    if (profile.width <= 0) profile = m_settings->outputProfile();
+    if (profile.width <= 0) {
+        profile.width = kDefaultCanvasWidth;
+        profile.height = kDefaultCanvasHeight;
+    }
+    return m_iso->start(sourceId, m_settings->recordingDirectory(), profile, error);
+}
+
+bool EngineController::isSourceIsoRecording(const QString& sourceId) const
+{
+    return m_iso && m_iso->isArmed(sourceId);
+}
+
+bool EngineController::setExternalOutputEnabled(bool enabled, QString* error)
+{
+    // External = program feed out via virtual camera (Phase 2 path).
+    return setVirtualCameraEnabled(enabled, error);
+}
+
+bool EngineController::externalOutputEnabled() const
+{
+    return m_vcam && m_vcam->isRunning();
 }
 
 } // namespace railshot

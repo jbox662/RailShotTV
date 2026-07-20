@@ -19,8 +19,11 @@ private:
     QSpinBox* m_outW = nullptr;
     QSpinBox* m_outH = nullptr;
     QSpinBox* m_streamBitrate = nullptr;
+    QSpinBox* m_streamKeyframe = nullptr;
     QSpinBox* m_replaySec = nullptr;
     QComboBox* m_streamEnc = nullptr;
+    QComboBox* m_streamRate = nullptr;
+    QComboBox* m_streamPlatform = nullptr;
     QComboBox* m_videoFps = nullptr;
     QComboBox* m_videoRes = nullptr;
     QLineEdit* m_outDir = nullptr;

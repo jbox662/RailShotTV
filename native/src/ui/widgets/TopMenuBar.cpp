@@ -84,10 +84,9 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     auto* preset = addChrome(QStringLiteral("Preset"));
     auto* presetMenu = new QMenu(preset);
     presetMenu->addAction(QStringLiteral("Save New Preset…"), this, [this] {
-        QMessageBox::information(this, QStringLiteral("Preset"),
-                                 QStringLiteral("Use Save / Save As to store the project."));
+        emit saveProjectAs();
     });
-    presetMenu->addAction(QStringLiteral("Load Last Preset"), this, [this] { emit openProject(); });
+    presetMenu->addAction(QStringLiteral("Load Last Preset"), this, [this] { emit openLastProject(); });
     presetMenu->addSeparator();
     presetMenu->addAction(QStringLiteral("Manage Presets…"), this, [this] { emit openSettings(); });
     preset->setMenu(presetMenu);
@@ -95,8 +94,8 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     connect(addChrome(QStringLiteral("New")), &QPushButton::clicked, this, &TopMenuBar::newProject);
     connect(addChrome(QStringLiteral("Open")), &QPushButton::clicked, this, &TopMenuBar::openProject);
     connect(addChrome(QStringLiteral("Save")), &QPushButton::clicked, this, &TopMenuBar::saveProject);
-    connect(addChrome(QStringLiteral("Save As")), &QPushButton::clicked, this, &TopMenuBar::saveProject);
-    connect(addChrome(QStringLiteral("Last")), &QPushButton::clicked, this, &TopMenuBar::openProject);
+    connect(addChrome(QStringLiteral("Save As")), &QPushButton::clicked, this, &TopMenuBar::saveProjectAs);
+    connect(addChrome(QStringLiteral("Last")), &QPushButton::clicked, this, &TopMenuBar::openLastProject);
 
     row->addStretch();
 
@@ -142,6 +141,8 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
             m_pauseInputs->style()->unpolish(m_pauseInputs);
             m_pauseInputs->style()->polish(m_pauseInputs);
         }
+        if (m_engine)
+            m_engine->setInputsPaused(on);
     });
 
     m_basic = addChrome(QStringLiteral("Basic"));
@@ -174,9 +175,21 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
 
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
         const int cpu = int(s.cpuPercent);
-        m_status->setText(QStringLiteral("1080p29.97   EX FPS: %1   CPU: %2%")
-                              .arg(int(s.fpsRender > 0 ? s.fpsRender : 30))
+        OutputProfile profile;
+        if (m_engine) {
+            profile = m_engine->projectSnapshot().output;
+            if (profile.width <= 0)
+                profile = m_engine->settings()->outputProfile();
+        }
+        const int w = profile.width > 0 ? profile.width : 1920;
+        const int h = profile.height > 0 ? profile.height : 1080;
+        const double fps = profile.fps > 0 ? profile.fps : 59.94;
+        m_status->setText(QStringLiteral("%1p%2   EX FPS: %3   CPU: %4%")
+                              .arg(h)
+                              .arg(fps, 0, 'f', fps == int(fps) ? 0 : 2)
+                              .arg(int(s.fpsRender > 0 ? s.fpsRender : fps))
                               .arg(s.streaming ? qMax(cpu, 12) : qMax(cpu, 3)));
+        Q_UNUSED(w);
     });
 
     if (m_engine) {

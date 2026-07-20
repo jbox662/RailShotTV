@@ -244,7 +244,17 @@ SchedulePage::SchedulePage(QWidget* parent)
     });
     refresh();
 
-    connect(startStream, &QPushButton::clicked, this, &SchedulePage::goLiveRequested);
+    connect(startStream, &QPushButton::clicked, this, [this, selected] {
+        QString title;
+        QString platform;
+        if (*selected >= 0 && *selected < m_model.events().size()) {
+            const auto& e = m_model.events().at(*selected);
+            title = e.title;
+            platform = e.platform;
+        }
+        emit goLiveRequested(title, platform);
+    });
+
 
     auto editEvent = [this](ScheduledEvent e, bool isNew) -> bool {
         QDialog dlg(this);

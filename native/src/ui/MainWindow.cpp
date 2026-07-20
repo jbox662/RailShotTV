@@ -86,6 +86,10 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
 
     connect(m_sidebar, &SidebarRail::navigate, this, &MainWindow::navigateTo);
     connect(m_top, &TopMenuBar::openProject, this, &MainWindow::openProjectDialog);
+    connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
+    connect(m_top, &TopMenuBar::saveProjectAs, this, &MainWindow::saveProjectAsDialog);
+    connect(m_top, &TopMenuBar::openLastProject, this, &MainWindow::openLastProject);
+
 
     if (auto* dash = qobject_cast<DashboardPage*>(m_stack->widget(0))) {
         connect(dash, &DashboardPage::openSceneEditorRequested, this, [this] {
@@ -97,16 +101,16 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     connect(sceneEditor, &SceneEditorPage::backToDashboard, this, [this] {
         navigateTo(QStringLiteral("dashboard"));
     });
-    connect(schedulePage, &SchedulePage::goLiveRequested, this, [this] {
+    connect(schedulePage, &SchedulePage::goLiveRequested, this, [this](const QString& title, const QString& platform) {
         navigateTo(QStringLiteral("dashboard"));
         GoLiveDialog dlg(m_engine, this);
+        dlg.setPrefill(title, platform);
         dlg.exec();
     });
     connect(m_top, &TopMenuBar::toggleShortcuts, this, [this] {
         ShortcutsOverlay dlg(this);
         dlg.exec();
     });
-    connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
     connect(m_top, &TopMenuBar::newProject, this, [this] {
         QMessageBox box(this);
         box.setWindowTitle(QStringLiteral("New Project"));
@@ -209,16 +213,42 @@ void MainWindow::saveProjectDialog()
 {
     auto path = m_engine->settings()->lastProjectPath();
     if (path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, QStringLiteral("Save Project"),
-                                            QStringLiteral("project.railshot.json"),
-                                            QStringLiteral("RailShot Project (*.railshot.json)"));
+        saveProjectAsDialog();
+        return;
     }
-    if (path.isEmpty()) return;
     QString err;
     if (!m_engine->saveProject(path, &err))
         QMessageBox::warning(this, QStringLiteral("Save"), err);
     else
         statusBar()->showMessage(QStringLiteral("Saved %1").arg(path), 3000);
+}
+
+void MainWindow::saveProjectAsDialog()
+{
+    const auto path = QFileDialog::getSaveFileName(this, QStringLiteral("Save Project As"),
+                                                   QStringLiteral("project.railshot.json"),
+                                                   QStringLiteral("RailShot Project (*.railshot.json)"));
+    if (path.isEmpty()) return;
+    QString err;
+    if (!m_engine->saveProject(path, &err))
+        QMessageBox::warning(this, QStringLiteral("Save As"), err);
+    else
+        statusBar()->showMessage(QStringLiteral("Saved %1").arg(path), 3000);
+}
+
+void MainWindow::openLastProject()
+{
+    const auto path = m_engine->settings()->lastProjectPath();
+    if (path.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("Open Last"),
+                                 QStringLiteral("No previous project path saved yet."));
+        return;
+    }
+    QString err;
+    if (!m_engine->loadProject(path, &err))
+        QMessageBox::warning(this, QStringLiteral("Open Last"), err);
+    else
+        statusBar()->showMessage(QStringLiteral("Loaded %1").arg(path), 3000);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event)

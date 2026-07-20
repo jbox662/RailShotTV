@@ -310,6 +310,15 @@ ScoreboardPage::ScoreboardPage(EngineController* engine, QWidget* parent)
             hiddenOverlay->setGeometry(preview->rect());
             hiddenOverlay->raise();
         }
+        engine->sceneGraph()->mutate([&](Project& p) {
+            for (auto& scene : p.scenes) {
+                for (auto& src : scene.sources) {
+                    if (src.type == SourceType::Scoreboard)
+                        src.visible = on;
+                }
+            }
+        });
+        engine->pushScoreboardToProgram();
     });
 
     connect(savePreset, &QPushButton::clicked, this, [=] {
