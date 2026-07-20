@@ -14,6 +14,7 @@ class EngineController;
 class SidebarRail;
 class TopMenuBar;
 class HotkeyDispatcher;
+class ObsStatusBarWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,6 +40,7 @@ private:
     QStackedWidget* m_stack = nullptr;
     HotkeyDispatcher* m_hotkeys = nullptr;
     QFrame* m_liveTopBorder = nullptr;
+    ObsStatusBarWidget* m_obsStatus = nullptr;
 };
 
 } // namespace railshot

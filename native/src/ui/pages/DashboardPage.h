@@ -20,6 +20,9 @@ class InputTilesWidget;
 class MultiCorderPanel;
 class PlayListPanel;
 class ScoreboardControlsWidget;
+class SceneListWidget;
+class SourceContextToolbar;
+class TransitionPanel;
 
 class DashboardPage : public QWidget {
     Q_OBJECT
@@ -46,6 +49,7 @@ private:
     void setMultiCorderOpen(bool open);
     void setPlayListOpen(bool open);
     void layoutSidePanels();
+    void setStudioMode(bool enabled);
 
     QDockWidget* makeDock(const QString& title, const QString& objectName, QWidget* content,
                           const QString& accent);
@@ -57,10 +61,14 @@ private:
     EngineController* m_engine = nullptr;
     PreviewWidget* m_preview = nullptr;
     PreviewWidget* m_program = nullptr;
+    TransitionPanel* m_transitions = nullptr;
+    SourceContextToolbar* m_contextBar = nullptr;
+    QWidget* m_previewColumn = nullptr;
     AudioMixerWidget* m_mixer = nullptr;
     SourcePropertiesWidget* m_props = nullptr;
     BottomToolbar* m_toolbar = nullptr;
     InputTilesWidget* m_tiles = nullptr;
+    SceneListWidget* m_sceneList = nullptr;
     QFrame* m_drawerBackdrop = nullptr;
     MultiCorderPanel* m_multi = nullptr;
     PlayListPanel* m_playlist = nullptr;

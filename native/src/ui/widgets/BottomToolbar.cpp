@@ -265,6 +265,15 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     });
     row->addWidget(vcamBtn);
 
+    m_studioBtn = new QPushButton(QStringLiteral("Studio Mode"), this);
+    m_studioBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
+    m_studioBtn->setCheckable(true);
+    m_studioBtn->setChecked(true);
+    m_studioBtn->setFixedHeight(22);
+    m_studioBtn->setToolTip(QStringLiteral("Show Preview + Program (OBS Studio Mode)"));
+    connect(m_studioBtn, &QPushButton::toggled, this, &BottomToolbar::studioModeToggled);
+    row->addWidget(m_studioBtn);
+
     row->addStretch();
 
     m_statusPill = new QLabel(QStringLiteral("1080p60  ·  — FPS  ·  GPU —  ·  CPU —"), this);

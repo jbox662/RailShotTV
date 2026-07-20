@@ -321,6 +321,14 @@ add_library(railshot_ui STATIC
     src/ui/widgets/TopMenuBar.cpp
     src/ui/widgets/BottomToolbar.h
     src/ui/widgets/BottomToolbar.cpp
+    src/ui/widgets/ObsStatusBarWidget.h
+    src/ui/widgets/ObsStatusBarWidget.cpp
+    src/ui/widgets/SourceContextToolbar.h
+    src/ui/widgets/SourceContextToolbar.cpp
+    src/ui/widgets/FiltersDialog.h
+    src/ui/widgets/FiltersDialog.cpp
+    src/ui/widgets/TransformDialog.h
+    src/ui/widgets/TransformDialog.cpp
     src/ui/widgets/GoLiveDialog.h
     src/ui/widgets/GoLiveDialog.cpp
     src/ui/widgets/SidebarRail.h

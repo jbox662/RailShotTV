@@ -11,8 +11,12 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "ui/widgets/MultiCorderPanel.h"
 #include "ui/widgets/PlayListPanel.h"
+#include "ui/widgets/SourceContextToolbar.h"
+#include "ui/widgets/FiltersDialog.h"
+#include "ui/widgets/TransformDialog.h"
 #include "ui/Theme.h"
 #include "core/EngineController.h"
+#include "core/SceneGraph.h"
 #include "core/SettingsStore.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
@@ -247,11 +251,20 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* monitors = new QHBoxLayout();
     monitors->setContentsMargins(0, 0, 0, 0);
     monitors->setSpacing(0);
-    m_preview = new PreviewWidget(engine, false, this);
+
+    m_previewColumn = new QWidget(this);
+    auto* previewColLay = new QVBoxLayout(m_previewColumn);
+    previewColLay->setContentsMargins(0, 0, 0, 0);
+    previewColLay->setSpacing(0);
+    m_preview = new PreviewWidget(engine, false, m_previewColumn);
+    m_contextBar = new SourceContextToolbar(engine, m_previewColumn);
+    previewColLay->addWidget(m_preview, 1);
+    previewColLay->addWidget(m_contextBar);
+
     m_program = new PreviewWidget(engine, true, this);
-    auto* transitions = new TransitionPanel(engine, this);
-    monitors->addWidget(m_preview, 1);
-    monitors->addWidget(transitions);
+    m_transitions = new TransitionPanel(engine, this);
+    monitors->addWidget(m_previewColumn, 1);
+    monitors->addWidget(m_transitions);
     monitors->addWidget(m_program, 1);
     root->addLayout(monitors, 5);
 
@@ -301,24 +314,81 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1D22,stop:1 #0D0F12);"
         "border-bottom:1px solid #2A2D35;"));
     auto* scenesToolsLay = new QHBoxLayout(scenesTools);
-    scenesToolsLay->setContentsMargins(6, 3, 6, 3);
-    auto* addScene = new QPushButton(QStringLiteral("+ Add Scene"), scenesTools);
-    addScene->setFixedHeight(22);
-    addScene->setCursor(Qt::PointingHandCursor);
+    scenesToolsLay->setContentsMargins(4, 3, 4, 3);
+    scenesToolsLay->setSpacing(3);
+
+    const auto sceneToolStyle = QStringLiteral(
+        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #32363F,stop:1 #1A1E26);"
+        "border:1px solid #5A5E68;color:#E0E2E8;font-family:'DM Sans';font-size:11px;"
+        "font-weight:800;border-radius:3px;padding:0 6px;min-width:22px;max-height:22px;}"
+        "QPushButton:hover{border-color:#4F9EFF;color:#FFFFFF;}"
+        "QPushButton:disabled{color:#505860;border-color:#2A2D35;}");
+
+    auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
     addScene->setToolTip(QStringLiteral("Add scene"));
+    addScene->setCursor(Qt::PointingHandCursor);
     addScene->setStyleSheet(QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1A3AFF);"
-        "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:10px;"
-        "font-weight:800;border-radius:3px;padding:0 10px;}"
-        "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);"
-        "border-color:#8AB4FF;}"));
+        "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:12px;"
+        "font-weight:800;border-radius:3px;padding:0 8px;min-width:22px;max-height:22px;}"
+        "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);}"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
+
+    auto* remScene = new QPushButton(QStringLiteral("\u2212"), scenesTools);
+    remScene->setToolTip(QStringLiteral("Remove scene"));
+    remScene->setCursor(Qt::PointingHandCursor);
+    remScene->setStyleSheet(sceneToolStyle);
+    connect(remScene, &QPushButton::clicked, this, [this] {
+        if (!m_sceneList || !m_sceneList->currentItem()) return;
+        const QString id = m_sceneList->currentItem()->data(Qt::UserRole).toString();
+        if (id.isEmpty()) return;
+        m_engine->sceneGraph()->mutate([&](Project& p) { p.removeScene(id); });
+    });
+
+    auto* dupScene = new QPushButton(QStringLiteral("⧉"), scenesTools);
+    dupScene->setToolTip(QStringLiteral("Duplicate scene"));
+    dupScene->setCursor(Qt::PointingHandCursor);
+    dupScene->setStyleSheet(sceneToolStyle);
+    connect(dupScene, &QPushButton::clicked, this, [this] {
+        if (!m_sceneList || !m_sceneList->currentItem()) return;
+        const QString id = m_sceneList->currentItem()->data(Qt::UserRole).toString();
+        if (id.isEmpty()) return;
+        m_engine->sceneGraph()->mutate([&](Project& p) { p.duplicateScene(id); });
+    });
+
+    auto* upScene = new QPushButton(QStringLiteral("↑"), scenesTools);
+    upScene->setToolTip(QStringLiteral("Move scene up"));
+    upScene->setCursor(Qt::PointingHandCursor);
+    upScene->setStyleSheet(sceneToolStyle);
+    connect(upScene, &QPushButton::clicked, this, [this] {
+        if (!m_sceneList || !m_sceneList->currentItem()) return;
+        const int row = m_sceneList->currentRow();
+        if (row <= 0) return;
+        m_engine->sceneGraph()->mutate([&](Project& p) { p.reorderScenes(row, row - 1); });
+    });
+
+    auto* downScene = new QPushButton(QStringLiteral("↓"), scenesTools);
+    downScene->setToolTip(QStringLiteral("Move scene down"));
+    downScene->setCursor(Qt::PointingHandCursor);
+    downScene->setStyleSheet(sceneToolStyle);
+    connect(downScene, &QPushButton::clicked, this, [this] {
+        if (!m_sceneList || !m_sceneList->currentItem()) return;
+        const int row = m_sceneList->currentRow();
+        if (row < 0 || row >= m_sceneList->count() - 1) return;
+        m_engine->sceneGraph()->mutate([&](Project& p) { p.reorderScenes(row, row + 1); });
+    });
+
     scenesToolsLay->addWidget(addScene);
+    scenesToolsLay->addWidget(remScene);
+    scenesToolsLay->addWidget(dupScene);
+    scenesToolsLay->addWidget(upScene);
+    scenesToolsLay->addWidget(downScene);
     scenesToolsLay->addStretch();
     scenesLay->addWidget(scenesTools);
-    scenesLay->addWidget(new SceneListWidget(engine, scenesCol), 1);
+    m_sceneList = new SceneListWidget(engine, scenesCol);
+    scenesLay->addWidget(m_sceneList, 1);
 
     m_tiles = new InputTilesWidget(engine, nullptr);
     m_tiles->setMinimumWidth(220);
@@ -367,6 +437,24 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     connect(m_preview, &PreviewWidget::sourceSelected, this, [this](const QString& id) {
         m_engine->setSelectedSourceId(id);
     });
+
+    connect(m_contextBar, &SourceContextToolbar::propertiesRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        SourcePropertiesDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+    connect(m_contextBar, &SourceContextToolbar::filtersRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        FiltersDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+    connect(m_contextBar, &SourceContextToolbar::transformRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        TransformDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+
+    connect(m_toolbar, &BottomToolbar::studioModeToggled, this, &DashboardPage::setStudioMode);
 
     connect(m_tiles, &InputTilesWidget::configureSourceRequested, this, [this](const QString& id) {
         if (id.isEmpty()) return;
@@ -574,6 +662,14 @@ void DashboardPage::setBasicMode(bool on)
         setMultiCorderOpen(false);
         setPlayListOpen(false);
     }
+}
+
+void DashboardPage::setStudioMode(bool enabled)
+{
+    if (m_previewColumn)
+        m_previewColumn->setVisible(enabled);
+    if (m_transitions)
+        m_transitions->setVisible(enabled);
 }
 
 void DashboardPage::openDrawer()

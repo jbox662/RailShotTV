@@ -3,6 +3,8 @@
 #include "core/SceneGraph.h"
 #include "compositor/D3D11Compositor.h"
 #include "ui/widgets/SourcePropertiesDialog.h"
+#include "ui/widgets/FiltersDialog.h"
+#include "ui/widgets/TransformDialog.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -464,9 +466,16 @@ private:
 
         QAction* props = menu.addAction(QStringLiteral("Properties"));
         props->setEnabled(src.has_value());
+        QAction* filters = menu.addAction(QStringLiteral("Filters"));
+        filters->setEnabled(src.has_value());
         menu.addSeparator();
 
         auto* transform = menu.addMenu(QStringLiteral("Transform"));
+        QAction* editXform = transform->addAction(QStringLiteral("Edit Transform…"));
+        QAction* copyXform = transform->addAction(QStringLiteral("Copy Transform"));
+        QAction* pasteXform = transform->addAction(QStringLiteral("Paste Transform"));
+        pasteXform->setEnabled(TransformDialog::hasClipboard());
+        transform->addSeparator();
         QAction* reset = transform->addAction(QStringLiteral("Reset Transform"));
         QAction* rotCw = transform->addAction(QStringLiteral("Rotate 90° Clockwise"));
         QAction* rotCcw = transform->addAction(QStringLiteral("Rotate 90° Counterclockwise"));
@@ -485,6 +494,26 @@ private:
 
         if (chosen == props) {
             emit m_owner->configureSourceRequested(src->id);
+            return true;
+        }
+        if (chosen == filters) {
+            FiltersDialog dlg(m_engine, src->id, m_owner);
+            dlg.exec();
+            return true;
+        }
+        if (chosen == editXform) {
+            TransformDialog dlg(m_engine, src->id, m_owner);
+            dlg.exec();
+            refreshChrome();
+            return true;
+        }
+        if (chosen == copyXform) {
+            TransformDialog::copyTransform(src->transform);
+            return true;
+        }
+        if (chosen == pasteXform) {
+            TransformDialog::pasteOnto(m_engine, src->id);
+            refreshChrome();
             return true;
         }
 

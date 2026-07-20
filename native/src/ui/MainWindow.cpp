@@ -12,6 +12,7 @@
 #include "ui/pages/SceneEditorPage.h"
 #include "ui/widgets/ShortcutsOverlay.h"
 #include "ui/widgets/GoLiveDialog.h"
+#include "ui/widgets/ObsStatusBarWidget.h"
 #include "core/EngineController.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
@@ -77,8 +78,11 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     setCentralWidget(central);
 
     statusBar()->setStyleSheet(QStringLiteral(
-        "background:#0F1114; color:#8892A4; border-top:1px solid #3A3D45;"));
-    statusBar()->showMessage(QStringLiteral("Ready"));
+        "QStatusBar{background:#0A0C0F; border:none; padding:0;}"
+        "QStatusBar::item{border:none;}"));
+    statusBar()->setSizeGripEnabled(false);
+    m_obsStatus = new ObsStatusBarWidget(engine, statusBar());
+    statusBar()->addWidget(m_obsStatus, 1);
 
     m_hotkeys = new HotkeyDispatcher(engine, this);
 
@@ -136,24 +140,11 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     });
     connect(m_top, &TopMenuBar::openSettings, this, [this] { navigateTo(QStringLiteral("settings")); });
     connect(m_engine, &EngineController::errorOccurred, this, [this](const QString& msg) {
-        statusBar()->showMessage(msg, 5000);
+        Q_UNUSED(msg);
+        // ObsStatusBarWidget also listens for errors.
     });
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
         updateLiveChrome(s.streaming);
-        QString msg;
-        if (s.streaming)
-            msg = QStringLiteral("LIVE  %1 kbps  drift %2 ms").arg(s.bitrateKbps).arg(s.avDriftMs, 0, 'f', 1);
-        else if (s.recording)
-            msg = QStringLiteral("REC  %1s").arg(s.recordUptimeSec);
-        else
-            msg = QStringLiteral("Ready");
-        if (m_engine->replayBuffer()) {
-            const qint64 us = m_engine->replayBuffer()->bufferedDurationUs();
-            msg += QStringLiteral("  ·  Replay %1s / %2s")
-                       .arg(us / 1000000)
-                       .arg(m_engine->replayBuffer()->capacitySeconds());
-        }
-        statusBar()->showMessage(msg);
     });
     connect(m_engine, &EngineController::replaySaved, this, [this](const QString& path) {
         statusBar()->showMessage(QStringLiteral("Replay saved: %1").arg(path), 4000);
