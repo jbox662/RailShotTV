@@ -5,9 +5,14 @@ alwaysApply: true
 
 # Auto commit and push
 
+**Default remote:** `origin` → `https://github.com/jbox662/RailShotTV.git` (branch `main`).
+If `origin` is missing or wrong, set it with `git remote add origin …` / `git remote set-url origin …` — never remove remote history or force-push.
+
 When you finish a task that changes files in this repo (feature, fix, docs, config, or rules):
 
-1. **Commit** — follow the repo git safety protocol:
+1. **Compare first** — `git fetch origin` then check `origin/main...HEAD`. Prefer merge/rebase over force. Never delete remote-only files unless the user explicitly asks. Push the newest local work; keep existing remote content that you did not intentionally replace.
+
+2. **Commit** — follow the repo git safety protocol:
    - Run `git status`, `git diff`, and `git log -5 --oneline` in parallel
    - Stage relevant files only (never secrets: `.env`, credentials, private keys)
    - Commit with a concise message focused on **why** (1–2 sentences)
@@ -15,13 +20,13 @@ When you finish a task that changes files in this repo (feature, fix, docs, conf
    - Do not amend unless the user explicitly requests it and amend conditions are met
    - Do **not** run `git config` to set identity. If commit fails for missing user.name/email, set `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars for that command only (prefer `username@users.noreply.github.com`), or ask the user once
 
-2. **Push** — immediately after a successful commit:
+3. **Push** — immediately after a successful commit:
    - `git push -u origin HEAD` (or `git push` if upstream exists)
    - Never force-push to `main`/`master` unless the user explicitly requests it
 
-3. **When to skip**
+4. **When to skip**
    - No file changes, or only unrelated dirty files you did not touch
    - User says not to commit/push for this turn
    - Commit would include secrets — warn and skip those files
 
-4. **Confirm** — after push, report the commit subject and that it was pushed to `origin`.
+5. **Confirm** — after push, report the commit subject and that it was pushed to `origin` (`jbox662/RailShotTV`).
