@@ -27,7 +27,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
 
     m_go = new QPushButton(QStringLiteral("GO"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
-    m_go->setMinimumHeight(44);
+    m_go->setMinimumHeight(36);
     m_go->setCursor(Qt::PointingHandCursor);
     connect(m_go, &QPushButton::clicked, this, [this] {
         if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
@@ -153,12 +153,12 @@ void TransitionPanel::updateGoArmed()
                             ? QStringLiteral(
                                   "QPushButton#goButton {"
                                   "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
-                                  "  border:3px solid #86EFAC; border-radius:4px; color:#04140A;"
-                                  "  font-weight:900; font-size:16px; letter-spacing:2px; padding:10px;"
+                                  "  border:2px solid #86EFAC; border-radius:4px; color:#04140A;"
+                                  "  font-weight:900; font-size:14px; letter-spacing:2px; padding:8px;"
                                   "}"
                                   "QPushButton#goButton:hover {"
                                   "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #86EFAC,stop:1 #22C55E);"
-                                  "  border:3px solid #BBF7D0;"
+                                  "  border:2px solid #BBF7D0;"
                                   "}")
                             : QString());
     m_go->style()->unpolish(m_go);
