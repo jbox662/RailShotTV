@@ -60,7 +60,7 @@ public:
     bool setExternalOutputEnabled(bool enabled, QString* error = nullptr);
     bool externalOutputEnabled() const;
 
-    QString addSource(SourceType type, const QString& name = {});
+    QString addSource(SourceType type, const QString& name = {}, const QJsonObject& settings = {});
     void removeSource(const QString& sourceId);
     void setSourceVisible(const QString& sourceId, bool visible);
     void setSourceName(const QString& sourceId, const QString& name);

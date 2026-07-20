@@ -23,6 +23,10 @@ QString sourceTypeToString(SourceType t)
     case SourceType::Media: return QStringLiteral("media");
     case SourceType::Ndi: return QStringLiteral("ndi");
     case SourceType::Color: return QStringLiteral("color");
+    case SourceType::Window: return QStringLiteral("window");
+    case SourceType::Game: return QStringLiteral("game");
+    case SourceType::AudioInput: return QStringLiteral("audio_input");
+    case SourceType::AudioOutput: return QStringLiteral("audio_output");
     default: return QStringLiteral("unknown");
     }
 }
@@ -40,6 +44,10 @@ SourceType sourceTypeFromString(const QString& s)
     if (s == QLatin1String("media")) return SourceType::Media;
     if (s == QLatin1String("ndi")) return SourceType::Ndi;
     if (s == QLatin1String("color")) return SourceType::Color;
+    if (s == QLatin1String("window")) return SourceType::Window;
+    if (s == QLatin1String("game")) return SourceType::Game;
+    if (s == QLatin1String("audio_input") || s == QLatin1String("audioinput")) return SourceType::AudioInput;
+    if (s == QLatin1String("audio_output") || s == QLatin1String("audiooutput")) return SourceType::AudioOutput;
     return SourceType::Unknown;
 }
 

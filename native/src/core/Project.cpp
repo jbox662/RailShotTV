@@ -223,6 +223,10 @@ QString Project::addSource(const QString& sceneId, SourceType type, const QStrin
     switch (type) {
     case SourceType::Camera: src.colorHex = QStringLiteral("#22C55E"); break;
     case SourceType::Display: src.colorHex = QStringLiteral("#4F9EFF"); break;
+    case SourceType::Window: src.colorHex = QStringLiteral("#38BDF8"); break;
+    case SourceType::Game: src.colorHex = QStringLiteral("#A3E635"); break;
+    case SourceType::AudioInput: src.colorHex = QStringLiteral("#F472B6"); break;
+    case SourceType::AudioOutput: src.colorHex = QStringLiteral("#FB7185"); break;
     case SourceType::Browser: src.colorHex = QStringLiteral("#22D3EE"); break;
     case SourceType::Text: src.colorHex = QStringLiteral("#A855F7"); break;
     case SourceType::Image: src.colorHex = QStringLiteral("#FBBF24"); break;
@@ -232,11 +236,19 @@ QString Project::addSource(const QString& sceneId, SourceType type, const QStrin
     }
     // Default transforms matching React prototype
     switch (type) {
-    case SourceType::Display: src.transform = {0, 0, 1, 1}; break;
+    case SourceType::Display:
+    case SourceType::Window:
+    case SourceType::Game:
+        src.transform = {0, 0, 1, 1};
+        break;
     case SourceType::Camera: src.transform = {0.05, 0.05, 0.4, 0.4}; break;
     case SourceType::Browser: src.transform = {0.1, 0.1, 0.8, 0.8}; break;
     case SourceType::Text: src.transform = {0.1, 0.7, 0.5, 0.12}; break;
     case SourceType::LowerThird: src.transform = {0.0, 0.72, 1.0, 0.2}; break;
+    case SourceType::AudioInput:
+    case SourceType::AudioOutput:
+        src.transform = {0.35, 0.35, 0.3, 0.3};
+        break;
     default: src.transform = {0.1, 0.1, 0.5, 0.5}; break;
     }
     sc->sources.append(src);

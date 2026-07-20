@@ -1,0 +1,780 @@
+#include "ui/widgets/properties/SourcePropertiesPanel.h"
+#include "core/EngineController.h"
+#include "capture/MediaFoundationCamera.h"
+#include "capture/NdiSource.h"
+#include "audio/WasapiCapture.h"
+#include "audio/AudioTypes.h"
+#include <QVBoxLayout>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
+#include <QPushButton>
+#include <QFileDialog>
+#include <QColorDialog>
+#include <QLabel>
+#include <QListWidget>
+#include <QFontComboBox>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <dxgi.h>
+#pragma comment(lib, "dxgi.lib")
+#endif
+
+namespace railshot {
+
+namespace {
+
+QVector<QPair<int, QString>> enumerateMonitors()
+{
+    QVector<QPair<int, QString>> out;
+#ifdef _WIN32
+    IDXGIFactory1* factory = nullptr;
+    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))) || !factory)
+        return out;
+    IDXGIAdapter1* adapter = nullptr;
+    int globalIndex = 0;
+    for (UINT ai = 0; factory->EnumAdapters1(ai, &adapter) != DXGI_ERROR_NOT_FOUND; ++ai) {
+        IDXGIOutput* output = nullptr;
+        for (UINT oi = 0; adapter->EnumOutputs(oi, &output) != DXGI_ERROR_NOT_FOUND; ++oi) {
+            DXGI_OUTPUT_DESC desc{};
+            output->GetDesc(&desc);
+            out.append({globalIndex, QStringLiteral("Monitor %1 (%2)")
+                                         .arg(globalIndex)
+                                         .arg(QString::fromWCharArray(desc.DeviceName))});
+            ++globalIndex;
+            output->Release();
+        }
+        adapter->Release();
+    }
+    factory->Release();
+#endif
+    if (out.isEmpty())
+        out.append({0, QStringLiteral("Monitor 0")});
+    return out;
+}
+
+struct WindowEntry {
+    quintptr hwnd = 0;
+    QString title;
+    QString exe;
+};
+
+QVector<WindowEntry> enumerateWindows()
+{
+    QVector<WindowEntry> out;
+#ifdef _WIN32
+    struct Ctx {
+        QVector<WindowEntry>* list;
+    } ctx{&out};
+    EnumWindows(
+        [](HWND hwnd, LPARAM lp) -> BOOL {
+            auto* c = reinterpret_cast<Ctx*>(lp);
+            if (!IsWindowVisible(hwnd)) return TRUE;
+            if (GetWindow(hwnd, GW_OWNER)) return TRUE;
+            wchar_t title[512];
+            const int n = GetWindowTextW(hwnd, title, 512);
+            if (n <= 0) return TRUE;
+            WINDOWINFO wi{};
+            wi.cbSize = sizeof(wi);
+            if (GetWindowInfo(hwnd, &wi) && (wi.dwStyle & WS_DISABLED)) return TRUE;
+            WindowEntry e;
+            e.hwnd = reinterpret_cast<quintptr>(hwnd);
+            e.title = QString::fromWCharArray(title);
+            DWORD pid = 0;
+            GetWindowThreadProcessId(hwnd, &pid);
+            if (pid) {
+                HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+                if (h) {
+                    wchar_t path[MAX_PATH];
+                    DWORD size = MAX_PATH;
+                    if (QueryFullProcessImageNameW(h, 0, path, &size)) {
+                        e.exe = QString::fromWCharArray(path);
+                        const int slash = e.exe.lastIndexOf(QLatin1Char('\\'));
+                        if (slash >= 0) e.exe = e.exe.mid(slash + 1);
+                    }
+                    CloseHandle(h);
+                }
+            }
+            c->list->append(e);
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&ctx));
+#endif
+    return out;
+}
+
+void wireChanged(SourcePropertiesPanel* self, QObject* obj)
+{
+    if (auto* e = qobject_cast<QLineEdit*>(obj))
+        QObject::connect(e, &QLineEdit::editingFinished, self, &SourcePropertiesPanel::settingsEdited);
+    else if (auto* p = qobject_cast<QPlainTextEdit*>(obj))
+        QObject::connect(p, &QPlainTextEdit::textChanged, self, &SourcePropertiesPanel::settingsEdited);
+    else if (auto* c = qobject_cast<QComboBox*>(obj))
+        QObject::connect(c, qOverload<int>(&QComboBox::currentIndexChanged), self,
+                         [self](int) { emit self->settingsEdited(); });
+    else if (auto* s = qobject_cast<QSpinBox*>(obj))
+        QObject::connect(s, qOverload<int>(&QSpinBox::valueChanged), self,
+                         [self](int) { emit self->settingsEdited(); });
+    else if (auto* d = qobject_cast<QDoubleSpinBox*>(obj))
+        QObject::connect(d, qOverload<double>(&QDoubleSpinBox::valueChanged), self,
+                         [self](double) { emit self->settingsEdited(); });
+    else if (auto* k = qobject_cast<QCheckBox*>(obj))
+        QObject::connect(k, &QCheckBox::toggled, self, [self](bool) { emit self->settingsEdited(); });
+    else if (auto* f = qobject_cast<QFontComboBox*>(obj))
+        QObject::connect(f, &QFontComboBox::currentFontChanged, self,
+                         [self](const QFont&) { emit self->settingsEdited(); });
+}
+
+class DisplayPanel : public SourcePropertiesPanel {
+public:
+    DisplayPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_monitor = new QComboBox(this);
+        for (const auto& m : enumerateMonitors())
+            m_monitor->addItem(m.second, m.first);
+        m_cursor = new QCheckBox(QStringLiteral("Capture cursor"), this);
+        m_cursor->setChecked(true);
+        m_forceSdr = new QCheckBox(QStringLiteral("Force SDR"), this);
+        auto* refresh = new QPushButton(QStringLiteral("Refresh monitors"), this);
+        connect(refresh, &QPushButton::clicked, this, [this] {
+            const int cur = m_monitor->currentData().toInt();
+            m_monitor->clear();
+            for (const auto& m : enumerateMonitors())
+                m_monitor->addItem(m.second, m.first);
+            const int idx = m_monitor->findData(cur);
+            if (idx >= 0) m_monitor->setCurrentIndex(idx);
+            emit settingsEdited();
+        });
+        form->addRow(QStringLiteral("Monitor"), m_monitor);
+        form->addRow(m_cursor);
+        form->addRow(m_forceSdr);
+        form->addRow(refresh);
+        wireChanged(this, m_monitor);
+        wireChanged(this, m_cursor);
+        wireChanged(this, m_forceSdr);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const int mon = src.settings.value(QStringLiteral("monitorIndex")).toInt(0);
+        const int idx = m_monitor->findData(mon);
+        m_monitor->setCurrentIndex(idx >= 0 ? idx : 0);
+        m_cursor->setChecked(src.settings.value(QStringLiteral("captureCursor")).toBool(true));
+        m_forceSdr->setChecked(src.settings.value(QStringLiteral("forceSdr")).toBool(false));
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("monitorIndex"), m_monitor->currentData().toInt());
+        s.insert(QStringLiteral("captureCursor"), m_cursor->isChecked());
+        s.insert(QStringLiteral("forceSdr"), m_forceSdr->isChecked());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("monitorIndex"), 0);
+        s.insert(QStringLiteral("captureCursor"), true);
+        s.insert(QStringLiteral("forceSdr"), false);
+    }
+
+private:
+    QComboBox* m_monitor = nullptr;
+    QCheckBox* m_cursor = nullptr;
+    QCheckBox* m_forceSdr = nullptr;
+};
+
+class CameraPanel : public SourcePropertiesPanel {
+public:
+    CameraPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_device = new QComboBox(this);
+        try {
+            for (const auto& d : MediaFoundationCamera::enumerateDevices())
+                m_device->addItem(d.second, d.first);
+        } catch (...) {
+        }
+        if (m_device->count() == 0)
+            m_device->addItem(QStringLiteral("(No cameras)"), QString());
+        m_res = new QComboBox(this);
+        m_res->addItem(QStringLiteral("Device default"), QString());
+        m_res->addItem(QStringLiteral("1280×720"), QStringLiteral("1280x720"));
+        m_res->addItem(QStringLiteral("1920×1080"), QStringLiteral("1920x1080"));
+        m_fps = new QSpinBox(this);
+        m_fps->setRange(0, 120);
+        m_fps->setSpecialValueText(QStringLiteral("Default"));
+        m_fps->setValue(0);
+        form->addRow(QStringLiteral("Device"), m_device);
+        form->addRow(QStringLiteral("Resolution"), m_res);
+        form->addRow(QStringLiteral("FPS"), m_fps);
+        wireChanged(this, m_device);
+        wireChanged(this, m_res);
+        wireChanged(this, m_fps);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const QString id = src.settings.value(QStringLiteral("deviceId")).toString();
+        const int idx = m_device->findData(id);
+        m_device->setCurrentIndex(idx >= 0 ? idx : 0);
+        const int r = m_res->findData(src.settings.value(QStringLiteral("resolution")).toString());
+        m_res->setCurrentIndex(r >= 0 ? r : 0);
+        m_fps->setValue(src.settings.value(QStringLiteral("fps")).toInt(0));
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("deviceId"), m_device->currentData().toString());
+        s.insert(QStringLiteral("resolution"), m_res->currentData().toString());
+        s.insert(QStringLiteral("fps"), m_fps->value());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("deviceId"), m_device->count() ? m_device->itemData(0).toString() : QString());
+        s.insert(QStringLiteral("resolution"), QString());
+        s.insert(QStringLiteral("fps"), 0);
+    }
+
+private:
+    QComboBox* m_device = nullptr;
+    QComboBox* m_res = nullptr;
+    QSpinBox* m_fps = nullptr;
+};
+
+class BrowserPanel : public SourcePropertiesPanel {
+public:
+    BrowserPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_url = new QLineEdit(this);
+        m_w = new QSpinBox(this);
+        m_w->setRange(64, 7680);
+        m_w->setValue(1280);
+        m_h = new QSpinBox(this);
+        m_h->setRange(64, 4320);
+        m_h->setValue(720);
+        m_fps = new QSpinBox(this);
+        m_fps->setRange(1, 60);
+        m_fps->setValue(15);
+        m_hw = new QCheckBox(QStringLiteral("Hardware acceleration"), this);
+        m_hw->setChecked(true);
+        auto* refresh = new QPushButton(QStringLiteral("Reload page"), this);
+        connect(refresh, &QPushButton::clicked, this, [this] {
+            // bump a token so BrowserSource reloads
+            emit settingsEdited();
+            if (!m_engine) return;
+            auto src = m_engine->selectedSource();
+            if (!src) return;
+            auto s = src->settings;
+            applyTo(s);
+            s.insert(QStringLiteral("reloadToken"), s.value(QStringLiteral("reloadToken")).toInt() + 1);
+            m_engine->updateSourceSettings(src->id, s);
+        });
+        form->addRow(QStringLiteral("URL"), m_url);
+        form->addRow(QStringLiteral("Width"), m_w);
+        form->addRow(QStringLiteral("Height"), m_h);
+        form->addRow(QStringLiteral("FPS"), m_fps);
+        form->addRow(m_hw);
+        form->addRow(refresh);
+        wireChanged(this, m_url);
+        wireChanged(this, m_w);
+        wireChanged(this, m_h);
+        wireChanged(this, m_fps);
+        wireChanged(this, m_hw);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_url->setText(src.settings.value(QStringLiteral("url")).toString(QStringLiteral("https://example.com")));
+        m_w->setValue(src.settings.value(QStringLiteral("width")).toInt(1280));
+        m_h->setValue(src.settings.value(QStringLiteral("height")).toInt(720));
+        m_fps->setValue(src.settings.value(QStringLiteral("fps")).toInt(15));
+        m_hw->setChecked(src.settings.value(QStringLiteral("hwAccel")).toBool(true));
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("url"), m_url->text().trimmed());
+        s.insert(QStringLiteral("width"), m_w->value());
+        s.insert(QStringLiteral("height"), m_h->value());
+        s.insert(QStringLiteral("fps"), m_fps->value());
+        s.insert(QStringLiteral("hwAccel"), m_hw->isChecked());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("url"), QStringLiteral("https://example.com"));
+        s.insert(QStringLiteral("width"), 1280);
+        s.insert(QStringLiteral("height"), 720);
+        s.insert(QStringLiteral("fps"), 15);
+        s.insert(QStringLiteral("hwAccel"), true);
+    }
+
+private:
+    QLineEdit* m_url = nullptr;
+    QSpinBox* m_w = nullptr;
+    QSpinBox* m_h = nullptr;
+    QSpinBox* m_fps = nullptr;
+    QCheckBox* m_hw = nullptr;
+};
+
+class TextPanel : public SourcePropertiesPanel {
+public:
+    TextPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* lay = new QVBoxLayout(this);
+        m_text = new QPlainTextEdit(this);
+        m_font = new QFontComboBox(this);
+        m_size = new QSpinBox(this);
+        m_size->setRange(8, 256);
+        m_size->setValue(48);
+        m_color = new QLineEdit(QStringLiteral("#FFFFFF"), this);
+        m_outline = new QCheckBox(QStringLiteral("Outline"), this);
+        m_wrap = new QCheckBox(QStringLiteral("Word wrap"), this);
+        m_align = new QComboBox(this);
+        m_align->addItem(QStringLiteral("Left"), QStringLiteral("left"));
+        m_align->addItem(QStringLiteral("Center"), QStringLiteral("center"));
+        m_align->addItem(QStringLiteral("Right"), QStringLiteral("right"));
+        auto* pick = new QPushButton(QStringLiteral("Pick colour…"), this);
+        connect(pick, &QPushButton::clicked, this, [this] {
+            const QColor c = QColorDialog::getColor(QColor(m_color->text()), this);
+            if (c.isValid()) {
+                m_color->setText(c.name(QColor::HexRgb));
+                emit settingsEdited();
+            }
+        });
+        auto* form = new QFormLayout();
+        form->addRow(QStringLiteral("Font"), m_font);
+        form->addRow(QStringLiteral("Size"), m_size);
+        form->addRow(QStringLiteral("Colour"), m_color);
+        form->addRow(pick);
+        form->addRow(QStringLiteral("Align"), m_align);
+        form->addRow(m_outline);
+        form->addRow(m_wrap);
+        lay->addWidget(new QLabel(QStringLiteral("Text"), this));
+        lay->addWidget(m_text, 1);
+        lay->addLayout(form);
+        wireChanged(this, m_text);
+        wireChanged(this, m_font);
+        wireChanged(this, m_size);
+        wireChanged(this, m_color);
+        wireChanged(this, m_outline);
+        wireChanged(this, m_wrap);
+        wireChanged(this, m_align);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_text->setPlainText(src.settings.value(QStringLiteral("text")).toString(src.name));
+        m_font->setCurrentFont(QFont(src.settings.value(QStringLiteral("fontFamily")).toString(QStringLiteral("Segoe UI"))));
+        m_size->setValue(src.settings.value(QStringLiteral("fontSize")).toInt(48));
+        m_color->setText(src.settings.value(QStringLiteral("textColor")).toString(QStringLiteral("#FFFFFF")));
+        m_outline->setChecked(src.settings.value(QStringLiteral("outline")).toBool(false));
+        m_wrap->setChecked(src.settings.value(QStringLiteral("wrap")).toBool(true));
+        const int a = m_align->findData(src.settings.value(QStringLiteral("align")).toString(QStringLiteral("left")));
+        m_align->setCurrentIndex(a >= 0 ? a : 0);
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("text"), m_text->toPlainText());
+        s.insert(QStringLiteral("fontFamily"), m_font->currentFont().family());
+        s.insert(QStringLiteral("fontSize"), m_size->value());
+        s.insert(QStringLiteral("textColor"), m_color->text().trimmed());
+        s.insert(QStringLiteral("outline"), m_outline->isChecked());
+        s.insert(QStringLiteral("wrap"), m_wrap->isChecked());
+        s.insert(QStringLiteral("align"), m_align->currentData().toString());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("text"), QStringLiteral("RailShotTV"));
+        s.insert(QStringLiteral("fontFamily"), QStringLiteral("Segoe UI"));
+        s.insert(QStringLiteral("fontSize"), 48);
+        s.insert(QStringLiteral("textColor"), QStringLiteral("#FFFFFF"));
+        s.insert(QStringLiteral("outline"), false);
+        s.insert(QStringLiteral("wrap"), true);
+        s.insert(QStringLiteral("align"), QStringLiteral("left"));
+    }
+
+private:
+    QPlainTextEdit* m_text = nullptr;
+    QFontComboBox* m_font = nullptr;
+    QSpinBox* m_size = nullptr;
+    QLineEdit* m_color = nullptr;
+    QCheckBox* m_outline = nullptr;
+    QCheckBox* m_wrap = nullptr;
+    QComboBox* m_align = nullptr;
+};
+
+class PathPanel : public SourcePropertiesPanel {
+public:
+    PathPanel(EngineController* engine, QWidget* parent, const QString& key, const QString& filter,
+              bool mediaExtras)
+        : SourcePropertiesPanel(engine, parent), m_key(key), m_media(mediaExtras)
+    {
+        auto* form = new QFormLayout(this);
+        m_path = new QLineEdit(this);
+        auto* browse = new QPushButton(QStringLiteral("Browse…"), this);
+        connect(browse, &QPushButton::clicked, this, [this, filter] {
+            const auto p = QFileDialog::getOpenFileName(this, QStringLiteral("Select file"), {}, filter);
+            if (!p.isEmpty()) {
+                m_path->setText(p);
+                emit settingsEdited();
+            }
+        });
+        form->addRow(QStringLiteral("Path"), m_path);
+        form->addRow(browse);
+        if (m_media) {
+            m_loop = new QCheckBox(QStringLiteral("Loop"), this);
+            m_loop->setChecked(true);
+            m_restart = new QCheckBox(QStringLiteral("Restart when activated"), this);
+            m_audio = new QCheckBox(QStringLiteral("Audio track"), this);
+            m_audio->setChecked(true);
+            form->addRow(m_loop);
+            form->addRow(m_restart);
+            form->addRow(m_audio);
+            wireChanged(this, m_loop);
+            wireChanged(this, m_restart);
+            wireChanged(this, m_audio);
+        } else {
+            m_unload = new QCheckBox(QStringLiteral("Unload when not showing"), this);
+            form->addRow(m_unload);
+            wireChanged(this, m_unload);
+        }
+        wireChanged(this, m_path);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_path->setText(src.settings.value(m_key).toString());
+        if (m_media) {
+            m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(true));
+            m_restart->setChecked(src.settings.value(QStringLiteral("restartOnActivate")).toBool(false));
+            m_audio->setChecked(src.settings.value(QStringLiteral("audioTrack")).toBool(true));
+        } else if (m_unload) {
+            m_unload->setChecked(src.settings.value(QStringLiteral("unloadWhenHidden")).toBool(false));
+        }
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(m_key, m_path->text().trimmed());
+        if (m_media) {
+            s.insert(QStringLiteral("loop"), m_loop->isChecked());
+            s.insert(QStringLiteral("restartOnActivate"), m_restart->isChecked());
+            s.insert(QStringLiteral("audioTrack"), m_audio->isChecked());
+        } else if (m_unload) {
+            s.insert(QStringLiteral("unloadWhenHidden"), m_unload->isChecked());
+        }
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        if (m_media) {
+            s.insert(QStringLiteral("loop"), true);
+            s.insert(QStringLiteral("restartOnActivate"), false);
+            s.insert(QStringLiteral("audioTrack"), true);
+        } else {
+            s.insert(QStringLiteral("unloadWhenHidden"), false);
+        }
+    }
+
+private:
+    QString m_key;
+    bool m_media = false;
+    QLineEdit* m_path = nullptr;
+    QCheckBox* m_loop = nullptr;
+    QCheckBox* m_restart = nullptr;
+    QCheckBox* m_audio = nullptr;
+    QCheckBox* m_unload = nullptr;
+};
+
+class ColorPanel : public SourcePropertiesPanel {
+public:
+    ColorPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_color = new QLineEdit(QStringLiteral("#1A1A1A"), this);
+        m_w = new QSpinBox(this);
+        m_w->setRange(16, 7680);
+        m_w->setValue(1920);
+        m_h = new QSpinBox(this);
+        m_h->setRange(16, 4320);
+        m_h->setValue(1080);
+        auto* pick = new QPushButton(QStringLiteral("Pick…"), this);
+        connect(pick, &QPushButton::clicked, this, [this] {
+            const QColor c = QColorDialog::getColor(QColor(m_color->text()), this);
+            if (c.isValid()) {
+                m_color->setText(c.name(QColor::HexRgb));
+                emit settingsEdited();
+            }
+        });
+        form->addRow(QStringLiteral("Colour"), m_color);
+        form->addRow(pick);
+        form->addRow(QStringLiteral("Width"), m_w);
+        form->addRow(QStringLiteral("Height"), m_h);
+        wireChanged(this, m_color);
+        wireChanged(this, m_w);
+        wireChanged(this, m_h);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_color->setText(src.settings.value(QStringLiteral("color")).toString(QStringLiteral("#1A1A1A")));
+        m_w->setValue(src.settings.value(QStringLiteral("width")).toInt(1920));
+        m_h->setValue(src.settings.value(QStringLiteral("height")).toInt(1080));
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("color"), m_color->text().trimmed());
+        s.insert(QStringLiteral("width"), m_w->value());
+        s.insert(QStringLiteral("height"), m_h->value());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("color"), QStringLiteral("#1A1A1A"));
+        s.insert(QStringLiteral("width"), 1920);
+        s.insert(QStringLiteral("height"), 1080);
+    }
+
+private:
+    QLineEdit* m_color = nullptr;
+    QSpinBox* m_w = nullptr;
+    QSpinBox* m_h = nullptr;
+};
+
+class NdiPanel : public SourcePropertiesPanel {
+public:
+    NdiPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* lay = new QVBoxLayout(this);
+        m_list = new QListWidget(this);
+        m_bw = new QComboBox(this);
+        m_bw->addItem(QStringLiteral("Highest"), QStringLiteral("highest"));
+        m_bw->addItem(QStringLiteral("Lowest"), QStringLiteral("lowest"));
+        auto* refresh = new QPushButton(QStringLiteral("Refresh"), this);
+        auto doRefresh = [this] {
+            m_list->clear();
+            const auto found = NdiSource::discoverSources(1200);
+            if (found.isEmpty()) {
+                m_list->addItem(QStringLiteral("(No NDI sources)"));
+                return;
+            }
+            for (const auto& n : found)
+                m_list->addItem(n);
+        };
+        connect(refresh, &QPushButton::clicked, this, [this, doRefresh] {
+            doRefresh();
+            emit settingsEdited();
+        });
+        connect(m_list, &QListWidget::currentRowChanged, this, [this](int) { emit settingsEdited(); });
+        lay->addWidget(new QLabel(QStringLiteral("NDI source"), this));
+        lay->addWidget(m_list, 1);
+        auto* form = new QFormLayout();
+        form->addRow(QStringLiteral("Bandwidth"), m_bw);
+        lay->addLayout(form);
+        lay->addWidget(refresh);
+        wireChanged(this, m_bw);
+        doRefresh();
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const QString name = src.settings.value(QStringLiteral("ndiName")).toString();
+        for (int i = 0; i < m_list->count(); ++i) {
+            if (m_list->item(i)->text() == name) {
+                m_list->setCurrentRow(i);
+                break;
+            }
+        }
+        const int b = m_bw->findData(src.settings.value(QStringLiteral("ndiBandwidth")).toString(QStringLiteral("highest")));
+        m_bw->setCurrentIndex(b >= 0 ? b : 0);
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        if (m_list->currentItem() && !m_list->currentItem()->text().startsWith(QLatin1Char('(')))
+            s.insert(QStringLiteral("ndiName"), m_list->currentItem()->text());
+        s.insert(QStringLiteral("ndiBandwidth"), m_bw->currentData().toString());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("ndiBandwidth"), QStringLiteral("highest"));
+    }
+
+private:
+    QListWidget* m_list = nullptr;
+    QComboBox* m_bw = nullptr;
+};
+
+class OverlayNotePanel : public SourcePropertiesPanel {
+public:
+    OverlayNotePanel(EngineController* engine, QWidget* parent, const QString& note)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* lay = new QVBoxLayout(this);
+        auto* lab = new QLabel(note, this);
+        lab->setWordWrap(true);
+        lab->setStyleSheet(QStringLiteral("color:#A0A8B8;"));
+        lay->addWidget(lab);
+        lay->addStretch();
+    }
+    void loadFrom(const SourceItem&) override {}
+    void applyTo(QJsonObject&) const override {}
+    void resetDefaults(QJsonObject&) const override {}
+};
+
+class WindowOrGamePanel : public SourcePropertiesPanel {
+public:
+    WindowOrGamePanel(EngineController* engine, QWidget* parent, bool gameFilter)
+        : SourcePropertiesPanel(engine, parent), m_game(gameFilter)
+    {
+        auto* lay = new QVBoxLayout(this);
+        m_list = new QListWidget(this);
+        auto* refresh = new QPushButton(QStringLiteral("Refresh"), this);
+        connect(refresh, &QPushButton::clicked, this, [this] {
+            rebuildList();
+            emit settingsEdited();
+        });
+        connect(m_list, &QListWidget::currentRowChanged, this, [this](int) { emit settingsEdited(); });
+        lay->addWidget(new QLabel(m_game ? QStringLiteral("Game / fullscreen window (WGC — no hook injection)")
+                                         : QStringLiteral("Window"),
+                                  this));
+        lay->addWidget(m_list, 1);
+        lay->addWidget(refresh);
+        rebuildList();
+    }
+    void rebuildList()
+    {
+        m_list->clear();
+        m_entries = enumerateWindows();
+        for (const auto& e : m_entries) {
+            QString label = e.title;
+            if (!e.exe.isEmpty())
+                label += QStringLiteral("  [%1]").arg(e.exe);
+            auto* item = new QListWidgetItem(label, m_list);
+            item->setData(Qt::UserRole, QVariant::fromValue(e.hwnd));
+            item->setData(Qt::UserRole + 1, e.title);
+            item->setData(Qt::UserRole + 2, e.exe);
+            if (m_game) {
+                // Prefer larger / likely game titles — keep all but sort exe-bearing first
+                Q_UNUSED(e);
+            }
+        }
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const quintptr hwnd = src.settings.value(QStringLiteral("hwnd")).toVariant().toULongLong();
+        const QString title = src.settings.value(QStringLiteral("windowTitle")).toString();
+        for (int i = 0; i < m_list->count(); ++i) {
+            auto* it = m_list->item(i);
+            if ((hwnd && it->data(Qt::UserRole).toULongLong() == hwnd)
+                || (!title.isEmpty() && it->data(Qt::UserRole + 1).toString() == title)) {
+                m_list->setCurrentRow(i);
+                return;
+            }
+        }
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        if (!m_list->currentItem()) return;
+        s.insert(QStringLiteral("hwnd"), static_cast<double>(m_list->currentItem()->data(Qt::UserRole).toULongLong()));
+        s.insert(QStringLiteral("windowTitle"), m_list->currentItem()->data(Qt::UserRole + 1).toString());
+        s.insert(QStringLiteral("exe"), m_list->currentItem()->data(Qt::UserRole + 2).toString());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.remove(QStringLiteral("hwnd"));
+        s.remove(QStringLiteral("windowTitle"));
+        s.remove(QStringLiteral("exe"));
+    }
+
+private:
+    bool m_game = false;
+    QListWidget* m_list = nullptr;
+    QVector<WindowEntry> m_entries;
+};
+
+class AudioDevicePanel : public SourcePropertiesPanel {
+public:
+    AudioDevicePanel(EngineController* engine, QWidget* parent, AudioDeviceKind kind)
+        : SourcePropertiesPanel(engine, parent), m_kind(kind)
+    {
+        auto* form = new QFormLayout(this);
+        m_device = new QComboBox(this);
+        for (const auto& d : WasapiCapture::enumerate(kind))
+            m_device->addItem(d.name, d.id);
+        if (m_device->count() == 0)
+            m_device->addItem(QStringLiteral("(Default device)"), QString());
+        form->addRow(QStringLiteral("Device"), m_device);
+        wireChanged(this, m_device);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const QString id = src.settings.value(QStringLiteral("deviceId")).toString();
+        const int idx = m_device->findData(id);
+        m_device->setCurrentIndex(idx >= 0 ? idx : 0);
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("deviceId"), m_device->currentData().toString());
+        s.insert(QStringLiteral("audioKind"),
+                 m_kind == AudioDeviceKind::Capture ? QStringLiteral("input") : QStringLiteral("output"));
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("deviceId"), QString());
+    }
+
+private:
+    AudioDeviceKind m_kind;
+    QComboBox* m_device = nullptr;
+};
+
+} // namespace
+
+SourcePropertiesPanel* createSourcePropertiesPanel(SourceType type, EngineController* engine, QWidget* parent)
+{
+    switch (type) {
+    case SourceType::Display:
+        return new DisplayPanel(engine, parent);
+    case SourceType::Camera:
+        return new CameraPanel(engine, parent);
+    case SourceType::Browser:
+        return new BrowserPanel(engine, parent);
+    case SourceType::Text:
+        return new TextPanel(engine, parent);
+    case SourceType::Image:
+        return new PathPanel(engine, parent, QStringLiteral("path"),
+                             QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"), false);
+    case SourceType::Media:
+        return new PathPanel(engine, parent, QStringLiteral("path"),
+                             QStringLiteral("Media (*.mp4 *.mov *.mkv *.webm *.avi *.png *.jpg)"), true);
+    case SourceType::Color:
+        return new ColorPanel(engine, parent);
+    case SourceType::Ndi:
+        return new NdiPanel(engine, parent);
+    case SourceType::Window:
+        return new WindowOrGamePanel(engine, parent, false);
+    case SourceType::Game:
+        return new WindowOrGamePanel(engine, parent, true);
+    case SourceType::AudioInput:
+        return new AudioDevicePanel(engine, parent, AudioDeviceKind::Capture);
+    case SourceType::AudioOutput:
+        return new AudioDevicePanel(engine, parent, AudioDeviceKind::Loopback);
+    case SourceType::Scoreboard:
+        return new OverlayNotePanel(engine, parent,
+                                    QStringLiteral("Live scores come from the Scoreboard dock. Use Push on the dock to sync."));
+    case SourceType::LowerThird:
+        return new OverlayNotePanel(engine, parent,
+                                    QStringLiteral("Lower-third title/subtitle live in General settings JSON; edit via Overlay presets."));
+    case SourceType::Alert:
+        return new OverlayNotePanel(engine, parent, QStringLiteral("Alert overlay — trigger from Overlay menu."));
+    default:
+        return new OverlayNotePanel(engine, parent, QStringLiteral("No type-specific settings."));
+    }
+}
+
+} // namespace railshot

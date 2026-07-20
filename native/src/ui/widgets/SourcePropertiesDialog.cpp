@@ -114,14 +114,18 @@ void SourcePropertiesDialog::onDefaults()
 {
     if (!m_engine) return;
     Transform t;
-    // Full-frame default for display-like sources; otherwise centered half
     const auto src = m_engine->selectedSource();
-    if (src && src->type == SourceType::Display)
+    if (src && (src->type == SourceType::Display || src->type == SourceType::Window
+                || src->type == SourceType::Game))
         t = {0, 0, 1, 1};
     else
         t = {0.1, 0.1, 0.5, 0.5};
     m_engine->updateSourceTransform(m_sourceId, t);
+    if (m_props)
+        m_props->resetTypeSpecificDefaults();
     QJsonObject settings;
+    if (src)
+        settings = src->settings;
     settings.insert(QStringLiteral("brightness"), 0);
     settings.insert(QStringLiteral("contrast"), 0);
     settings.insert(QStringLiteral("saturation"), 0);
@@ -130,15 +134,7 @@ void SourcePropertiesDialog::onDefaults()
     settings.insert(QStringLiteral("blur"), 0);
     settings.insert(QStringLiteral("audioVolume"), 100);
     settings.insert(QStringLiteral("audioMute"), false);
-    // Preserve type-specific keys (device path, URL, etc.)
-    if (src) {
-        auto keep = src->settings;
-        for (auto it = settings.begin(); it != settings.end(); ++it)
-            keep.insert(it.key(), it.value());
-        m_engine->updateSourceSettings(m_sourceId, keep);
-    } else {
-        m_engine->updateSourceSettings(m_sourceId, settings);
-    }
+    m_engine->updateSourceSettings(m_sourceId, settings);
     if (m_props)
         m_props->reload();
 }

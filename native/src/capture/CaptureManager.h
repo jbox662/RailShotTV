@@ -21,6 +21,7 @@ public:
     ~CaptureManager() override;
 
     void setDevice(ID3D11Device* device);
+    void setAudioGraph(class AudioGraph* graph);
     FrameBus& frameBus() { return m_bus; }
 
     /// Called when Media/NDI sources produce audio (sourceId, display name, buffer).
@@ -52,8 +53,10 @@ signals:
 private:
     std::unique_ptr<IVideoSource> createSource(const SourceItem& source);
     void wireSourceAudio(IVideoSource* src, const SourceItem& source);
+    void reattach(const SourceItem& source);
 
     ID3D11Device* m_device = nullptr;
+    class AudioGraph* m_audioGraph = nullptr;
     FrameBus m_bus;
     QHash<QString, std::shared_ptr<IVideoSource>> m_sources;
     bool m_paused = false;

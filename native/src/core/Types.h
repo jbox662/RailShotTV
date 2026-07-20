@@ -29,6 +29,10 @@ enum class SourceType {
     Media,
     Ndi,
     Color,
+    Window,
+    Game,
+    AudioInput,
+    AudioOutput,
     Unknown
 };
 

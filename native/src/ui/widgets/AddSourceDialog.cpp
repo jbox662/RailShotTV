@@ -67,6 +67,10 @@ struct InputTypeEntry {
 const InputTypeEntry kInputTypes[] = {
     {"Camera", "#22C55E", SourceType::Camera, true},
     {"Display Capture", "#4F9EFF", SourceType::Display, true},
+    {"Window Capture", "#38BDF8", SourceType::Window, true},
+    {"Game Capture", "#A3E635", SourceType::Game, true},
+    {"Audio Input", "#F472B6", SourceType::AudioInput, true},
+    {"Audio Output (Desktop)", "#FB7185", SourceType::AudioOutput, true},
     {"Image", "#FBBF24", SourceType::Image, true},
     {"Title / Text", "#EC4899", SourceType::Text, true},
     {"Web Browser", "#3B82F6", SourceType::Browser, true},
@@ -82,7 +86,7 @@ const InputTypeEntry kInputTypes[] = {
 AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
 {
-    setWindowTitle(QStringLiteral("Input Select"));
+    setWindowTitle(QStringLiteral("Add Source"));
     setObjectName(QStringLiteral("addSourceDialog"));
     resize(780, 520);
     setMaximumHeight(int(0.88 * 900));
@@ -101,7 +105,7 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* header = new QLabel(QStringLiteral("  INPUT SELECT"), this);
+    auto* header = new QLabel(QStringLiteral("  ADD SOURCE"), this);
     header->setFixedHeight(40);
     header->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.5 transparent);"
@@ -169,6 +173,11 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
         m_monitor->addItem(QStringLiteral("Monitor 0"), 0);
     monForm->addRow(QStringLiteral("Monitor"), m_monitor);
     m_stack->addWidget(monPage);
+
+    m_stack->addWidget(new QLabel(QStringLiteral("Pick a window in Properties after Create."), m_stack)); // Window
+    m_stack->addWidget(new QLabel(QStringLiteral("Pick a game window in Properties (WGC/BitBlt — no anti-cheat hooks)."), m_stack)); // Game
+    m_stack->addWidget(new QLabel(QStringLiteral("Microphone / capture device — configure in Properties."), m_stack)); // AudioIn
+    m_stack->addWidget(new QLabel(QStringLiteral("Desktop audio loopback — configure in Properties."), m_stack)); // AudioOut
 
     auto* imgPage = new QWidget(m_stack);
     auto* imgForm = new QFormLayout(imgPage);
@@ -257,7 +266,7 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     foot->setContentsMargins(16, 8, 16, 8);
     auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
     cancel->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    auto* ok = new QPushButton(QStringLiteral("OK"), footer);
+    auto* ok = new QPushButton(QStringLiteral("Create"), footer);
     ok->setStyleSheet(QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1050CC);"
         "color:white;font-weight:900;border:2px solid #5A8AFF;border-radius:4px;padding:7px 24px;}"
@@ -305,15 +314,19 @@ void AddSourceDialog::rebuildFields()
     switch (m_selectedType) {
     case SourceType::Camera: m_stack->setCurrentIndex(0); break;
     case SourceType::Display: m_stack->setCurrentIndex(1); break;
-    case SourceType::Image: m_stack->setCurrentIndex(2); break;
-    case SourceType::Text: m_stack->setCurrentIndex(3); break;
-    case SourceType::Browser: m_stack->setCurrentIndex(4); break;
-    case SourceType::Scoreboard: m_stack->setCurrentIndex(5); break;
-    case SourceType::LowerThird: m_stack->setCurrentIndex(6); break;
-    case SourceType::Color: m_stack->setCurrentIndex(7); break;
-    case SourceType::Media: m_stack->setCurrentIndex(8); break;
-    case SourceType::Ndi: m_stack->setCurrentIndex(9); break;
-    case SourceType::Alert: m_stack->setCurrentIndex(10); break;
+    case SourceType::Window: m_stack->setCurrentIndex(2); break;
+    case SourceType::Game: m_stack->setCurrentIndex(3); break;
+    case SourceType::AudioInput: m_stack->setCurrentIndex(4); break;
+    case SourceType::AudioOutput: m_stack->setCurrentIndex(5); break;
+    case SourceType::Image: m_stack->setCurrentIndex(6); break;
+    case SourceType::Text: m_stack->setCurrentIndex(7); break;
+    case SourceType::Browser: m_stack->setCurrentIndex(8); break;
+    case SourceType::Scoreboard: m_stack->setCurrentIndex(9); break;
+    case SourceType::LowerThird: m_stack->setCurrentIndex(10); break;
+    case SourceType::Color: m_stack->setCurrentIndex(11); break;
+    case SourceType::Media: m_stack->setCurrentIndex(12); break;
+    case SourceType::Ndi: m_stack->setCurrentIndex(13); break;
+    case SourceType::Alert: m_stack->setCurrentIndex(14); break;
     default: m_stack->setCurrentIndex(0); break;
     }
 }

@@ -74,6 +74,7 @@ bool EngineController::initialize(QString* error)
         return false;
 
     m_capture->setDevice(m_d3d->device());
+    m_capture->setAudioGraph(m_audio.get());
     m_capture->setOverlayCanvasSize(w, h);
     if (!m_audio->initialize(m_settings->desktopDeviceId(), m_settings->micDeviceId(), error))
         return false;
@@ -271,7 +272,7 @@ void EngineController::setTransition(TransitionType type, int durationMs)
     if (m_transition) m_transition->configure(type, durationMs);
 }
 
-QString EngineController::addSource(SourceType type, const QString& name)
+QString EngineController::addSource(SourceType type, const QString& name, const QJsonObject& settings)
 {
     QString id;
     m_sceneGraph->mutate([&](Project& p) {
@@ -286,6 +287,9 @@ QString EngineController::addSource(SourceType type, const QString& name)
                 s->settings.insert(QStringLiteral("title"), QStringLiteral("Alert"));
                 s->settings.insert(QStringLiteral("body"), QStringLiteral("New follower"));
             }
+            // Caller settings win / merge on top of type defaults.
+            for (auto it = settings.begin(); it != settings.end(); ++it)
+                s->settings.insert(it.key(), it.value());
         }
     });
     return id;

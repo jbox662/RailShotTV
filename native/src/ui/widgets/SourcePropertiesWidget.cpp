@@ -1,4 +1,5 @@
 #include "ui/widgets/SourcePropertiesWidget.h"
+#include "ui/widgets/properties/SourcePropertiesPanel.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include <QVBoxLayout>
@@ -13,6 +14,7 @@
 #include <QSlider>
 #include <QScrollArea>
 #include <QColorDialog>
+#include <QStackedWidget>
 
 namespace railshot {
 
@@ -69,6 +71,12 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
 
     m_tabs = new QTabWidget(m_formHost);
     m_tabs->setDocumentMode(true);
+
+    // Source (type-specific) — leading tab
+    m_sourceTab = new QWidget(m_tabs);
+    m_sourceTabLay = new QVBoxLayout(m_sourceTab);
+    m_sourceTabLay->setContentsMargins(14, 12, 14, 12);
+    m_tabs->addTab(m_sourceTab, QStringLiteral("Source"));
 
     auto makeSpin = [this](double minV, double maxV, double step) {
         auto* s = new QDoubleSpinBox(m_formHost);
@@ -337,6 +345,17 @@ void SourcePropertiesWidget::applyAndClose()
     applyAll();
 }
 
+void SourcePropertiesWidget::resetTypeSpecificDefaults()
+{
+    if (!m_engine || !m_sourcePanel) return;
+    auto src = m_engine->selectedSource();
+    if (!src) return;
+    auto settings = src->settings;
+    m_sourcePanel->resetDefaults(settings);
+    m_engine->updateSourceSettings(src->id, settings);
+    rebuild();
+}
+
 void SourcePropertiesWidget::applyTransformFromUi()
 {
     if (m_block || !m_engine) return;
@@ -363,6 +382,8 @@ void SourcePropertiesWidget::applyAll()
     auto src = m_engine->selectedSource();
     if (!src) return;
     auto settings = src->settings;
+    if (m_sourcePanel)
+        m_sourcePanel->applyTo(settings);
     settings.insert(QStringLiteral("brightness"), m_brightness->value());
     settings.insert(QStringLiteral("contrast"), m_contrast->value());
     settings.insert(QStringLiteral("saturation"), m_saturation->value());
@@ -410,8 +431,37 @@ void SourcePropertiesWidget::rebuild()
             m_blur->setValue(src->settings.value(QStringLiteral("blur")).toInt(0));
         m_volume->setValue(src->settings.value(QStringLiteral("audioVolume")).toInt(100));
         m_audioMute->setChecked(src->settings.value(QStringLiteral("audioMute")).toBool());
+
+        if (!m_sourcePanel || m_panelType != src->type) {
+            if (m_sourcePanel) {
+                m_sourceTabLay->removeWidget(m_sourcePanel);
+                m_sourcePanel->deleteLater();
+                m_sourcePanel = nullptr;
+            }
+            m_panelType = src->type;
+            m_sourcePanel = createSourcePropertiesPanel(src->type, m_engine, m_sourceTab);
+            if (m_sourcePanel) {
+                m_sourceTabLay->addWidget(m_sourcePanel, 1);
+                connect(m_sourcePanel, &SourcePropertiesPanel::settingsEdited, this, [this] {
+                    if (m_block || !m_engine || !m_sourcePanel) return;
+                    auto cur = m_engine->selectedSource();
+                    if (!cur) return;
+                    auto settings = cur->settings;
+                    m_sourcePanel->applyTo(settings);
+                    m_engine->updateSourceSettings(cur->id, settings);
+                });
+            }
+        }
+        if (m_sourcePanel)
+            m_sourcePanel->loadFrom(*src);
     } else {
         m_title->setText(QStringLiteral("INPUT SETTINGS"));
+        if (m_sourcePanel) {
+            m_sourceTabLay->removeWidget(m_sourcePanel);
+            m_sourcePanel->deleteLater();
+            m_sourcePanel = nullptr;
+            m_panelType = SourceType::Unknown;
+        }
     }
     m_block = false;
 }

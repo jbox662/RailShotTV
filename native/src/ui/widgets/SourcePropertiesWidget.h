@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include "core/Types.h"
 
 class QLineEdit;
 class QCheckBox;
@@ -8,9 +9,11 @@ class QLabel;
 class QTabWidget;
 class QSlider;
 class QPushButton;
+class QVBoxLayout;
 
 namespace railshot {
 class EngineController;
+class SourcePropertiesPanel;
 
 class SourcePropertiesWidget : public QWidget {
     Q_OBJECT
@@ -19,6 +22,8 @@ public:
 
     /// When true, hide drawer chrome / internal footer (host dialog provides OK/Cancel).
     void setDialogMode(bool on);
+    /// Reset type-specific Source tab defaults.
+    void resetTypeSpecificDefaults();
     void applyAndClose();
     void reload() { rebuild(); }
 
@@ -60,6 +65,10 @@ private:
     QSlider* m_blur = nullptr;
     QSlider* m_volume = nullptr;
     QCheckBox* m_audioMute = nullptr;
+    QWidget* m_sourceTab = nullptr;
+    QVBoxLayout* m_sourceTabLay = nullptr;
+    SourcePropertiesPanel* m_sourcePanel = nullptr;
+    SourceType m_panelType = SourceType::Unknown;
     bool m_block = false;
     bool m_dialogMode = false;
 };

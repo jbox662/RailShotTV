@@ -379,12 +379,14 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         if (dlg.exec() != QDialog::Accepted) return;
         const auto r = dlg.result();
         if (!r.accepted) return;
-        const QString id = m_engine->addSource(r.type, r.name);
-        if (!id.isEmpty() && !r.settings.isEmpty())
-            m_engine->updateSourceSettings(id, r.settings);
+        const QString id = m_engine->addSource(r.type, r.name, r.settings);
         if (r.type == SourceType::Scoreboard)
             m_engine->pushScoreboardToProgram();
         m_engine->setSelectedSourceId(id);
+        if (!id.isEmpty()) {
+            SourcePropertiesDialog props(m_engine, id, this);
+            props.exec();
+        }
     });
 
     connect(m_toolbar, &BottomToolbar::goLiveRequested, this, [this] {
