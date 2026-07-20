@@ -1,6 +1,8 @@
 #pragma once
 #include "compositor/PreviewSurface.h"
 
+class QEvent;
+
 namespace railshot {
 class EngineController;
 
@@ -13,6 +15,9 @@ public:
 
 signals:
     void sourceSelected(const QString& sourceId);
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     class CanvasOverlay;

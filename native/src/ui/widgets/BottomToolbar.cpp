@@ -3,7 +3,6 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QStyle>
-#include <QLabel>
 
 namespace railshot {
 
@@ -15,10 +14,10 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
         "border-top: 1px solid #2A2D35;"));
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(10, 6, 10, 6);
+    row->setContentsMargins(8, 4, 8, 4);
     row->setSpacing(6);
 
-    auto* add = new QPushButton(QStringLiteral("Add Input"), this);
+    auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
     add->setCursor(Qt::PointingHandCursor);
     connect(add, &QPushButton::clicked, this, &BottomToolbar::addInputRequested);
     row->addWidget(add);
@@ -30,13 +29,18 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         if (m_engine->telemetrySnapshot().recording) {
             m_engine->stopRecording();
             m_recordBtn->setText(QStringLiteral("+ Record"));
+            m_recordBtn->setProperty("recording", false);
         } else {
             QString err;
             if (!m_engine->startRecording(&err))
                 QMessageBox::warning(this, QStringLiteral("Record"), err);
-            else
+            else {
                 m_recordBtn->setText(QStringLiteral("■ Stop Rec"));
+                m_recordBtn->setProperty("recording", true);
+            }
         }
+        m_recordBtn->style()->unpolish(m_recordBtn);
+        m_recordBtn->style()->polish(m_recordBtn);
     });
     row->addWidget(m_recordBtn);
 
@@ -61,6 +65,21 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     });
     row->addWidget(m_streamBtn);
 
+    auto* multi = new QPushButton(QStringLiteral("MultiCorder"), this);
+    multi->setCursor(Qt::PointingHandCursor);
+    connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
+    row->addWidget(multi);
+
+    auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
+    playlist->setCursor(Qt::PointingHandCursor);
+    connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
+    row->addWidget(playlist);
+
+    auto* overlay = new QPushButton(QStringLiteral("Overlay"), this);
+    overlay->setCursor(Qt::PointingHandCursor);
+    connect(overlay, &QPushButton::clicked, this, &BottomToolbar::overlayRequested);
+    row->addWidget(overlay);
+
     auto* replayBtn = new QPushButton(QStringLiteral("Save Replay"), this);
     connect(replayBtn, &QPushButton::clicked, this, [this] {
         QString err;
@@ -84,10 +103,16 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     row->addStretch();
 
-    auto* mixerHint = new QPushButton(QStringLiteral("Audio Mixer"), this);
-    mixerHint->setObjectName(QStringLiteral("mixerToggle"));
-    mixerHint->setEnabled(false);
-    row->addWidget(mixerHint);
+    m_mixerBtn = new QPushButton(QStringLiteral("Audio Mixer"), this);
+    m_mixerBtn->setObjectName(QStringLiteral("mixerToggle"));
+    m_mixerBtn->setCheckable(true);
+    m_mixerBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_mixerBtn, &QPushButton::clicked, this, &BottomToolbar::mixerToggleRequested);
+    row->addWidget(m_mixerBtn);
+
+    m_statusPill = new QLabel(QStringLiteral("1080p60  ·  — FPS  ·  GPU —  ·  CPU —"), this);
+    m_statusPill->setObjectName(QStringLiteral("statusPill"));
+    row->addWidget(m_statusPill);
 
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
         if (s.streaming) {
@@ -95,10 +120,34 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
             m_streamBtn->setObjectName(QStringLiteral("endStreamButton"));
             m_streamBtn->style()->unpolish(m_streamBtn);
             m_streamBtn->style()->polish(m_streamBtn);
+        } else {
+            m_streamBtn->setText(QStringLiteral("● Stream"));
+            m_streamBtn->setObjectName(QStringLiteral("streamButton"));
+            m_streamBtn->style()->unpolish(m_streamBtn);
+            m_streamBtn->style()->polish(m_streamBtn);
         }
         if (s.recording)
             m_recordBtn->setText(QStringLiteral("■ Stop Rec %1s").arg(s.recordUptimeSec));
+        else
+            m_recordBtn->setText(QStringLiteral("+ Record"));
+
+        m_statusPill->setText(QStringLiteral("1080p60  ·  %1 FPS  ·  ENC %2  ·  GPU %3%  ·  CPU %4%")
+                                  .arg(int(s.fpsRender))
+                                  .arg(int(s.fpsEncode))
+                                  .arg(int(s.gpuPercent))
+                                  .arg(int(s.cpuPercent)));
     });
+}
+
+void BottomToolbar::setMixerOpen(bool open)
+{
+    m_mixerOpen = open;
+    if (m_mixerBtn) {
+        m_mixerBtn->setChecked(open);
+        m_mixerBtn->setProperty("open", open);
+        m_mixerBtn->style()->unpolish(m_mixerBtn);
+        m_mixerBtn->style()->polish(m_mixerBtn);
+    }
 }
 
 } // namespace railshot

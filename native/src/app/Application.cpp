@@ -44,6 +44,7 @@ bool Application::bootstrap(QString* error)
         return false;
     }
 
+    theme::registerFonts();
     m_app->setStyleSheet(theme::loadStyleSheet());
 
     m_engine = std::make_unique<EngineController>();

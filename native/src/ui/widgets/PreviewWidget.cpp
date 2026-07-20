@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QStackedLayout>
+#include <QEvent>
 #include <cmath>
 
 namespace railshot {
@@ -192,44 +193,76 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     : QWidget(parent), m_engine(engine), m_program(program)
 {
     const QString accent = program ? QStringLiteral("#FF5A2C") : QStringLiteral("#22C55E");
-    const QString accentDim = program ? QStringLiteral("rgba(255,90,44,0.35)")
-                                      : QStringLiteral("rgba(34,197,94,0.30)");
 
     setStyleSheet(QStringLiteral(
         "background: #0D0F12;"
-        "border: 2px solid %1;")
-                      .arg(accentDim));
+        "border-right: 1px solid #2A2D35;"));
 
     auto* col = new QVBoxLayout(this);
     col->setContentsMargins(0, 0, 0, 0);
     col->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(26);
+    header->setFixedHeight(24);
     header->setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %1, stop:0.12 transparent);"
-        "border-bottom: 1px solid #1A1D24;")
-                              .arg(program ? QStringLiteral("rgba(255,90,44,0.18)")
-                                           : QStringLiteral("rgba(34,197,94,0.18)")));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
+        "border-bottom: 1px solid #2A2D35;"));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(10, 0, 10, 0);
+    h->setSpacing(6);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
+    title->setObjectName(program ? QStringLiteral("programLabel") : QStringLiteral("previewLabel"));
     title->setStyleSheet(QStringLiteral(
-        "color:%1; font-weight:800; font-size:11px; letter-spacing:2px; background:transparent;")
+        "color:%1; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;")
                              .arg(accent));
     h->addWidget(title);
-    if (!program) {
-        auto* hint = new QLabel(QStringLiteral("Drag to position · corners to resize"), header);
-        hint->setStyleSheet(QStringLiteral("color:#4A5060; font-size:10px; background:transparent;"));
-        h->addWidget(hint);
-    } else {
-        auto* badge = new QLabel(QStringLiteral("PGM"), header);
-        badge->setStyleSheet(QStringLiteral(
-            "background:#FF5A2C; color:#fff; font-size:9px; font-weight:800;"
-            "padding:2px 6px; border-radius:3px;"));
-        h->addWidget(badge);
-    }
     h->addStretch();
+
+    auto* sceneName = new QLabel(QStringLiteral("No Scene"), header);
+    sceneName->setObjectName(QStringLiteral("mono"));
+    sceneName->setStyleSheet(QStringLiteral(
+        "font-family:'JetBrains Mono'; font-size:10px; color:#A0A8B8; background:transparent;"));
+    h->addWidget(sceneName);
+
+    if (program) {
+        auto* live = new QLabel(QStringLiteral("● LIVE"), header);
+        live->setObjectName(QStringLiteral("liveBadge"));
+        live->setStyleSheet(QStringLiteral(
+            "font-family:'JetBrains Mono'; font-size:10px; color:#FF5A2C; background:transparent;"));
+        live->setVisible(false);
+        h->addWidget(live);
+        auto* tc = new QLabel(QStringLiteral("00:00:00"), header);
+        tc->setObjectName(QStringLiteral("liveTimecode"));
+        tc->setStyleSheet(QStringLiteral(
+            "font-family:'JetBrains Mono'; font-size:10px; color:#606878; background:transparent;"));
+        h->addWidget(tc);
+        if (engine) {
+            connect(engine, &EngineController::telemetryUpdated, this,
+                    [live, tc](const TelemetrySnapshot& s) {
+                        live->setVisible(s.streaming);
+                        if (!s.streaming) {
+                            tc->setText(QStringLiteral("00:00:00"));
+                            return;
+                        }
+                        const int secs = int(s.streamUptimeSec);
+                        tc->setText(QStringLiteral("%1:%2:%3")
+                                        .arg(secs / 3600, 2, 10, QChar('0'))
+                                        .arg((secs % 3600) / 60, 2, 10, QChar('0'))
+                                        .arg(secs % 60, 2, 10, QChar('0')));
+                    });
+        }
+    }
+
+    auto* clearBtn = new QLabel(QStringLiteral("CLEAR"), header);
+    clearBtn->setCursor(Qt::PointingHandCursor);
+    clearBtn->setStyleSheet(QStringLiteral(
+        "padding:1px 7px; border:1px solid %1; border-radius:2px; color:%2;"
+        "font-size:9px; font-weight:700; letter-spacing:1px; background:transparent;")
+                                .arg(program ? QStringLiteral("#FF5A2C40") : QStringLiteral("#22C55E40"),
+                                     program ? QStringLiteral("#FF5A2C70") : QStringLiteral("#22C55E70")));
+    clearBtn->installEventFilter(this);
+    clearBtn->setProperty("clearRole", program ? QStringLiteral("program") : QStringLiteral("preview"));
+    h->addWidget(clearBtn);
     col->addWidget(header);
 
     auto* stackHost = new QWidget(this);
@@ -241,7 +274,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     m_surface = new PreviewSurface(stackHost);
     if (engine && engine->graphicsDevice())
         m_surface->setDevice(engine->graphicsDevice());
-    m_surface->setLabel(program ? QStringLiteral("PGM") : QStringLiteral("PVW"),
+    m_surface->setLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"),
                         QColor(accent));
     m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
@@ -256,7 +289,19 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     if (engine) {
         connect(engine, &EngineController::selectedSourceChanged, m_overlay, QOverload<>::of(&QWidget::update));
-        connect(engine->sceneGraph(), &SceneGraph::projectChanged, m_overlay, QOverload<>::of(&QWidget::update));
+        connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this, sceneName, clearBtn] {
+            const auto p = m_engine->projectSnapshot();
+            const QString id = m_program ? p.programSceneId : p.previewSceneId;
+            const auto* sc = p.findScene(id);
+            sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
+            clearBtn->setVisible(!id.isEmpty());
+            if (m_overlay) m_overlay->update();
+        });
+        const auto p = engine->projectSnapshot();
+        const QString id = program ? p.programSceneId : p.previewSceneId;
+        const auto* sc = p.findScene(id);
+        sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
+        clearBtn->setVisible(!id.isEmpty());
     }
 }
 
@@ -271,6 +316,21 @@ void PreviewWidget::tick()
         m_surface->presentTexture(tex);
     if (m_overlay)
         m_overlay->update();
+}
+
+bool PreviewWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease && m_engine) {
+        if (auto* lab = qobject_cast<QLabel*>(watched)) {
+            const auto role = lab->property("clearRole").toString();
+            if (role == QLatin1String("preview"))
+                m_engine->setPreviewScene({});
+            else if (role == QLatin1String("program"))
+                m_engine->sceneGraph()->setProgramSceneId({});
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 } // namespace railshot

@@ -1,8 +1,12 @@
 <RCC>
-  <qresource prefix="/">
-    <file>styles/railshot.qss</file>
-    <file>overlays/player-intro.html</file>
-    <file>overlays/match-point.html</file>
-    <file>overlays/break-and-run.html</file>
-  </qresource>
-</RCC>
+  <qresource prefix="/">
+    <file>styles/railshot.qss</file>
+    <file>overlays/player-intro.html</file>
+    <file>overlays/match-point.html</file>
+    <file>overlays/break-and-run.html</file>
+    <file>fonts/BebasNeue-Regular.ttf</file>
+    <file>fonts/DMSans-Variable.ttf</file>
+    <file>fonts/JetBrainsMono-Regular.ttf</file>
+    <file>fonts/JetBrainsMono-Medium.ttf</file>
+  </qresource>
+</RCC>

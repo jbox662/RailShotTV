@@ -1,9 +1,13 @@
 #include "ui/widgets/TransitionPanel.h"
 #include "core/EngineController.h"
+#include "core/SceneGraph.h"
+#include "ui/Theme.h"
 #include <QVBoxLayout>
 #include <QSlider>
 #include <QLabel>
 #include <QGridLayout>
+#include <QButtonGroup>
+#include <QStyle>
 
 namespace railshot {
 
@@ -12,67 +16,76 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
 {
     setFixedWidth(120);
     setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #16191E, stop:1 #101318);"
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
         "border-left: 1px solid #2A2D35;"
         "border-right: 1px solid #2A2D35;"));
     auto* col = new QVBoxLayout(this);
-    col->setContentsMargins(6, 10, 6, 8);
-    col->setSpacing(5);
+    col->setContentsMargins(6, 8, 6, 8);
+    col->setSpacing(2);
 
     m_go = new QPushButton(QStringLiteral("GO"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
-    m_go->setMinimumHeight(44);
+    m_go->setMinimumHeight(40);
     m_go->setCursor(Qt::PointingHandCursor);
-    connect(m_go, &QPushButton::clicked, this, [this] { m_engine->go(); });
+    connect(m_go, &QPushButton::clicked, this, [this] {
+        if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
+            m_engine->go();
+    });
     col->addWidget(m_go);
 
-    auto* label = new QLabel(QStringLiteral("CUT"), this);
-    label->setAlignment(Qt::AlignCenter);
-    label->setStyleSheet(QStringLiteral(
-        "color:#4F9EFF; font-family:'JetBrains Mono','Consolas',monospace;"
-        "font-size:10px; letter-spacing:2px; font-weight:700;"));
-    col->addWidget(label);
+    m_activeLabel = new QLabel(QStringLiteral("CUT"), this);
+    m_activeLabel->setAlignment(Qt::AlignCenter);
+    m_activeLabel->setStyleSheet(QStringLiteral(
+        "color:#606878; font-family:'DM Sans'; font-size:9px; letter-spacing:1px;"));
+    col->addWidget(m_activeLabel);
 
-    const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Wipe"),
-                               QStringLiteral("Merge"), QStringLiteral("CubeZoom"), QStringLiteral("FTB")};
+    const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Merge"),
+                               QStringLiteral("Wipe"), QStringLiteral("CubeZoom"), QStringLiteral("FTB")};
+    auto* group = new QButtonGroup(this);
+    group->setExclusive(true);
     for (const auto& t : types) {
         auto* b = new QPushButton(t, this);
-        if (t == QLatin1String("Cut"))
-            b->setObjectName(QStringLiteral("cutButton"));
+        b->setObjectName(QStringLiteral("transTypeBtn"));
+        b->setCheckable(true);
+        b->setChecked(t == QLatin1String("Cut"));
         b->setCursor(Qt::PointingHandCursor);
-        connect(b, &QPushButton::clicked, this, [this, t, label, types] {
+        group->addButton(b);
+        m_typeButtons.push_back(b);
+        connect(b, &QPushButton::clicked, this, [this, t] {
             m_active = t;
-            label->setText(t.toUpper());
+            m_activeLabel->setText(t.toUpper());
             m_engine->setTransition(transitionTypeFromString(t),
                                     m_engine->projectSnapshot().transitionMs);
-            // Restyle siblings: Cut stays blue when selected conceptually via label
-            Q_UNUSED(types);
+            restyleTypes();
         });
         col->addWidget(b);
     }
+    restyleTypes();
 
     auto* grid = new QGridLayout();
-    grid->setSpacing(3);
+    grid->setSpacing(2);
+    grid->setContentsMargins(0, 6, 0, 2);
     for (int i = 0; i < 8; ++i) {
         auto* b = new QPushButton(QString::number(i + 1), this);
-        b->setFixedHeight(22);
-        b->setStyleSheet(QStringLiteral(
-            "QPushButton { font-size:10px; padding:2px; background:#1A1D22; border:1px solid #2A2D35; }"
-            "QPushButton:hover { border-color:#4F9EFF; color:#4F9EFF; }"));
+        b->setObjectName(QStringLiteral("scenePadBtn"));
+        b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, [this, i] {
             auto p = m_engine->projectSnapshot();
-            if (i < p.scenes.size())
+            if (i < p.scenes.size()) {
                 m_engine->setPreviewScene(p.scenes[i].id);
+            }
         });
         grid->addWidget(b, i / 4, i % 4);
+        m_scenePad.push_back(b);
     }
     col->addLayout(grid);
 
-    auto* speedLabel = new QLabel(QStringLiteral("SPEED"), this);
+    auto* speedLabel = new QLabel(QStringLiteral("Speed"), this);
     speedLabel->setAlignment(Qt::AlignCenter);
-    speedLabel->setStyleSheet(QStringLiteral("color:#606878; font-size:9px; letter-spacing:1px; font-weight:700;"));
+    speedLabel->setStyleSheet(QStringLiteral("color:#606878; font-size:9px; font-family:'DM Sans';"));
     col->addWidget(speedLabel);
     auto* speed = new QSlider(Qt::Horizontal, this);
+    speed->setObjectName(QStringLiteral("speedSlider"));
     speed->setRange(100, 2000);
     speed->setValue(500);
     connect(speed, &QSlider::valueChanged, this, [this](int v) {
@@ -80,6 +93,49 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     });
     col->addWidget(speed);
     col->addStretch();
+
+    connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, [this] { refreshScenePad(); updateGoArmed(); });
+    connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot&) { refreshScenePad(); });
+    refreshScenePad();
+    updateGoArmed();
+}
+
+void TransitionPanel::restyleTypes()
+{
+    for (auto* b : m_typeButtons)
+        b->setChecked(b->text() == m_active);
+}
+
+void TransitionPanel::refreshScenePad()
+{
+    const auto p = m_engine->projectSnapshot();
+    for (int i = 0; i < m_scenePad.size(); ++i) {
+        auto* b = m_scenePad[i];
+        if (i >= p.scenes.size()) {
+            b->setEnabled(false);
+            b->setProperty("role", QVariant());
+            b->style()->unpolish(b);
+            b->style()->polish(b);
+            continue;
+        }
+        b->setEnabled(true);
+        const auto& sc = p.scenes[i];
+        if (sc.id == p.previewSceneId)
+            b->setProperty("role", QStringLiteral("preview"));
+        else if (sc.id == p.programSceneId)
+            b->setProperty("role", QStringLiteral("program"));
+        else
+            b->setProperty("role", QVariant());
+        b->style()->unpolish(b);
+        b->style()->polish(b);
+        b->update();
+    }
+}
+
+void TransitionPanel::updateGoArmed()
+{
+    const bool armed = !m_engine->projectSnapshot().previewSceneId.isEmpty();
+    m_go->setEnabled(armed);
 }
 
 } // namespace railshot

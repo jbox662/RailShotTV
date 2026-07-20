@@ -21,6 +21,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QAbstractSpinBox>
+#include <QFrame>
 
 namespace railshot {
 
@@ -30,9 +31,21 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     setWindowTitle(QStringLiteral("RailShotTV"));
     resize(1440, 900);
     setMinimumSize(1100, 700);
+    setObjectName(QStringLiteral("AppRoot"));
 
     auto* central = new QWidget(this);
-    auto* root = new QHBoxLayout(central);
+    central->setObjectName(QStringLiteral("AppRoot"));
+    auto* outer = new QVBoxLayout(central);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    m_liveTopBorder = new QFrame(central);
+    m_liveTopBorder->setObjectName(QStringLiteral("liveTopBorder"));
+    m_liveTopBorder->setFixedHeight(3);
+    m_liveTopBorder->setVisible(false);
+    outer->addWidget(m_liveTopBorder);
+
+    auto* root = new QHBoxLayout();
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
@@ -46,6 +59,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     mainCol->addWidget(m_top);
 
     m_stack = new QStackedWidget(central);
+    m_stack->setObjectName(QStringLiteral("PageStack"));
     m_stack->addWidget(new DashboardPage(engine, m_stack));
     m_stack->addWidget(new ChatPage(engine->chat(), m_stack));
     m_stack->addWidget(new AnalyticsPage(engine, m_stack));
@@ -54,6 +68,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     m_stack->addWidget(new SettingsPage(engine, m_stack));
     mainCol->addWidget(m_stack, 1);
     root->addLayout(mainCol, 1);
+    outer->addLayout(root, 1);
     setCentralWidget(central);
 
     statusBar()->setStyleSheet(QStringLiteral("background:#0F1114; color:#606878;"));
@@ -73,6 +88,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
         statusBar()->showMessage(msg, 5000);
     });
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
+        updateLiveChrome(s.streaming);
         QString msg;
         if (s.streaming)
             msg = QStringLiteral("LIVE  %1 kbps  drift %2 ms").arg(s.bitrateKbps).arg(s.avDriftMs, 0, 'f', 1);
@@ -95,8 +111,15 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
 
 MainWindow::~MainWindow() = default;
 
+void MainWindow::updateLiveChrome(bool streaming)
+{
+    if (m_liveTopBorder) m_liveTopBorder->setVisible(streaming);
+    if (m_sidebar) m_sidebar->setLive(streaming);
+}
+
 void MainWindow::navigateTo(const QString& pageId)
 {
+    if (m_sidebar) m_sidebar->setActivePage(pageId);
     if (pageId == QLatin1String("dashboard")) m_stack->setCurrentIndex(0);
     else if (pageId == QLatin1String("chat")) m_stack->setCurrentIndex(1);
     else if (pageId == QLatin1String("analytics")) m_stack->setCurrentIndex(2);

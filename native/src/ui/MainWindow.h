@@ -6,6 +6,7 @@
 
 class QKeyEvent;
 class QCloseEvent;
+class QFrame;
 
 namespace railshot {
 
@@ -28,12 +29,14 @@ private:
     void navigateTo(const QString& pageId);
     void openProjectDialog();
     void saveProjectDialog();
+    void updateLiveChrome(bool streaming);
 
     EngineController* m_engine = nullptr;
     SidebarRail* m_sidebar = nullptr;
     TopMenuBar* m_top = nullptr;
     QStackedWidget* m_stack = nullptr;
     HotkeyDispatcher* m_hotkeys = nullptr;
+    QFrame* m_liveTopBorder = nullptr;
 };
 
 } // namespace railshot
