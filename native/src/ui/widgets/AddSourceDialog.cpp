@@ -1,7 +1,6 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "core/EngineController.h"
 #include "capture/MediaFoundationCamera.h"
-#include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -154,8 +153,12 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     auto* camPage = new QWidget(m_stack);
     auto* camForm = new QFormLayout(camPage);
     m_camera = new QComboBox(camPage);
-    for (const auto& d : MediaFoundationCamera::enumerateDevices())
-        m_camera->addItem(d.second, d.first);
+    try {
+        for (const auto& d : MediaFoundationCamera::enumerateDevices())
+            m_camera->addItem(d.second, d.first);
+    } catch (...) {
+        m_camera->clear();
+    }
     if (m_camera->count() == 0)
         m_camera->addItem(QStringLiteral("(No cameras found)"), QString());
     camForm->addRow(QStringLiteral("Device"), m_camera);
@@ -164,8 +167,14 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     auto* monPage = new QWidget(m_stack);
     auto* monForm = new QFormLayout(monPage);
     m_monitor = new QComboBox(monPage);
-    for (const auto& m : enumerateMonitors())
-        m_monitor->addItem(m.second, m.first);
+    try {
+        for (const auto& m : enumerateMonitors())
+            m_monitor->addItem(m.second, m.first);
+    } catch (...) {
+        m_monitor->clear();
+    }
+    if (m_monitor->count() == 0)
+        m_monitor->addItem(QStringLiteral("Monitor 0"), 0);
     monForm->addRow(QStringLiteral("Monitor"), m_monitor);
     m_stack->addWidget(monPage);
 
@@ -233,7 +242,7 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
 
     m_typeList->setCurrentRow(0);
     rebuildFields();
-    motion::playModalEnter(this);
+    // Avoid QGraphicsOpacityEffect on this dialog — native HWND + effect has caused hard exits.
 }
 
 void AddSourceDialog::selectType(int index)

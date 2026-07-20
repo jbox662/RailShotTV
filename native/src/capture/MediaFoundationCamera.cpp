@@ -42,29 +42,47 @@ QVector<QPair<QString, QString>> MediaFoundationCamera::enumerateDevices()
     QVector<QPair<QString, QString>> devices;
 #ifdef _WIN32
     ComInitializer com;
-    IMFAttributes* attrs = nullptr;
-    if (FAILED(MFCreateAttributes(&attrs, 1)))
+    if (!com.ok()) {
+        devices.append({QStringLiteral("default"), QStringLiteral("Default Camera")});
         return devices;
-    attrs->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-    IMFActivate** activates = nullptr;
-    UINT32 count = 0;
-    if (SUCCEEDED(MFEnumDeviceSources(attrs, &activates, &count))) {
-        for (UINT32 i = 0; i < count; ++i) {
-            WCHAR* name = nullptr;
-            UINT32 nameLen = 0;
-            WCHAR* symlink = nullptr;
-            UINT32 symlinkLen = 0;
-            activates[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name, &nameLen);
-            activates[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &symlink, &symlinkLen);
-            devices.append({QString::fromWCharArray(symlink ? symlink : L""),
-                            QString::fromWCharArray(name ? name : L"Camera")});
-            if (name) CoTaskMemFree(name);
-            if (symlink) CoTaskMemFree(symlink);
-            activates[i]->Release();
-        }
-        CoTaskMemFree(activates);
     }
-    attrs->Release();
+
+    // MFEnumDeviceSources requires an active MFStartup ref — without it this AVs on many systems.
+    const HRESULT startupHr = MFStartup(MF_VERSION);
+    if (FAILED(startupHr)) {
+        Logger::warn(QStringLiteral("MFStartup failed during camera enumerate: 0x%1")
+                         .arg(quint32(startupHr), 8, 16, QChar('0')));
+        devices.append({QStringLiteral("default"), QStringLiteral("Default Camera")});
+        return devices;
+    }
+
+    IMFAttributes* attrs = nullptr;
+    if (SUCCEEDED(MFCreateAttributes(&attrs, 1)) && attrs) {
+        attrs->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+        IMFActivate** activates = nullptr;
+        UINT32 count = 0;
+        if (SUCCEEDED(MFEnumDeviceSources(attrs, &activates, &count)) && activates) {
+            for (UINT32 i = 0; i < count; ++i) {
+                if (!activates[i]) continue;
+                WCHAR* name = nullptr;
+                UINT32 nameLen = 0;
+                WCHAR* symlink = nullptr;
+                UINT32 symlinkLen = 0;
+                activates[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name, &nameLen);
+                activates[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
+                                                 &symlink, &symlinkLen);
+                devices.append({QString::fromWCharArray(symlink ? symlink : L""),
+                                QString::fromWCharArray(name ? name : L"Camera")});
+                if (name) CoTaskMemFree(name);
+                if (symlink) CoTaskMemFree(symlink);
+                activates[i]->Release();
+            }
+            CoTaskMemFree(activates);
+        }
+        attrs->Release();
+    }
+
+    MFShutdown();
 #endif
     if (devices.isEmpty())
         devices.append({QStringLiteral("default"), QStringLiteral("Default Camera")});
