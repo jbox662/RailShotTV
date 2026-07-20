@@ -241,10 +241,7 @@ SchedulePage::SchedulePage(QWidget* parent)
     });
     refresh();
 
-    connect(startStream, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, QStringLiteral("Schedule"),
-                                 QStringLiteral("Open Dashboard and use Stream / Go Live to start broadcasting."));
-    });
+    connect(startStream, &QPushButton::clicked, this, &SchedulePage::goLiveRequested);
 
     auto editEvent = [this](ScheduledEvent e, bool isNew) -> bool {
         QDialog dlg(this);

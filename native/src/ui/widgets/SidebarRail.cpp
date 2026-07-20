@@ -6,6 +6,7 @@
 #include <QLinearGradient>
 #include <QRadialGradient>
 #include <QHBoxLayout>
+#include <QTimer>
 
 namespace railshot {
 
@@ -95,6 +96,7 @@ SidebarRail::SidebarRail(QWidget* parent)
     liveLay->setSpacing(3);
     liveLay->setAlignment(Qt::AlignHCenter);
     auto* liveDot = new QLabel(m_liveBlock);
+    liveDot->setObjectName(QStringLiteral("sidebarLiveDot"));
     liveDot->setFixedSize(10, 10);
     liveDot->setStyleSheet(QStringLiteral(
         "background: #FF5A2C; border-radius: 5px; border: 2px solid #FF3A0C;"));
@@ -154,6 +156,25 @@ void SidebarRail::setLive(bool live)
 {
     m_live = live;
     if (m_liveBlock) m_liveBlock->setVisible(live);
+    if (live) {
+        if (!findChild<QTimer*>(QStringLiteral("livePulseTimer"))) {
+            auto* t = new QTimer(this);
+            t->setObjectName(QStringLiteral("livePulseTimer"));
+            connect(t, &QTimer::timeout, this, [this] {
+                if (auto* dot = m_liveBlock ? m_liveBlock->findChild<QLabel*>() : nullptr) {
+                    static bool bright = false;
+                    bright = !bright;
+                    dot->setStyleSheet(bright
+                        ? QStringLiteral("background:#FF8C42;border-radius:5px;border:2px solid #FF5A2C;")
+                        : QStringLiteral("background:#FF5A2C;border-radius:5px;border:2px solid #FF3A0C;"));
+                }
+            });
+            t->start(700);
+        }
+    } else if (auto* t = findChild<QTimer*>(QStringLiteral("livePulseTimer"))) {
+        t->stop();
+        t->deleteLater();
+    }
 }
 
 QPushButton* SidebarRail::addNav(const QString& id, const QString& tip, const QColor& /*color*/)

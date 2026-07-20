@@ -8,6 +8,8 @@
 #include "ui/widgets/GoLiveDialog.h"
 #include "ui/widgets/SourcePropertiesWidget.h"
 #include "ui/widgets/AddSourceDialog.h"
+#include "ui/widgets/MultiCorderPanel.h"
+#include "ui/widgets/PlayListPanel.h"
 #include "core/EngineController.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -135,6 +137,14 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_props->hide();
     connect(m_props, &SourcePropertiesWidget::closeRequested, this, [this] { closeDrawer(); });
 
+    m_multi = new MultiCorderPanel(engine, this);
+    m_multi->hide();
+    connect(m_multi, &MultiCorderPanel::closeRequested, this, [this] { setMultiCorderOpen(false); });
+
+    m_playlist = new PlayListPanel(engine, this);
+    m_playlist->hide();
+    connect(m_playlist, &PlayListPanel::closeRequested, this, [this] { setPlayListOpen(false); });
+
     // Click backdrop to close — use event filter via mouse
     m_drawerBackdrop->installEventFilter(this);
 
@@ -168,12 +178,14 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     });
 
     connect(m_toolbar, &BottomToolbar::multiCorderRequested, this, [this] {
-        QMessageBox::information(this, QStringLiteral("MultiCorder"),
-                                 QStringLiteral("MultiCorder panel — Phase 2."));
+        const bool open = !m_multi->isVisible();
+        setMultiCorderOpen(open);
+        if (open) setPlayListOpen(false);
     });
     connect(m_toolbar, &BottomToolbar::playListRequested, this, [this] {
-        QMessageBox::information(this, QStringLiteral("PlayList"),
-                                 QStringLiteral("PlayList panel — Phase 2."));
+        const bool open = !m_playlist->isVisible();
+        setPlayListOpen(open);
+        if (open) setMultiCorderOpen(false);
     });
     connect(m_toolbar, &BottomToolbar::overlayRequested, this, [this] {
         emit openSceneEditorRequested();
@@ -234,6 +246,8 @@ void DashboardPage::setMixerOpen(bool open)
 
 void DashboardPage::openDrawer()
 {
+    setMultiCorderOpen(false);
+    setPlayListOpen(false);
     layoutDrawer();
     m_drawerBackdrop->show();
     m_drawerBackdrop->raise();
@@ -244,7 +258,8 @@ void DashboardPage::openDrawer()
 void DashboardPage::closeDrawer()
 {
     m_props->hide();
-    m_drawerBackdrop->hide();
+    if (!m_multi->isVisible() && !m_playlist->isVisible())
+        m_drawerBackdrop->hide();
 }
 
 void DashboardPage::layoutDrawer()
@@ -254,17 +269,67 @@ void DashboardPage::layoutDrawer()
     m_props->setGeometry(width() - 460, 0, 460, height());
 }
 
+void DashboardPage::setMultiCorderOpen(bool open)
+{
+    if (!m_multi) return;
+    if (open) {
+        closeDrawer();
+        layoutSidePanels();
+        m_drawerBackdrop->show();
+        m_drawerBackdrop->raise();
+        m_multi->show();
+        m_multi->raise();
+        m_multi->refresh();
+    } else {
+        m_multi->hide();
+        if (!m_playlist->isVisible() && !m_props->isVisible())
+            m_drawerBackdrop->hide();
+    }
+}
+
+void DashboardPage::setPlayListOpen(bool open)
+{
+    if (!m_playlist) return;
+    if (open) {
+        closeDrawer();
+        layoutSidePanels();
+        m_drawerBackdrop->show();
+        m_drawerBackdrop->raise();
+        m_playlist->show();
+        m_playlist->raise();
+        m_playlist->refresh();
+    } else {
+        m_playlist->hide();
+        if (!m_multi->isVisible() && !m_props->isVisible())
+            m_drawerBackdrop->hide();
+    }
+}
+
+void DashboardPage::layoutSidePanels()
+{
+    if (m_drawerBackdrop)
+        m_drawerBackdrop->setGeometry(0, 0, width(), height());
+    if (m_multi)
+        m_multi->setGeometry(width() - 320, 36, 320, height() - 36);
+    if (m_playlist)
+        m_playlist->setGeometry(width() - 300, 36, 300, height() - 36);
+}
+
 void DashboardPage::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     if (m_props && m_props->isVisible())
         layoutDrawer();
+    if ((m_multi && m_multi->isVisible()) || (m_playlist && m_playlist->isVisible()))
+        layoutSidePanels();
 }
 
 bool DashboardPage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_drawerBackdrop && event->type() == QEvent::MouseButtonPress) {
         closeDrawer();
+        setMultiCorderOpen(false);
+        setPlayListOpen(false);
         return true;
     }
     return QWidget::eventFilter(watched, event);

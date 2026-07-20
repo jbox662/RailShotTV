@@ -10,6 +10,8 @@
 #include "ui/pages/ChatPage.h"
 #include "ui/pages/AnalyticsPage.h"
 #include "ui/pages/SceneEditorPage.h"
+#include "ui/widgets/ShortcutsOverlay.h"
+#include "ui/widgets/GoLiveDialog.h"
 #include "core/EngineController.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
@@ -65,7 +67,8 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     m_stack->addWidget(new ChatPage(engine->chat(), m_stack));
     m_stack->addWidget(new AnalyticsPage(engine, m_stack));
     m_stack->addWidget(new ScoreboardPage(engine, m_stack));
-    m_stack->addWidget(new SchedulePage(m_stack));
+    auto* schedulePage = new SchedulePage(m_stack);
+    m_stack->addWidget(schedulePage);
     m_stack->addWidget(new SettingsPage(engine, m_stack));
     auto* sceneEditor = new SceneEditorPage(engine, m_stack);
     m_stack->addWidget(sceneEditor);
@@ -89,6 +92,15 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     }
     connect(sceneEditor, &SceneEditorPage::backToDashboard, this, [this] {
         navigateTo(QStringLiteral("dashboard"));
+    });
+    connect(schedulePage, &SchedulePage::goLiveRequested, this, [this] {
+        navigateTo(QStringLiteral("dashboard"));
+        GoLiveDialog dlg(m_engine, this);
+        dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::toggleShortcuts, this, [this] {
+        ShortcutsOverlay dlg(this);
+        dlg.exec();
     });
     connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
     connect(m_top, &TopMenuBar::newProject, this, [this] {
@@ -182,6 +194,12 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
             QMainWindow::keyPressEvent(event);
             return;
         }
+    }
+    if (event->modifiers() & Qt::ShiftModifier
+        && (event->key() == Qt::Key_Question || event->key() == Qt::Key_Slash)) {
+        ShortcutsOverlay dlg(this);
+        dlg.exec();
+        return;
     }
     if (m_hotkeys && m_hotkeys->handleKey(event))
         return;

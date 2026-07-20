@@ -12,6 +12,8 @@ class AudioMixerWidget;
 class SourcePropertiesWidget;
 class BottomToolbar;
 class InputTilesWidget;
+class MultiCorderPanel;
+class PlayListPanel;
 
 class DashboardPage : public QWidget {
     Q_OBJECT
@@ -30,6 +32,9 @@ private:
     void openDrawer();
     void closeDrawer();
     void layoutDrawer();
+    void setMultiCorderOpen(bool open);
+    void setPlayListOpen(bool open);
+    void layoutSidePanels();
 
     EngineController* m_engine = nullptr;
     PreviewWidget* m_preview = nullptr;
@@ -39,6 +44,8 @@ private:
     BottomToolbar* m_toolbar = nullptr;
     InputTilesWidget* m_tiles = nullptr;
     QFrame* m_drawerBackdrop = nullptr;
+    MultiCorderPanel* m_multi = nullptr;
+    PlayListPanel* m_playlist = nullptr;
     bool m_mixerOpen = false;
 };
 

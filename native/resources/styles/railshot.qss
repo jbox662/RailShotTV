@@ -456,3 +456,18 @@ QLabel#livePulse {
   color: #FF5A2C;
   font-weight: 800;
 }
+
+QLabel#sidebarLiveDot {
+  background: #FF5A2C;
+  border-radius: 5px;
+  border: 2px solid #FF3A0C;
+  min-width: 10px;
+  max-width: 10px;
+  min-height: 10px;
+  max-height: 10px;
+}
+
+QFrame#multiCorderPanel,
+QFrame#playListPanel {
+  border-left: 1px solid #2A2D35;
+}

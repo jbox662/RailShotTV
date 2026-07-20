@@ -306,6 +306,12 @@ add_library(railshot_ui STATIC
     src/ui/widgets/StreamStatusWidget.cpp
     src/ui/widgets/OverlayLibraryWidget.h
     src/ui/widgets/OverlayLibraryWidget.cpp
+    src/ui/widgets/MultiCorderPanel.h
+    src/ui/widgets/MultiCorderPanel.cpp
+    src/ui/widgets/PlayListPanel.h
+    src/ui/widgets/PlayListPanel.cpp
+    src/ui/widgets/ShortcutsOverlay.h
+    src/ui/widgets/ShortcutsOverlay.cpp
     src/ui/HotkeyDispatcher.h
     src/ui/HotkeyDispatcher.cpp
     src/ui/pages/DashboardPage.h

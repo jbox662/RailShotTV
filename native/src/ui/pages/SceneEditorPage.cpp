@@ -20,8 +20,47 @@
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 #include <QAbstractAnimation>
+#include <QPainter>
+#include <QPaintEvent>
 
 namespace railshot {
+
+namespace {
+class CanvasHost : public QFrame {
+public:
+    explicit CanvasHost(QWidget* parent = nullptr) : QFrame(parent)
+    {
+        setObjectName(QStringLiteral("sceneCanvasHost"));
+        setStyleSheet(QStringLiteral("QFrame#sceneCanvasHost{background:#060608; border:none;}"));
+    }
+protected:
+    void paintEvent(QPaintEvent* e) override
+    {
+        QFrame::paintEvent(e);
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, false);
+        QColor grid(79, 158, 255, 15);
+        p.setPen(QPen(grid, 1));
+        constexpr int step = 40;
+        for (int x = 0; x < width(); x += step)
+            p.drawLine(x, 0, x, height());
+        for (int y = 0; y < height(); y += step)
+            p.drawLine(0, y, width(), y);
+
+        p.setPen(QPen(QColor(QStringLiteral("#4F9EFF")), 2));
+        constexpr int L = 18;
+        // corner brackets
+        p.drawLine(8, 8, 8 + L, 8);
+        p.drawLine(8, 8, 8, 8 + L);
+        p.drawLine(width() - 8, 8, width() - 8 - L, 8);
+        p.drawLine(width() - 8, 8, width() - 8, 8 + L);
+        p.drawLine(8, height() - 8, 8 + L, height() - 8);
+        p.drawLine(8, height() - 8, 8, height() - 8 - L);
+        p.drawLine(width() - 8, height() - 8, width() - 8 - L, height() - 8);
+        p.drawLine(width() - 8, height() - 8, width() - 8, height() - 8 - L);
+    }
+};
+} // namespace
 
 SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
@@ -61,13 +100,17 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
     leftLay->addWidget(new SceneListWidget(engine, left), 1);
     body->addWidget(left);
 
-    // Canvas
+    // Canvas with grid + brackets
     auto* canvasCol = new QVBoxLayout();
     canvasCol->setContentsMargins(0, 0, 0, 0);
     canvasCol->setSpacing(0);
-    m_canvas = new PreviewWidget(engine, false, this);
-    m_canvas->setStyleSheet(QStringLiteral("background:#060608;"));
-    canvasCol->addWidget(m_canvas, 1);
+    m_canvasHost = new CanvasHost(this);
+    auto* hostLay = new QVBoxLayout(m_canvasHost);
+    hostLay->setContentsMargins(12, 12, 12, 12);
+    m_canvas = new PreviewWidget(engine, false, m_canvasHost);
+    m_canvas->setStyleSheet(QStringLiteral("background:transparent; border:1px solid #1A2A3A;"));
+    hostLay->addWidget(m_canvas, 1);
+    canvasCol->addWidget(m_canvasHost, 1);
 
     // Transitions rail
     auto* trans = new QFrame(this);
@@ -179,6 +222,19 @@ void SceneEditorPage::applyOverlayTemplate(const OverlayTemplateInfo& tmpl)
     }
     if (!id.isEmpty())
         m_engine->updateSourceTransform(id, t);
+    flashDrop();
+}
+
+void SceneEditorPage::flashDrop()
+{
+    if (!m_canvasHost) return;
+    m_canvasHost->setStyleSheet(QStringLiteral(
+        "QFrame#sceneCanvasHost{background:#060608; border:2px solid #22C55E;}"));
+    QTimer::singleShot(280, this, [this] {
+        if (m_canvasHost)
+            m_canvasHost->setStyleSheet(QStringLiteral(
+                "QFrame#sceneCanvasHost{background:#060608; border:none;}"));
+    });
 }
 
 } // namespace railshot
