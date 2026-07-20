@@ -1,0 +1,184 @@
+#include "ui/pages/SceneEditorPage.h"
+#include "ui/Theme.h"
+#include "ui/widgets/OverlayLibraryWidget.h"
+#include "ui/widgets/PreviewWidget.h"
+#include "ui/widgets/SceneListWidget.h"
+#include "ui/widgets/SourcePropertiesWidget.h"
+#include "core/EngineController.h"
+#include "core/SceneGraph.h"
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QLabel>
+#include <QFrame>
+#include <QTimer>
+#include <QFile>
+#include <QDir>
+#include <QUrl>
+#include <QJsonObject>
+#include <QStandardPaths>
+#include <QGraphicsOpacityEffect>
+#include <QPropertyAnimation>
+#include <QAbstractAnimation>
+
+namespace railshot {
+
+SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
+    : QWidget(parent), m_engine(engine)
+{
+    setObjectName(QStringLiteral("sceneEditorPage"));
+    setFocusPolicy(Qt::StrongFocus);
+
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+
+    auto* header = theme::makePageHeader(QStringLiteral("Scene Editor"), theme::PanelAccent::Blue, this);
+    auto* headerLay = qobject_cast<QHBoxLayout*>(header->layout());
+    auto* back = new QPushButton(QStringLiteral("← Dashboard"), header);
+    back->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#1E2640;border:1px solid #2A3350;color:#4F9EFF;font-weight:700;padding:6px 12px;}"));
+    connect(back, &QPushButton::clicked, this, &SceneEditorPage::backToDashboard);
+    if (headerLay) headerLay->addWidget(back);
+    root->addWidget(header);
+
+    auto* body = new QHBoxLayout();
+    body->setContentsMargins(0, 0, 0, 0);
+    body->setSpacing(0);
+
+    // Left: scenes
+    auto* left = new QFrame(this);
+    left->setFixedWidth(180);
+    left->setStyleSheet(QStringLiteral("background:#0A0C0F; border-right:1px solid #2A2D35;"));
+    auto* leftLay = new QVBoxLayout(left);
+    leftLay->setContentsMargins(0, 0, 0, 0);
+    auto* scenesHead = new QLabel(QStringLiteral("  SCENES"), left);
+    scenesHead->setFixedHeight(28);
+    scenesHead->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-weight:800; font-size:10px; letter-spacing:1.5px;"
+        "background:#0F1114; border-bottom:1px solid #1A1D24;"));
+    leftLay->addWidget(scenesHead);
+    leftLay->addWidget(new SceneListWidget(engine, left), 1);
+    body->addWidget(left);
+
+    // Canvas
+    auto* canvasCol = new QVBoxLayout();
+    canvasCol->setContentsMargins(0, 0, 0, 0);
+    canvasCol->setSpacing(0);
+    m_canvas = new PreviewWidget(engine, false, this);
+    m_canvas->setStyleSheet(QStringLiteral("background:#060608;"));
+    canvasCol->addWidget(m_canvas, 1);
+
+    // Transitions rail
+    auto* trans = new QFrame(this);
+    trans->setFixedHeight(44);
+    trans->setStyleSheet(QStringLiteral("background:#141619; border-top:1px solid #2A2D35;"));
+    auto* tLay = new QHBoxLayout(trans);
+    tLay->setContentsMargins(8, 4, 8, 4);
+    const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Wipe"),
+                               QStringLiteral("Slide"), QStringLiteral("Stinger")};
+    for (const auto& t : types) {
+        auto* b = new QPushButton(t, trans);
+        b->setCursor(Qt::PointingHandCursor);
+        connect(b, &QPushButton::clicked, this, [this, t] {
+            TransitionType ty = TransitionType::Cut;
+            if (t == QLatin1String("Fade")) ty = TransitionType::Fade;
+            else if (t == QLatin1String("Wipe")) ty = TransitionType::Wipe;
+            else if (t == QLatin1String("Slide")) ty = TransitionType::Merge;
+            else if (t == QLatin1String("Stinger")) ty = TransitionType::CubeZoom;
+            m_engine->setTransition(ty, 300);
+            m_engine->go(ty);
+        });
+        tLay->addWidget(b);
+    }
+    tLay->addStretch();
+    auto* go = new QPushButton(QStringLiteral("GO"), trans);
+    go->setObjectName(QStringLiteral("goButton"));
+    connect(go, &QPushButton::clicked, this, [this] { m_engine->go(); });
+    tLay->addWidget(go);
+    canvasCol->addWidget(trans);
+    body->addLayout(canvasCol, 1);
+
+    // Overlay library
+    auto* lib = new OverlayLibraryWidget(this);
+    connect(lib, &OverlayLibraryWidget::templateActivated, this, &SceneEditorPage::applyOverlayTemplate);
+    body->addWidget(lib);
+
+    // Compact properties (not full drawer)
+    auto* props = new SourcePropertiesWidget(engine, this);
+    // SourcePropertiesWidget is fixed 460 — shrink for editor
+    props->setFixedWidth(320);
+    props->setMaximumWidth(320);
+    body->addWidget(props);
+
+    root->addLayout(body, 1);
+
+    auto* tick = new QTimer(this);
+    connect(tick, &QTimer::timeout, this, [this] {
+        if (m_canvas) m_canvas->tick();
+    });
+    tick->start(16);
+
+    // Fade-in
+    auto* fx = new QGraphicsOpacityEffect(this);
+    setGraphicsEffect(fx);
+    fx->setOpacity(0.0);
+    auto* anim = new QPropertyAnimation(fx, "opacity", this);
+    anim->setDuration(200);
+    anim->setStartValue(0.0);
+    anim->setEndValue(1.0);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void SceneEditorPage::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        emit backToDashboard();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
+void SceneEditorPage::applyOverlayTemplate(const OverlayTemplateInfo& tmpl)
+{
+    QString name = tmpl.name;
+    QJsonObject settings;
+    if (!tmpl.htmlResource.isEmpty()) {
+        const QString qrc = QStringLiteral(":/overlays/%1").arg(tmpl.htmlResource);
+        QFile f(qrc);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QString destDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                                    + QStringLiteral("/overlays");
+            QDir().mkpath(destDir);
+            const QString dest = destDir + QLatin1Char('/') + tmpl.htmlResource;
+            QFile out(dest);
+            if (out.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                out.write(f.readAll());
+            settings.insert(QStringLiteral("url"), QUrl::fromLocalFile(dest).toString());
+            settings.insert(QStringLiteral("width"), 1280);
+            settings.insert(QStringLiteral("height"), 720);
+            settings.insert(QStringLiteral("fps"), 30);
+        }
+    }
+    settings.insert(QStringLiteral("overlayTemplate"), tmpl.id);
+    settings.insert(QStringLiteral("layout"), tmpl.id);
+    const QString id = m_engine->addSource(tmpl.sourceType, name);
+    if (!id.isEmpty() && !settings.isEmpty())
+        m_engine->updateSourceSettings(id, settings);
+    m_engine->setSelectedSourceId(id);
+
+    Transform t;
+    if (tmpl.category == QLatin1String("lowerthird") || tmpl.id.startsWith(QLatin1String("sb-lower"))) {
+        t.x = 0.05; t.y = 0.78; t.w = 0.55; t.h = 0.18;
+    } else if (tmpl.category == QLatin1String("ticker")) {
+        t.x = 0.0; t.y = 0.92; t.w = 1.0; t.h = 0.08;
+    } else if (tmpl.category == QLatin1String("alert")) {
+        t.x = 0.3; t.y = 0.3; t.w = 0.4; t.h = 0.3;
+    } else {
+        t.x = 0.05; t.y = 0.05; t.w = 0.25; t.h = 0.15;
+    }
+    if (!id.isEmpty())
+        m_engine->updateSourceTransform(id, t);
+}
+
+} // namespace railshot

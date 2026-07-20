@@ -7,7 +7,6 @@
 namespace railshot {
 namespace theme {
 
-// Chromatic Command — Bright Edition tokens
 inline constexpr const char* kBgRoot = "#0B0D0F";
 inline constexpr const char* kBgPanel = "#0F1114";
 inline constexpr const char* kBgElevated = "#1A1D22";
@@ -46,6 +45,7 @@ QString loadStyleSheet();
 QColor color(const char* hex);
 QString panelHeaderStyle(PanelAccent accent);
 void applyPanelHeader(QWidget* widget, PanelAccent accent);
+QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* parent);
 
 } // namespace theme
 } // namespace railshot

@@ -378,3 +378,81 @@ QFrame#inputSettingsDrawer {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #13151A, stop:1 #0F1114);
   border-left: 1px solid #2A2D35;
 }
+
+/* ── Phase 2 secondary pages ─────────────────────────────────────────────── */
+QWidget#chatPage { background: #0B0D0F; }
+QWidget#scoreboardPage { background: #0D1117; }
+QWidget#schedulePage { background: #0F1623; }
+QWidget#analyticsPage { background: #161B2E; }
+QWidget#settingsPage { background: #141928; }
+QWidget#sceneEditorPage { background: #0B0D0F; }
+
+QLabel#connDotConnected { background: #22C55E; border-radius: 4px; min-width: 8px; max-width: 8px; min-height: 8px; max-height: 8px; }
+QLabel#connDotConnecting { background: #FBBF24; border-radius: 4px; min-width: 8px; max-width: 8px; min-height: 8px; max-height: 8px; }
+QLabel#connDotDisconnected { background: #606878; border-radius: 4px; min-width: 8px; max-width: 8px; min-height: 8px; max-height: 8px; }
+QLabel#connDotError { background: #FF5A2C; border-radius: 4px; min-width: 8px; max-width: 8px; min-height: 8px; max-height: 8px; }
+
+QPushButton#rangePill {
+  background: #1E2640;
+  border: 1px solid #2A3350;
+  border-radius: 3px;
+  color: #8892A4;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+QPushButton#rangePill:checked {
+  background: #0A2A30;
+  border-color: #22D3EE;
+  color: #22D3EE;
+}
+
+QPushButton#settingsTabBtn {
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  text-align: left;
+  padding: 10px 14px;
+  color: #8892A4;
+  font-weight: 600;
+}
+QPushButton#settingsTabBtn:checked {
+  background: rgba(255,90,44,0.06);
+  border-left: 3px solid #FF5A2C;
+  color: #F0F0F0;
+}
+
+QPushButton#saveSettingsDirty {
+  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #FF5A2C, stop:1 #FF8C42);
+  color: white;
+  font-weight: 800;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 20px;
+}
+
+QFrame#eventCard {
+  background: #1A2035;
+  border: 1px solid #2A3350;
+  border-radius: 6px;
+}
+QFrame#eventCardLive {
+  background: #1A2035;
+  border: 1px solid #FF5A2C;
+  border-radius: 6px;
+}
+QFrame#kpiCard {
+  background: #1E2640;
+  border: 1px solid #2A3350;
+  border-radius: 6px;
+}
+QFrame#nextUpBanner {
+  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(79,158,255,0.18), stop:1 rgba(168,85,247,0.18));
+  border: 1px solid #2A3350;
+  border-radius: 8px;
+}
+
+QLabel#livePulse {
+  color: #FF5A2C;
+  font-weight: 800;
+}

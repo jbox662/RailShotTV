@@ -9,6 +9,7 @@
 #include "ui/pages/SchedulePage.h"
 #include "ui/pages/ChatPage.h"
 #include "ui/pages/AnalyticsPage.h"
+#include "ui/pages/SceneEditorPage.h"
 #include "core/EngineController.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
@@ -66,6 +67,8 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     m_stack->addWidget(new ScoreboardPage(engine, m_stack));
     m_stack->addWidget(new SchedulePage(m_stack));
     m_stack->addWidget(new SettingsPage(engine, m_stack));
+    auto* sceneEditor = new SceneEditorPage(engine, m_stack);
+    m_stack->addWidget(sceneEditor);
     mainCol->addWidget(m_stack, 1);
     root->addLayout(mainCol, 1);
     outer->addLayout(root, 1);
@@ -78,6 +81,15 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
 
     connect(m_sidebar, &SidebarRail::navigate, this, &MainWindow::navigateTo);
     connect(m_top, &TopMenuBar::openProject, this, &MainWindow::openProjectDialog);
+
+    if (auto* dash = qobject_cast<DashboardPage*>(m_stack->widget(0))) {
+        connect(dash, &DashboardPage::openSceneEditorRequested, this, [this] {
+            navigateTo(QStringLiteral("sceneeditor"));
+        });
+    }
+    connect(sceneEditor, &SceneEditorPage::backToDashboard, this, [this] {
+        navigateTo(QStringLiteral("dashboard"));
+    });
     connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
     connect(m_top, &TopMenuBar::newProject, this, [this] {
         m_engine->newProject();
@@ -119,13 +131,19 @@ void MainWindow::updateLiveChrome(bool streaming)
 
 void MainWindow::navigateTo(const QString& pageId)
 {
-    if (m_sidebar) m_sidebar->setActivePage(pageId);
+    if (pageId != QLatin1String("sceneeditor") && m_sidebar)
+        m_sidebar->setActivePage(pageId);
     if (pageId == QLatin1String("dashboard")) m_stack->setCurrentIndex(0);
     else if (pageId == QLatin1String("chat")) m_stack->setCurrentIndex(1);
     else if (pageId == QLatin1String("analytics")) m_stack->setCurrentIndex(2);
     else if (pageId == QLatin1String("scoreboard")) m_stack->setCurrentIndex(3);
     else if (pageId == QLatin1String("schedule")) m_stack->setCurrentIndex(4);
     else if (pageId == QLatin1String("settings")) m_stack->setCurrentIndex(5);
+    else if (pageId == QLatin1String("sceneeditor")) {
+        m_stack->setCurrentIndex(6);
+        if (auto* p = m_stack->currentWidget())
+            p->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 void MainWindow::openProjectDialog()

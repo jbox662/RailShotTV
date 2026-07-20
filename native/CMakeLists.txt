@@ -304,6 +304,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/AddSourceDialog.cpp
     src/ui/widgets/StreamStatusWidget.h
     src/ui/widgets/StreamStatusWidget.cpp
+    src/ui/widgets/OverlayLibraryWidget.h
+    src/ui/widgets/OverlayLibraryWidget.cpp
     src/ui/HotkeyDispatcher.h
     src/ui/HotkeyDispatcher.cpp
     src/ui/pages/DashboardPage.h
@@ -318,6 +320,8 @@ add_library(railshot_ui STATIC
     src/ui/pages/ChatPage.cpp
     src/ui/pages/AnalyticsPage.h
     src/ui/pages/AnalyticsPage.cpp
+    src/ui/pages/SceneEditorPage.h
+    src/ui/pages/SceneEditorPage.cpp
     resources/styles/railshot.qss
     resources/railshot.qrc
 )

@@ -18,6 +18,9 @@ class DashboardPage : public QWidget {
 public:
     explicit DashboardPage(EngineController* engine, QWidget* parent = nullptr);
 
+signals:
+    void openSceneEditorRequested();
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;

@@ -3,6 +3,8 @@
 #include <QColor>
 #include <QFontDatabase>
 #include <QDebug>
+#include <QHBoxLayout>
+#include <QLabel>
 
 namespace railshot {
 namespace theme {
@@ -57,6 +59,54 @@ void applyPanelHeader(QWidget* widget, PanelAccent accent)
 {
     if (!widget) return;
     widget->setStyleSheet(panelHeaderStyle(accent));
+}
+
+QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* parent)
+{
+    auto* bar = new QWidget(parent);
+    bar->setObjectName(QStringLiteral("pageHeader"));
+    bar->setFixedHeight(46);
+    const char* accentHex = kBlue;
+    switch (accent) {
+    case PanelAccent::Brand: accentHex = kBrand; break;
+    case PanelAccent::Violet: accentHex = kViolet; break;
+    case PanelAccent::Emerald: accentHex = kEmerald; break;
+    case PanelAccent::Cyan: accentHex = kCyan; break;
+    case PanelAccent::Amber: accentHex = kAmber; break;
+    case PanelAccent::Pink: accentHex = "#EC4899"; break;
+    default: break;
+    }
+    bar->setStyleSheet(QStringLiteral(
+        "QWidget#pageHeader {"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
+        "  border-bottom: 1px solid #2A2D35;"
+        "  border-top: 2px solid %1;"
+        "}").arg(QString::fromLatin1(accentHex)));
+
+    auto* lay = new QHBoxLayout(bar);
+    lay->setContentsMargins(16, 0, 16, 0);
+    lay->setSpacing(10);
+
+    auto* brand = new QLabel(QStringLiteral("RAILSHOT"), bar);
+    brand->setStyleSheet(QStringLiteral(
+        "font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px; color:#F0F0F0; background:transparent;"));
+    auto* tv = new QLabel(QStringLiteral("TV"), bar);
+    tv->setStyleSheet(QStringLiteral(
+        "font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px; color:#FF5A2C; background:transparent;"));
+    auto* div = new QLabel(QStringLiteral("|"), bar);
+    div->setStyleSheet(QStringLiteral("color:#3A3D45; font-size:14px; background:transparent;"));
+    auto* title = new QLabel(pageTitle.toUpper(), bar);
+    title->setObjectName(QStringLiteral("pageHeaderTitle"));
+    title->setStyleSheet(QStringLiteral(
+        "font-family:'DM Sans'; font-size:11px; font-weight:700; letter-spacing:2px;"
+        "color:#8892A4; background:transparent;"));
+
+    lay->addWidget(brand);
+    lay->addWidget(tv);
+    lay->addWidget(div);
+    lay->addWidget(title);
+    lay->addStretch();
+    return bar;
 }
 
 QString loadStyleSheet()

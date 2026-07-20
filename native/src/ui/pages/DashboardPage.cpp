@@ -176,8 +176,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
                                  QStringLiteral("PlayList panel — Phase 2."));
     });
     connect(m_toolbar, &BottomToolbar::overlayRequested, this, [this] {
-        QMessageBox::information(this, QStringLiteral("Overlay"),
-                                 QStringLiteral("Overlay browser — Phase 2."));
+        emit openSceneEditorRequested();
     });
 
     m_toolbar->setContextMenuPolicy(Qt::CustomContextMenu);

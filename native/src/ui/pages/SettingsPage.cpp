@@ -1,9 +1,11 @@
 #include "ui/pages/SettingsPage.h"
+#include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "compositor/D3D11Compositor.h"
 #include "overlays/ReplayBuffer.h"
 #include "ui/HotkeyDispatcher.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QFormLayout>
 #include <QSpinBox>
 #include <QComboBox>
@@ -11,131 +13,345 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QFileDialog>
-#include <QTabWidget>
 #include <QKeySequenceEdit>
 #include <QJsonObject>
 #include <QHash>
+#include <QCheckBox>
+#include <QStackedWidget>
+#include <QButtonGroup>
+#include <QFrame>
+#include <QScrollArea>
 #include <memory>
+#include <QStyle>
 
 namespace railshot {
 
 SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
+    setObjectName(QStringLiteral("settingsPage"));
     auto* root = new QVBoxLayout(this);
-    auto* tabs = new QTabWidget(this);
-    root->addWidget(tabs);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    root->addWidget(theme::makePageHeader(QStringLiteral("Settings"), theme::PanelAccent::Brand, this));
 
-    auto* output = new QWidget(tabs);
-    auto* form = new QFormLayout(output);
-    auto profile = engine->settings()->outputProfile();
-    auto* w = new QSpinBox(output); w->setRange(640, 3840); w->setValue(profile.width);
-    auto* h = new QSpinBox(output); h->setRange(360, 2160); h->setValue(profile.height);
-    auto* bitrate = new QSpinBox(output); bitrate->setRange(500, 50000); bitrate->setValue(profile.videoBitrateKbps);
-    auto* enc = new QComboBox(output);
-    enc->addItems({QStringLiteral("auto"), QStringLiteral("mf"), QStringLiteral("software"),
-                   QStringLiteral("nvenc"), QStringLiteral("amf"), QStringLiteral("qsv")});
-    enc->setCurrentText(profile.encoderPreference);
-    form->addRow(QStringLiteral("Width"), w);
-    form->addRow(QStringLiteral("Height"), h);
-    form->addRow(QStringLiteral("Video Bitrate (kbps)"), bitrate);
-    form->addRow(QStringLiteral("Encoder"), enc);
-    auto* save = new QPushButton(QStringLiteral("Save Output Profile"), output);
-    connect(save, &QPushButton::clicked, this, [this, w, h, bitrate, enc] {
+    auto* body = new QHBoxLayout();
+    body->setContentsMargins(0, 0, 0, 0);
+    body->setSpacing(0);
+
+    auto* rail = new QFrame(this);
+    rail->setFixedWidth(168);
+    rail->setStyleSheet(QStringLiteral("background:#1A2035; border-right:1px solid #2A3350;"));
+    auto* railLay = new QVBoxLayout(rail);
+    railLay->setContentsMargins(0, 8, 0, 8);
+    railLay->setSpacing(0);
+
+    auto* stack = new QStackedWidget(this);
+    stack->setStyleSheet(QStringLiteral("background:#141928;"));
+    auto* tabGroup = new QButtonGroup(this);
+    tabGroup->setExclusive(true);
+
+    bool* dirty = new bool(false);
+    auto* saveBtn = new QPushButton(QStringLiteral("SAVE SETTINGS"), this);
+    saveBtn->setEnabled(false);
+    auto markDirty = [=] {
+        *dirty = true;
+        saveBtn->setEnabled(true);
+        saveBtn->setObjectName(QStringLiteral("saveSettingsDirty"));
+        saveBtn->style()->unpolish(saveBtn);
+        saveBtn->style()->polish(saveBtn);
+    };
+
+    const QStringList tabNames = {
+        QStringLiteral("General"), QStringLiteral("Stream"), QStringLiteral("Output"),
+        QStringLiteral("Video"), QStringLiteral("Audio"), QStringLiteral("Hotkeys"),
+        QStringLiteral("Advanced"), QStringLiteral("Plugins")};
+
+    auto addScrollPage = [&](QWidget* inner) {
+        auto* scroll = new QScrollArea(stack);
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setStyleSheet(QStringLiteral("background:#141928; border:none;"));
+        auto* host = new QWidget;
+        host->setMaximumWidth(640);
+        auto* hl = new QVBoxLayout(host);
+        hl->setContentsMargins(24, 20, 24, 20);
+        hl->addWidget(inner);
+        hl->addStretch();
+        scroll->setWidget(host);
+        stack->addWidget(scroll);
+    };
+
+    // General
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto* theme = new QComboBox(w);
+        theme->addItems({QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("System")});
+        auto* lang = new QComboBox(w);
+        lang->addItems({QStringLiteral("English"), QStringLiteral("Español"), QStringLiteral("Français")});
+        auto* startLive = new QCheckBox(QStringLiteral("Confirm before quitting while live"), w);
+        startLive->setChecked(true);
+        auto* autoProject = new QCheckBox(QStringLiteral("Restore last project on startup"), w);
+        autoProject->setChecked(true);
+        f->addRow(QStringLiteral("Theme"), theme);
+        f->addRow(QStringLiteral("Language"), lang);
+        f->addRow(startLive);
+        f->addRow(autoProject);
+        connect(theme, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(lang, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(startLive, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        connect(autoProject, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        addScrollPage(w);
+    }
+
+    // Stream
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto* plat = new QComboBox(w);
+        plat->addItems({QStringLiteral("YouTube"), QStringLiteral("Twitch"), QStringLiteral("Facebook"), QStringLiteral("Custom")});
+        auto* key = new QLineEdit(w);
+        key->setEchoMode(QLineEdit::Password);
+        key->setPlaceholderText(QStringLiteral("Configured via Go Live / Credential Manager"));
+        key->setEnabled(false);
+        auto profile = engine->settings()->outputProfile();
+        auto* enc = new QComboBox(w);
+        enc->addItems({QStringLiteral("auto"), QStringLiteral("nvenc"), QStringLiteral("qsv"),
+                       QStringLiteral("amf"), QStringLiteral("x264"), QStringLiteral("mf"), QStringLiteral("software")});
+        enc->setCurrentText(profile.encoderPreference);
+        auto* rate = new QComboBox(w);
+        rate->addItems({QStringLiteral("CBR"), QStringLiteral("VBR"), QStringLiteral("CQP")});
+        auto* bitrate = new QSpinBox(w);
+        bitrate->setRange(500, 50000);
+        bitrate->setValue(profile.videoBitrateKbps);
+        auto* kf = new QSpinBox(w);
+        kf->setRange(1, 10);
+        kf->setValue(2);
+        f->addRow(QStringLiteral("Platform"), plat);
+        f->addRow(QStringLiteral("Stream Key"), key);
+        f->addRow(QStringLiteral("Encoder"), enc);
+        f->addRow(QStringLiteral("Rate control"), rate);
+        f->addRow(QStringLiteral("Bitrate (kbps)"), bitrate);
+        f->addRow(QStringLiteral("Keyframe (s)"), kf);
+        connect(enc, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(bitrate, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        // stash widgets for save via properties
+        enc->setObjectName(QStringLiteral("settingsEncoder"));
+        bitrate->setObjectName(QStringLiteral("settingsBitrate"));
+        addScrollPage(w);
+        m_streamEnc = enc;
+        m_streamBitrate = bitrate;
+    }
+
+    // Output
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto profile = engine->settings()->outputProfile();
+        auto* width = new QSpinBox(w); width->setRange(640, 3840); width->setValue(profile.width);
+        auto* height = new QSpinBox(w); height->setRange(360, 2160); height->setValue(profile.height);
+        auto* dir = new QLineEdit(engine->settings()->recordingDirectory(), w);
+        auto* browse = new QPushButton(QStringLiteral("Browse…"), w);
+        auto* fmt = new QComboBox(w);
+        fmt->addItems({QStringLiteral("MKV"), QStringLiteral("MP4"), QStringLiteral("MOV"), QStringLiteral("FLV")});
+        const int replayDefault = engine->settings()->uiState().value(QStringLiteral("replaySeconds")).toInt(30);
+        if (engine->replayBuffer())
+            engine->replayBuffer()->setCapacitySeconds(replayDefault);
+        auto* replaySec = new QSpinBox(w);
+        replaySec->setRange(5, 300);
+        replaySec->setValue(replayDefault);
+        replaySec->setSuffix(QStringLiteral(" sec"));
+        f->addRow(QStringLiteral("Canvas W"), width);
+        f->addRow(QStringLiteral("Canvas H"), height);
+        f->addRow(QStringLiteral("Recording path"), dir);
+        f->addRow(browse);
+        f->addRow(QStringLiteral("Container"), fmt);
+        f->addRow(QStringLiteral("Replay buffer"), replaySec);
+        connect(browse, &QPushButton::clicked, this, [=] {
+            const auto d = QFileDialog::getExistingDirectory(this, QStringLiteral("Recording Folder"));
+            if (!d.isEmpty()) { dir->setText(d); markDirty(); }
+        });
+        connect(width, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(height, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(replaySec, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        addScrollPage(w);
+        m_outW = width;
+        m_outH = height;
+        m_outDir = dir;
+        m_replaySec = replaySec;
+    }
+
+    // Video
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto profile = engine->settings()->outputProfile();
+        auto* res = new QComboBox(w);
+        res->addItems({QStringLiteral("1920×1080"), QStringLiteral("1280×720"), QStringLiteral("2560×1440"), QStringLiteral("3840×2160")});
+        auto* fps = new QComboBox(w);
+        fps->addItems({QStringLiteral("24"), QStringLiteral("30"), QStringLiteral("60"), QStringLiteral("120")});
+        fps->setCurrentText(QString::number(profile.fps > 0 ? profile.fps : 60));
+        f->addRow(QStringLiteral("Resolution"), res);
+        f->addRow(QStringLiteral("FPS"), fps);
+        connect(res, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(fps, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        addScrollPage(w);
+        m_videoFps = fps;
+        m_videoRes = res;
+    }
+
+    // Audio
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto* rate = new QComboBox(w);
+        rate->addItems({QStringLiteral("44100"), QStringLiteral("48000")});
+        rate->setCurrentText(QStringLiteral("48000"));
+        auto* ch = new QComboBox(w);
+        ch->addItems({QStringLiteral("Stereo"), QStringLiteral("Mono")});
+        auto* desktop = new QLineEdit(QStringLiteral("Default desktop"), w);
+        auto* mic = new QLineEdit(QStringLiteral("Default mic"), w);
+        f->addRow(QStringLiteral("Sample rate"), rate);
+        f->addRow(QStringLiteral("Channels"), ch);
+        f->addRow(QStringLiteral("Desktop device"), desktop);
+        f->addRow(QStringLiteral("Mic device"), mic);
+        connect(rate, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        addScrollPage(w);
+    }
+
+    // Hotkeys
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        f->addRow(new QLabel(QStringLiteral("Click a field and press a key combination."), w));
+        const QStringList order = {
+            QStringLiteral("go"), QStringLiteral("streamToggle"), QStringLiteral("recordToggle"),
+            QStringLiteral("saveReplay"), QStringLiteral("muteMic"),
+            QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
+            QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
+            QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
+            QStringLiteral("scene1"), QStringLiteral("scene2"), QStringLiteral("scene3"),
+        };
+        auto edits = std::make_shared<QHash<QString, QKeySequenceEdit*>>();
+        QJsonObject keys = engine->settings()->hotkeys();
+        for (const QString& action : order) {
+            auto* edit = new QKeySequenceEdit(HotkeyDispatcher::sequenceFor(keys.value(action).toString()), w);
+            edits->insert(action, edit);
+            f->addRow(action, edit);
+            connect(edit, &QKeySequenceEdit::keySequenceChanged, this, [markDirty](const QKeySequence&) { markDirty(); });
+        }
+        m_hotkeyEdits = edits;
+        addScrollPage(w);
+    }
+
+    // Advanced
+    {
+        auto* w = new QWidget;
+        auto* f = new QFormLayout(w);
+        auto* prio = new QComboBox(w);
+        prio->addItems({QStringLiteral("Normal"), QStringLiteral("Above normal"), QStringLiteral("High")});
+        auto* net = new QCheckBox(QStringLiteral("Network optimize"), w);
+        auto* lowLat = new QCheckBox(QStringLiteral("Low latency mode"), w);
+        auto* bind = new QLineEdit(w);
+        bind->setPlaceholderText(QStringLiteral("0.0.0.0"));
+        f->addRow(QStringLiteral("Process priority"), prio);
+        f->addRow(net);
+        f->addRow(lowLat);
+        f->addRow(QStringLiteral("Bind IP"), bind);
+        connect(prio, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
+        addScrollPage(w);
+    }
+
+    // Plugins
+    {
+        auto* w = new QWidget;
+        auto* f = new QVBoxLayout(w);
+        f->addWidget(new QLabel(QStringLiteral("Plugins"), w));
+        auto* list = new QLabel(QStringLiteral("No plugins installed.\nInstall packages will appear here."), w);
+        list->setStyleSheet(QStringLiteral("color:#606878;"));
+        f->addWidget(list);
+        auto* install = new QPushButton(QStringLiteral("Install…"), w);
+        install->setEnabled(false);
+        f->addWidget(install);
+        f->addStretch();
+        addScrollPage(w);
+    }
+
+    for (int i = 0; i < tabNames.size(); ++i) {
+        auto* b = new QPushButton(tabNames[i], rail);
+        b->setObjectName(QStringLiteral("settingsTabBtn"));
+        b->setCheckable(true);
+        b->setChecked(i == 0);
+        tabGroup->addButton(b, i);
+        railLay->addWidget(b);
+        connect(b, &QPushButton::clicked, this, [stack, i] { stack->setCurrentIndex(i); });
+    }
+    railLay->addStretch();
+    body->addWidget(rail);
+    body->addWidget(stack, 1);
+    root->addLayout(body, 1);
+
+    auto* footer = new QFrame(this);
+    footer->setFixedHeight(52);
+    footer->setStyleSheet(QStringLiteral("background:#1A2035; border-top:1px solid #2A3350;"));
+    auto* foot = new QHBoxLayout(footer);
+    foot->setContentsMargins(16, 8, 16, 8);
+    auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
+    foot->addStretch();
+    foot->addWidget(cancel);
+    foot->addWidget(saveBtn);
+    root->addWidget(footer);
+
+    connect(cancel, &QPushButton::clicked, this, [=] {
+        *dirty = false;
+        saveBtn->setEnabled(false);
+        saveBtn->setObjectName(QString());
+        saveBtn->style()->unpolish(saveBtn);
+        saveBtn->style()->polish(saveBtn);
+    });
+
+    connect(saveBtn, &QPushButton::clicked, this, [=] {
         OutputProfile p = m_engine->settings()->outputProfile();
-        p.width = w->value();
-        p.height = h->value();
-        p.videoBitrateKbps = bitrate->value();
-        p.encoderPreference = enc->currentText();
+        if (m_outW) p.width = m_outW->value();
+        if (m_outH) p.height = m_outH->value();
+        if (m_streamBitrate) p.videoBitrateKbps = m_streamBitrate->value();
+        if (m_streamEnc) p.encoderPreference = m_streamEnc->currentText();
+        if (m_videoFps) p.fps = m_videoFps->currentText().toInt();
+        if (m_videoRes) {
+            const QString r = m_videoRes->currentText();
+            if (r.contains(QLatin1String("720"))) { p.width = 1280; p.height = 720; }
+            else if (r.contains(QLatin1String("1440"))) { p.width = 2560; p.height = 1440; }
+            else if (r.contains(QLatin1String("2160"))) { p.width = 3840; p.height = 2160; }
+            else { p.width = 1920; p.height = 1080; }
+        }
         m_engine->settings()->setOutputProfile(p);
         m_engine->sceneGraph()->mutate([&](Project& proj) { proj.output = p; });
         if (m_engine->compositor())
             m_engine->compositor()->resize(p.width, p.height);
-    });
-    form->addRow(save);
-    tabs->addTab(output, QStringLiteral("Output"));
-
-    auto* rec = new QWidget(tabs);
-    auto* rform = new QFormLayout(rec);
-    auto* dir = new QLineEdit(engine->settings()->recordingDirectory(), rec);
-    auto* browse = new QPushButton(QStringLiteral("Browse…"), rec);
-    connect(browse, &QPushButton::clicked, this, [this, dir] {
-        const auto d = QFileDialog::getExistingDirectory(this, QStringLiteral("Recording Folder"));
-        if (!d.isEmpty()) {
-            dir->setText(d);
-            m_engine->settings()->setRecordingDirectory(d);
+        if (m_outDir && !m_outDir->text().isEmpty())
+            m_engine->settings()->setRecordingDirectory(m_outDir->text());
+        if (m_replaySec) {
+            if (m_engine->replayBuffer())
+                m_engine->replayBuffer()->setCapacitySeconds(m_replaySec->value());
+            auto ui = m_engine->settings()->uiState();
+            ui.insert(QStringLiteral("replaySeconds"), m_replaySec->value());
+            m_engine->settings()->setUiState(ui);
         }
-    });
-    const int replayDefault = engine->settings()->uiState().value(QStringLiteral("replaySeconds")).toInt(30);
-    if (engine->replayBuffer())
-        engine->replayBuffer()->setCapacitySeconds(replayDefault);
-    auto* replaySec = new QSpinBox(rec);
-    replaySec->setRange(5, 300);
-    replaySec->setValue(replayDefault);
-    replaySec->setSuffix(QStringLiteral(" sec"));
-    connect(replaySec, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
-        if (m_engine->replayBuffer())
-            m_engine->replayBuffer()->setCapacitySeconds(v);
-        auto ui = m_engine->settings()->uiState();
-        ui.insert(QStringLiteral("replaySeconds"), v);
-        m_engine->settings()->setUiState(ui);
-    });
-    rform->addRow(QStringLiteral("Directory"), dir);
-    rform->addRow(browse);
-    rform->addRow(QStringLiteral("Replay buffer"), replaySec);
-    rform->addRow(new QLabel(QStringLiteral("Save Replay writes the last N seconds of encoded output."), rec));
-    tabs->addTab(rec, QStringLiteral("Recording"));
-
-    auto* stream = new QWidget(tabs);
-    auto* sform = new QFormLayout(stream);
-    sform->addRow(new QLabel(QStringLiteral("Configure targets via Go Live. Keys live in Windows Credential Manager."), stream));
-    tabs->addTab(stream, QStringLiteral("Stream"));
-
-    auto* hotkeysPage = new QWidget(tabs);
-    auto* hform = new QFormLayout(hotkeysPage);
-    hform->addRow(new QLabel(QStringLiteral("Click a field and press a key combination."), hotkeysPage));
-
-    const QStringList order = {
-        QStringLiteral("go"), QStringLiteral("streamToggle"), QStringLiteral("recordToggle"),
-        QStringLiteral("saveReplay"), QStringLiteral("muteMic"),
-        QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
-        QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
-        QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
-        QStringLiteral("scene1"), QStringLiteral("scene2"), QStringLiteral("scene3"), QStringLiteral("scene4"),
-        QStringLiteral("scene5"), QStringLiteral("scene6"), QStringLiteral("scene7"), QStringLiteral("scene8"),
-    };
-
-    auto edits = std::make_shared<QHash<QString, QKeySequenceEdit*>>();
-    auto persist = [this, edits] {
-        QJsonObject o;
-        for (auto it = edits->begin(); it != edits->end(); ++it) {
-            const QKeySequence seq = it.value()->keySequence();
-            if (it.key() == QLatin1String("go")
-                && (seq.isEmpty() || seq == QKeySequence(Qt::Key_Space)
-                    || seq.toString(QKeySequence::PortableText).compare(QStringLiteral("Space"), Qt::CaseInsensitive) == 0))
-                o.insert(it.key(), QStringLiteral("Space"));
-            else
+        if (m_hotkeyEdits) {
+            QJsonObject o;
+            for (auto it = m_hotkeyEdits->begin(); it != m_hotkeyEdits->end(); ++it) {
+                const QKeySequence seq = it.value()->keySequence();
                 o.insert(it.key(), seq.toString(QKeySequence::NativeText));
+            }
+            m_engine->settings()->setHotkeys(o);
         }
-        m_engine->settings()->setHotkeys(o);
-    };
-
-    QJsonObject keys = engine->settings()->hotkeys();
-    for (const QString& action : order) {
-        auto* edit = new QKeySequenceEdit(HotkeyDispatcher::sequenceFor(keys.value(action).toString()), hotkeysPage);
-        edits->insert(action, edit);
-        hform->addRow(action, edit);
-        connect(edit, &QKeySequenceEdit::keySequenceChanged, this, persist);
-    }
-    auto* resetKeys = new QPushButton(QStringLiteral("Reset Defaults"), hotkeysPage);
-    connect(resetKeys, &QPushButton::clicked, this, [this, edits] {
-        m_engine->settings()->setHotkeys({});
-        const auto keys = m_engine->settings()->hotkeys();
-        for (auto it = edits->begin(); it != edits->end(); ++it)
-            it.value()->setKeySequence(HotkeyDispatcher::sequenceFor(keys.value(it.key()).toString()));
+        *dirty = false;
+        saveBtn->setEnabled(false);
+        saveBtn->setObjectName(QString());
+        saveBtn->style()->unpolish(saveBtn);
+        saveBtn->style()->polish(saveBtn);
     });
-    hform->addRow(resetKeys);
-    tabs->addTab(hotkeysPage, QStringLiteral("Hotkeys"));
 }
 
 } // namespace railshot
