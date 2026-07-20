@@ -107,24 +107,14 @@ protected:
         corner(inset, height() - inset - 1, 1, -1);
         corner(width() - inset - 1, height() - inset - 1, -1, -1);
 
-        // Always-visible canvas badge chip — drawn in top margin above HWND
-        const QString badge = m_program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW");
-        QFont f = p.font();
-        f.setFamily(QStringLiteral("DM Sans"));
-        f.setBold(true);
-        f.setPointSize(8);
-        p.setFont(f);
-        const QFontMetrics fm(f);
-        const int bw = fm.horizontalAdvance(badge) + 14;
-        const QRect chip(12, 5, bw, 18);
-        p.setPen(Qt::NoPen);
-        p.setBrush(accent);
-        p.drawRoundedRect(chip, 2, 2);
-        p.setPen(m_program ? Qt::white : QColor(QStringLiteral("#04140A")));
-        p.drawText(chip, Qt::AlignCenter, badge);
-
+        // ON AIR only when live (header already has PREVIEW/PROGRAM chip — avoid duplicate)
         if (m_program && m_live) {
-            const QRect air(12 + bw + 6, 5, 54, 18);
+            QFont f = p.font();
+            f.setFamily(QStringLiteral("DM Sans"));
+            f.setBold(true);
+            f.setPointSize(8);
+            p.setFont(f);
+            const QRect air(12, 6, 54, 16);
             p.setBrush(QColor(QStringLiteral("#FF5A2C")));
             p.setPen(Qt::NoPen);
             p.drawRoundedRect(air, 2, 2);
@@ -381,11 +371,10 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     h->addWidget(clearBtn);
     col->addWidget(header);
 
-    // Stage chrome draws in margins around HWND (D3D surface punches through overlays)
+    // Stage chrome: brackets in margins; label chip lives in header only
     stage = new StageChrome(program, this);
     auto* stageLay = new QVBoxLayout(stage);
-    // Top margin tall enough for badge chip; sides/bottom for L-brackets
-    stageLay->setContentsMargins(10, 28, 10, 10);
+    stageLay->setContentsMargins(10, m_program ? 24 : 10, 10, 10);
     stageLay->setSpacing(0);
 
     auto* stackHost = new QWidget(stage);
@@ -397,8 +386,8 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     m_surface = new PreviewSurface(stackHost);
     if (engine && engine->graphicsDevice())
         m_surface->setDevice(engine->graphicsDevice());
-    m_surface->setLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"),
-                        QColor(accent));
+    // Don't paint a second PROGRAM/PREVIEW chip on the surface — header chip is enough
+    m_surface->setLabel({}, QColor(accent));
     m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
 

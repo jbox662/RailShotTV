@@ -94,35 +94,40 @@ QPushButton#transTypeBtn:checked {
 }
 
 QPushButton#streamButton {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF5A2C, stop:1 #CC3A18);
-  border: 1px solid #FF8C42;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF6B3D, stop:1 #CC3A18);
+  border: 2px solid #FF8C42;
   border-radius: 3px;
   color: #FFFFFF;
   font-weight: 800;
-  padding: 6px 16px;
+  padding: 6px 18px;
 }
 QPushButton#streamButton:hover {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF7A4C, stop:1 #FF5A2C);
-  border: 1px solid #FFB08A;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF8C42, stop:1 #FF5A2C);
+  border: 2px solid #FFB08A;
 }
 QPushButton#streamButton:pressed {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #CC3A18, stop:1 #A32E14);
-  border: 1px solid #CC3A18;
+  border: 2px solid #CC3A18;
   padding-top: 7px;
   padding-bottom: 5px;
 }
 
 QPushButton#toolbarChromeBtn {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2E323A, stop:1 #1A1D22);
   border: 1px solid #4A4D55;
   border-radius: 3px;
   color: #D0D2D8;
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 6px 12px;
 }
 QPushButton#toolbarChromeBtn:hover {
   border-color: #4F9EFF;
   color: #FFFFFF;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3A3F48, stop:1 #242830);
+}
+QPushButton#toolbarChromeBtn:pressed {
+  background: #16181E;
+  border-color: #3A3D45;
 }
 
 QPushButton#endStreamButton {
@@ -133,10 +138,12 @@ QPushButton#endStreamButton {
 }
 
 QPushButton#recordButton {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2E323A, stop:1 #1A1D22);
   border: 1px solid #4A4D55;
+  border-radius: 3px;
   color: #D0D2D8;
   font-weight: 700;
+  padding: 6px 12px;
 }
 QPushButton#recordButton:checked {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7F1D1D, stop:1 #5A1010);

@@ -5,29 +5,58 @@
 #include <QMessageBox>
 #include <QStyle>
 #include <QPoint>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QRadialGradient>
 
 namespace railshot {
+
+namespace {
+/** Stream CTA with painted brand glow (QSS cannot do box-shadow). */
+class StreamGlowButton : public QPushButton {
+public:
+    using QPushButton::QPushButton;
+protected:
+    void paintEvent(QPaintEvent* e) override
+    {
+        if (objectName() == QLatin1String("streamButton") && isEnabled()) {
+            QPainter p(this);
+            p.setRenderHint(QPainter::Antialiasing);
+            QRadialGradient g(rect().center(), qMax(width(), height()) * 0.75);
+            g.setColorAt(0, QColor(255, 90, 44, 90));
+            g.setColorAt(0.55, QColor(255, 90, 44, 35));
+            g.setColorAt(1, QColor(255, 90, 44, 0));
+            p.setPen(Qt::NoPen);
+            p.setBrush(g);
+            p.drawEllipse(rect().adjusted(-6, -4, 6, 4));
+        }
+        QPushButton::paintEvent(e);
+    }
+};
+} // namespace
 
 BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
-    setFixedHeight(44);
+    setFixedHeight(48);
     setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
-        "border-top: 1px solid #2A2D35;"));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #171A1F, stop:1 #0F1114);"
+        "border-top: 1px solid #3A3D45;"));
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(8, 4, 8, 4);
-    row->setSpacing(6);
+    row->setContentsMargins(10, 6, 10, 6);
+    row->setSpacing(5);
 
     auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
     add->setObjectName(QStringLiteral("toolbarChromeBtn"));
     add->setCursor(Qt::PointingHandCursor);
+    add->setMinimumHeight(30);
     connect(add, &QPushButton::clicked, this, &BottomToolbar::addInputRequested);
     row->addWidget(add);
 
     m_recordBtn = new QPushButton(QStringLiteral("+ Record"), this);
     m_recordBtn->setObjectName(QStringLiteral("recordButton"));
     m_recordBtn->setCursor(Qt::PointingHandCursor);
+    m_recordBtn->setMinimumHeight(30);
     connect(m_recordBtn, &QPushButton::clicked, this, [this] {
         if (m_engine->telemetrySnapshot().recording) {
             m_engine->stopRecording();
@@ -50,13 +79,14 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* external = new QPushButton(QStringLiteral("External"), this);
     external->setObjectName(QStringLiteral("toolbarChromeBtn"));
     external->setEnabled(false);
+    external->setMinimumHeight(30);
     row->addWidget(external);
 
-    m_streamBtn = new QPushButton(QStringLiteral("● Stream"), this);
+    m_streamBtn = new StreamGlowButton(QStringLiteral("● Stream"), this);
     m_streamBtn->setObjectName(QStringLiteral("streamButton"));
     m_streamBtn->setCursor(Qt::PointingHandCursor);
-    m_streamBtn->setMinimumWidth(110);
-    m_streamBtn->setProperty("glow", true);
+    m_streamBtn->setMinimumWidth(120);
+    m_streamBtn->setMinimumHeight(30);
     connect(m_streamBtn, &QPushButton::clicked, this, [this] {
         if (m_engine->telemetrySnapshot().streaming) {
             m_engine->stopStreaming();
@@ -73,6 +103,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* multi = new QPushButton(QStringLiteral("MultiCorder"), this);
     multi->setObjectName(QStringLiteral("toolbarChromeBtn"));
     multi->setCursor(Qt::PointingHandCursor);
+    multi->setMinimumHeight(30);
     connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
     row->addWidget(multi);
     m_multiBtn = multi;
@@ -80,6 +111,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
     playlist->setObjectName(QStringLiteral("toolbarChromeBtn"));
     playlist->setCursor(Qt::PointingHandCursor);
+    playlist->setMinimumHeight(30);
     connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
     row->addWidget(playlist);
     m_playlistBtn = playlist;
@@ -87,6 +119,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     auto* overlay = new QPushButton(QStringLiteral("Overlay  ▾"), this);
     overlay->setObjectName(QStringLiteral("toolbarChromeBtn"));
     overlay->setCursor(Qt::PointingHandCursor);
+    overlay->setMinimumHeight(30);
     connect(overlay, &QPushButton::clicked, this, [this, overlay] {
         emit overlayMenuRequested(overlay->mapToGlobal(QPoint(0, overlay->height())));
     });
@@ -94,6 +127,8 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     m_overlayBtn = overlay;
 
     auto* replayBtn = new QPushButton(QStringLiteral("Save Replay"), this);
+    replayBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
+    replayBtn->setMinimumHeight(30);
     connect(replayBtn, &QPushButton::clicked, this, [this] {
         QString err;
         if (!m_engine->saveReplay(&err))
@@ -104,7 +139,9 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->addWidget(replayBtn);
 
     auto* vcamBtn = new QPushButton(QStringLiteral("Virtual Cam"), this);
+    vcamBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
     vcamBtn->setCheckable(true);
+    vcamBtn->setMinimumHeight(30);
     connect(vcamBtn, &QPushButton::toggled, this, [this, vcamBtn](bool on) {
         QString err;
         if (!m_engine->setVirtualCameraEnabled(on, &err)) {
@@ -120,6 +157,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     m_mixerBtn->setObjectName(QStringLiteral("mixerToggle"));
     m_mixerBtn->setCheckable(true);
     m_mixerBtn->setCursor(Qt::PointingHandCursor);
+    m_mixerBtn->setMinimumHeight(30);
     connect(m_mixerBtn, &QPushButton::clicked, this, &BottomToolbar::mixerToggleRequested);
     row->addWidget(m_mixerBtn);
 
@@ -149,6 +187,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
                                   .arg(int(s.fpsEncode))
                                   .arg(int(s.gpuPercent))
                                   .arg(int(s.cpuPercent)));
+        m_streamBtn->update();
     });
 
     motion::installPressScale(m_streamBtn);
@@ -170,7 +209,6 @@ void BottomToolbar::setBasicMode(bool on)
 {
     if (m_multiBtn) m_multiBtn->setVisible(!on);
     if (m_playlistBtn) m_playlistBtn->setVisible(!on);
-    // Overlay stays available but catalogue is simplified via Dashboard
 }
 
 } // namespace railshot
