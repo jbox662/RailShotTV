@@ -47,9 +47,15 @@ QString chromeBtnStyle(bool hot)
 InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
+    setObjectName(QStringLiteral("inputTiles"));
     setMinimumHeight(118);
+    // Scope to #inputTiles — bare border/background rules cascade onto child labels
+    // and paint the uneven purple horizontal lines in the empty state.
     setStyleSheet(QStringLiteral(
-        "background:#080A0D; border-top:2px solid #FF5A2C55; border-right:1px solid #2A2D35;"));
+        "QWidget#inputTiles {"
+        "  background:#080A0D;"
+        "  border:none;"
+        "}"));
     m_row = new QHBoxLayout(this);
     m_row->setContentsMargins(0, 0, 0, 0);
     m_row->setSpacing(0);
@@ -72,20 +78,27 @@ void InputTilesWidget::refresh()
     const auto* scene = p.findScene(sceneId);
     if (!scene || scene->sources.isEmpty()) {
         auto* empty = new QWidget(this);
+        empty->setObjectName(QStringLiteral("sourcesEmpty"));
+        empty->setStyleSheet(QStringLiteral(
+            "QWidget#sourcesEmpty{background:transparent;border:none;}"
+            "QWidget#sourcesEmpty QLabel{background:transparent;border:none;}"));
         auto* emptyLay = new QVBoxLayout(empty);
-        emptyLay->setContentsMargins(16, 12, 16, 12);
-        emptyLay->setSpacing(8);
+        emptyLay->setContentsMargins(20, 16, 20, 16);
+        emptyLay->setSpacing(6);
         auto* icon = new QLabel(QStringLiteral("◇"), empty);
         icon->setAlignment(Qt::AlignCenter);
-        icon->setStyleSheet(QStringLiteral("color:#FF5A2C66; font-size:28px; background:transparent;"));
+        icon->setStyleSheet(QStringLiteral(
+            "color:#FF5A2C88; font-size:26px; background:transparent; border:none;"));
         auto* hint = new QLabel(QStringLiteral("No inputs yet"), empty);
         hint->setAlignment(Qt::AlignCenter);
         hint->setStyleSheet(QStringLiteral(
-            "color:#E0E2E8; font-family:'DM Sans'; font-size:13px; font-weight:700; background:transparent;"));
+            "color:#E0E2E8; font-family:'DM Sans'; font-size:13px; font-weight:700;"
+            "background:transparent; border:none;"));
         auto* sub = new QLabel(QStringLiteral("Click Add Input in the toolbar to begin"), empty);
         sub->setAlignment(Qt::AlignCenter);
         sub->setWordWrap(true);
-        sub->setStyleSheet(QStringLiteral("color:#8892A4; font-size:11px; background:transparent;"));
+        sub->setStyleSheet(QStringLiteral(
+            "color:#8892A4; font-size:11px; background:transparent; border:none;"));
         emptyLay->addStretch(1);
         emptyLay->addWidget(icon);
         emptyLay->addWidget(hint);
