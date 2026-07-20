@@ -1,0 +1,166 @@
+#include "ui/MainWindow.h"
+#include "ui/Theme.h"
+#include "ui/HotkeyDispatcher.h"
+#include "ui/widgets/SidebarRail.h"
+#include "ui/widgets/TopMenuBar.h"
+#include "ui/pages/DashboardPage.h"
+#include "ui/pages/SettingsPage.h"
+#include "ui/pages/ScoreboardPage.h"
+#include "ui/pages/SchedulePage.h"
+#include "ui/pages/ChatPage.h"
+#include "ui/pages/AnalyticsPage.h"
+#include "core/EngineController.h"
+#include "overlays/ReplayBuffer.h"
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QFileDialog>
+#include <QKeyEvent>
+#include <QCloseEvent>
+#include <QMessageBox>
+#include <QStatusBar>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QAbstractSpinBox>
+
+namespace railshot {
+
+MainWindow::MainWindow(EngineController* engine, QWidget* parent)
+    : QMainWindow(parent), m_engine(engine)
+{
+    setWindowTitle(QStringLiteral("RailShotTV"));
+    resize(1440, 900);
+    setMinimumSize(1100, 700);
+
+    auto* central = new QWidget(this);
+    auto* root = new QHBoxLayout(central);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+
+    m_sidebar = new SidebarRail(central);
+    root->addWidget(m_sidebar);
+
+    auto* mainCol = new QVBoxLayout();
+    mainCol->setContentsMargins(0, 0, 0, 0);
+    mainCol->setSpacing(0);
+    m_top = new TopMenuBar(engine, central);
+    mainCol->addWidget(m_top);
+
+    m_stack = new QStackedWidget(central);
+    m_stack->addWidget(new DashboardPage(engine, m_stack));
+    m_stack->addWidget(new ChatPage(engine->chat(), m_stack));
+    m_stack->addWidget(new AnalyticsPage(engine, m_stack));
+    m_stack->addWidget(new ScoreboardPage(engine, m_stack));
+    m_stack->addWidget(new SchedulePage(m_stack));
+    m_stack->addWidget(new SettingsPage(engine, m_stack));
+    mainCol->addWidget(m_stack, 1);
+    root->addLayout(mainCol, 1);
+    setCentralWidget(central);
+
+    statusBar()->setStyleSheet(QStringLiteral("background:#0F1114; color:#606878;"));
+    statusBar()->showMessage(QStringLiteral("Ready"));
+
+    m_hotkeys = new HotkeyDispatcher(engine, this);
+
+    connect(m_sidebar, &SidebarRail::navigate, this, &MainWindow::navigateTo);
+    connect(m_top, &TopMenuBar::openProject, this, &MainWindow::openProjectDialog);
+    connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
+    connect(m_top, &TopMenuBar::newProject, this, [this] {
+        m_engine->newProject();
+        statusBar()->showMessage(QStringLiteral("New project"), 2000);
+    });
+    connect(m_top, &TopMenuBar::openSettings, this, [this] { navigateTo(QStringLiteral("settings")); });
+    connect(m_engine, &EngineController::errorOccurred, this, [this](const QString& msg) {
+        statusBar()->showMessage(msg, 5000);
+    });
+    connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
+        QString msg;
+        if (s.streaming)
+            msg = QStringLiteral("LIVE  %1 kbps  drift %2 ms").arg(s.bitrateKbps).arg(s.avDriftMs, 0, 'f', 1);
+        else if (s.recording)
+            msg = QStringLiteral("REC  %1s").arg(s.recordUptimeSec);
+        else
+            msg = QStringLiteral("Ready");
+        if (m_engine->replayBuffer()) {
+            const qint64 us = m_engine->replayBuffer()->bufferedDurationUs();
+            msg += QStringLiteral("  ·  Replay %1s / %2s")
+                       .arg(us / 1000000)
+                       .arg(m_engine->replayBuffer()->capacitySeconds());
+        }
+        statusBar()->showMessage(msg);
+    });
+    connect(m_engine, &EngineController::replaySaved, this, [this](const QString& path) {
+        statusBar()->showMessage(QStringLiteral("Replay saved: %1").arg(path), 4000);
+    });
+}
+
+MainWindow::~MainWindow() = default;
+
+void MainWindow::navigateTo(const QString& pageId)
+{
+    if (pageId == QLatin1String("dashboard")) m_stack->setCurrentIndex(0);
+    else if (pageId == QLatin1String("chat")) m_stack->setCurrentIndex(1);
+    else if (pageId == QLatin1String("analytics")) m_stack->setCurrentIndex(2);
+    else if (pageId == QLatin1String("scoreboard")) m_stack->setCurrentIndex(3);
+    else if (pageId == QLatin1String("schedule")) m_stack->setCurrentIndex(4);
+    else if (pageId == QLatin1String("settings")) m_stack->setCurrentIndex(5);
+}
+
+void MainWindow::openProjectDialog()
+{
+    const auto path = QFileDialog::getOpenFileName(this, QStringLiteral("Open Project"),
+                                                   {}, QStringLiteral("RailShot Project (*.railshot.json *.json)"));
+    if (path.isEmpty()) return;
+    QString err;
+    if (!m_engine->loadProject(path, &err))
+        QMessageBox::warning(this, QStringLiteral("Open"), err);
+    else
+        statusBar()->showMessage(QStringLiteral("Loaded %1").arg(path), 3000);
+}
+
+void MainWindow::saveProjectDialog()
+{
+    auto path = m_engine->settings()->lastProjectPath();
+    if (path.isEmpty()) {
+        path = QFileDialog::getSaveFileName(this, QStringLiteral("Save Project"),
+                                            QStringLiteral("project.railshot.json"),
+                                            QStringLiteral("RailShot Project (*.railshot.json)"));
+    }
+    if (path.isEmpty()) return;
+    QString err;
+    if (!m_engine->saveProject(path, &err))
+        QMessageBox::warning(this, QStringLiteral("Save"), err);
+    else
+        statusBar()->showMessage(QStringLiteral("Saved %1").arg(path), 3000);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    if (auto* w = focusWidget()) {
+        if (qobject_cast<QLineEdit*>(w) || qobject_cast<QPlainTextEdit*>(w)
+            || qobject_cast<QAbstractSpinBox*>(w) || w->inherits("QKeySequenceEdit")) {
+            QMainWindow::keyPressEvent(event);
+            return;
+        }
+    }
+    if (m_hotkeys && m_hotkeys->handleKey(event))
+        return;
+    QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (m_engine->telemetrySnapshot().streaming || m_engine->telemetrySnapshot().recording) {
+        const auto r = QMessageBox::question(this, QStringLiteral("Quit"),
+                                             QStringLiteral("Stream/recording is active. Stop and quit?"));
+        if (r != QMessageBox::Yes) {
+            event->ignore();
+            return;
+        }
+        m_engine->stopStreaming();
+        m_engine->stopRecording();
+    }
+    m_engine->settings()->sync();
+    event->accept();
+}
+
+} // namespace railshot

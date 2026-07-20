@@ -111,3 +111,25 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Native / CMake
+native/build/
+native/**/CMakeFiles/
+native/**/cmake_install.cmake
+native/**/CTestTestfile.cmake
+native/**/*.dir/
+native/**/*.vcxproj*
+native/**/*.sln
+*.pdb
+*.ilk
+*.exp
+*.lib
+!native/cmake/**
+symbols/
+*.rskv
+*.dmp
+
+# Large binary FFmpeg SDK (download via scripts/install-ffmpeg.ps1)
+native/third_party/ffmpeg/
+# WebView2 NuGet extract (download via scripts/install-webview2.ps1)
+native/third_party/webview2/

@@ -1,0 +1,17 @@
+RailShotTV Proprietary Software License Agreement (EULA)
+
+Copyright (c) RailShotTV. All rights reserved.
+
+This software and associated documentation files (the "Software") are the
+proprietary property of RailShotTV and its licensors.
+
+Permission is granted to use the Software only under a separate commercial
+license agreement with RailShotTV, or for personal evaluation on machines you
+own. You may not redistribute, sublicense, reverse engineer (except to the
+extent permitted by applicable law), or use the Software to create a competing
+broadcast product without written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+Third-party components (Qt under LGPL/commercial terms, FFmpeg under LGPL,
+system libraries) are licensed separately — see THIRD_PARTY_NOTICES.md.

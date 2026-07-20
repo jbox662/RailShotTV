@@ -1,0 +1,281 @@
+#include "capture/BrowserSource.h"
+#include "browser/BrowserIpc.h"
+#include "core/Logger.h"
+#include <QCoreApplication>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QFileInfo>
+#include <cstring>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <d3d11.h>
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+#endif
+
+namespace railshot {
+
+BrowserSource::BrowserSource(QString id, QString name, QJsonObject settings)
+    : m_id(std::move(id))
+    , m_name(std::move(name))
+    , m_settings(std::move(settings))
+{
+    m_width = m_settings.value(QStringLiteral("width")).toInt(1280);
+    m_height = m_settings.value(QStringLiteral("height")).toInt(720);
+}
+
+BrowserSource::~BrowserSource()
+{
+    stop();
+}
+
+QString BrowserSource::mappingName() const
+{
+    return QStringLiteral("Local\\RailShotTV_Browser_%1").arg(m_id);
+}
+
+QString BrowserSource::helperExecutable() const
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString local = QDir(appDir).filePath(QStringLiteral("railshot_browser_helper.exe"));
+    if (QFileInfo::exists(local))
+        return local;
+    // Dev builds may place helper next to tests / alternate bin dirs
+    const QString alt = QDir(appDir).absoluteFilePath(QStringLiteral("../tests/RelWithDebInfo/railshot_browser_helper.exe"));
+    if (QFileInfo::exists(alt))
+        return QFileInfo(alt).absoluteFilePath();
+    return local;
+}
+
+bool BrowserSource::openSharedMemory(QString* error)
+{
+#ifdef _WIN32
+    closeSharedMemory();
+    const std::wstring mapName = mappingName().toStdWString();
+    const std::wstring mtxName = (mappingName() + QStringLiteral("_mtx")).toStdWString();
+    const DWORD bytes = static_cast<DWORD>(browser_ipc::bufferBytes(m_width, m_height));
+
+    m_mutexHandle = CreateMutexW(nullptr, FALSE, mtxName.c_str());
+    m_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, bytes, mapName.c_str());
+    if (!m_mapping) {
+        if (error) *error = QStringLiteral("Browser shared mapping failed");
+        return false;
+    }
+    m_view = MapViewOfFile(m_mapping, FILE_MAP_ALL_ACCESS, 0, 0, bytes);
+    if (!m_view) {
+        if (error) *error = QStringLiteral("Browser MapViewOfFile failed");
+        closeSharedMemory();
+        return false;
+    }
+    auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
+    *hdr = browser_ipc::FrameHeader{};
+    hdr->width = static_cast<quint32>(m_width);
+    hdr->height = static_cast<quint32>(m_height);
+    hdr->stride = static_cast<quint32>(m_width * 4);
+    hdr->status = 1;
+    return true;
+#else
+    Q_UNUSED(error);
+    return false;
+#endif
+}
+
+void BrowserSource::closeSharedMemory()
+{
+#ifdef _WIN32
+    if (m_view) {
+        UnmapViewOfFile(m_view);
+        m_view = nullptr;
+    }
+    if (m_mapping) {
+        CloseHandle(m_mapping);
+        m_mapping = nullptr;
+    }
+    if (m_mutexHandle) {
+        CloseHandle(m_mutexHandle);
+        m_mutexHandle = nullptr;
+    }
+#endif
+}
+
+bool BrowserSource::ensureHelper(QString* error)
+{
+    if (m_helper.state() != QProcess::NotRunning)
+        return true;
+
+    const QString exe = helperExecutable();
+    if (!QFileInfo::exists(exe)) {
+        if (error) {
+            *error = QStringLiteral("railshot_browser_helper.exe not found next to RailShotTV "
+                                    "(build the helper target)");
+        }
+        return false;
+    }
+
+    const QString url = m_settings.value(QStringLiteral("url")).toString(
+        QStringLiteral("https://example.com"));
+    QStringList args;
+    args << QStringLiteral("--url") << url
+         << QStringLiteral("--width") << QString::number(m_width)
+         << QStringLiteral("--height") << QString::number(m_height)
+         << QStringLiteral("--shm") << mappingName()
+         << QStringLiteral("--fps") << QString::number(m_settings.value(QStringLiteral("fps")).toInt(15));
+
+    m_helper.setProgram(exe);
+    m_helper.setArguments(args);
+    m_helper.setProcessChannelMode(QProcess::MergedChannels);
+    m_helper.start();
+    if (!m_helper.waitForStarted(5000)) {
+        if (error) *error = QStringLiteral("Failed to start browser helper: %1").arg(m_helper.errorString());
+        return false;
+    }
+    Logger::info(QStringLiteral("Browser helper started for %1 → %2").arg(m_id, url));
+    return true;
+}
+
+bool BrowserSource::uploadLatest(QString* error)
+{
+#ifdef _WIN32
+    if (!m_device || !m_view) return false;
+
+    if (m_mutexHandle)
+        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 5);
+    auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
+    const quint64 idx = hdr->frameIndex;
+    const int w = static_cast<int>(hdr->width);
+    const int h = static_cast<int>(hdr->height);
+    const int stride = static_cast<int>(hdr->stride);
+    const uint8_t* pixels = reinterpret_cast<const uint8_t*>(hdr + 1);
+    if (m_mutexHandle)
+        ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
+
+    if (hdr->magic != browser_ipc::kMagic || w <= 0 || h <= 0 || idx == m_lastFrameIndex)
+        return m_texture != nullptr;
+
+    m_lastFrameIndex = idx;
+    m_width = w;
+    m_height = h;
+
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(w);
+    desc.Height = static_cast<UINT>(h);
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA init{};
+    init.pSysMem = pixels;
+    init.SysMemPitch = static_cast<UINT>(stride > 0 ? stride : w * 4);
+
+    ComPtr<ID3D11Texture2D> tex;
+    if (FAILED(m_device->CreateTexture2D(&desc, &init, &tex))) {
+        if (error) *error = QStringLiteral("Browser texture upload failed");
+        return false;
+    }
+    if (m_texture) m_texture->Release();
+    m_texture = tex.Detach();
+    return true;
+#else
+    Q_UNUSED(error);
+    return false;
+#endif
+}
+
+bool BrowserSource::start(ID3D11Device* device, QString* error)
+{
+    std::lock_guard lock(m_mutex);
+    m_device = device;
+    m_width = m_settings.value(QStringLiteral("width")).toInt(m_width);
+    m_height = m_settings.value(QStringLiteral("height")).toInt(m_height);
+    if (!openSharedMemory(error))
+        return false;
+    if (!ensureHelper(error)) {
+        closeSharedMemory();
+        return false;
+    }
+    // Give helper a moment to paint first frame; upload may still be empty.
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < 1500) {
+        if (uploadLatest(nullptr) && m_texture)
+            break;
+#ifdef _WIN32
+        Sleep(50);
+#endif
+    }
+    if (!m_texture) {
+        // Create transparent placeholder so compositor has something.
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = static_cast<UINT>(m_width);
+        desc.Height = static_cast<UINT>(m_height);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        ComPtr<ID3D11Texture2D> tex;
+        if (SUCCEEDED(m_device->CreateTexture2D(&desc, nullptr, &tex)))
+            m_texture = tex.Detach();
+    }
+    m_running = true;
+    return true;
+}
+
+void BrowserSource::stop()
+{
+    std::lock_guard lock(m_mutex);
+    m_running = false;
+    if (m_helper.state() != QProcess::NotRunning) {
+        m_helper.terminate();
+        if (!m_helper.waitForFinished(2000))
+            m_helper.kill();
+    }
+#ifdef _WIN32
+    if (m_texture) {
+        m_texture->Release();
+        m_texture = nullptr;
+    }
+#endif
+    closeSharedMemory();
+}
+
+bool BrowserSource::acquireLatest(VideoFrame& out)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_running.load()) return false;
+    uploadLatest(nullptr);
+    if (!m_texture) return false;
+    out.texture = m_texture;
+    out.width = m_width;
+    out.height = m_height;
+    out.sourceId = m_id;
+    out.opaque = false;
+    return true;
+}
+
+void BrowserSource::applySettings(const QJsonObject& settings)
+{
+    std::lock_guard lock(m_mutex);
+    const QString oldUrl = m_settings.value(QStringLiteral("url")).toString();
+    m_settings = settings;
+    m_width = m_settings.value(QStringLiteral("width")).toInt(m_width);
+    m_height = m_settings.value(QStringLiteral("height")).toInt(m_height);
+    const QString newUrl = m_settings.value(QStringLiteral("url")).toString();
+    if (m_running.load() && oldUrl != newUrl) {
+        if (m_helper.state() != QProcess::NotRunning) {
+            m_helper.terminate();
+            m_helper.waitForFinished(1500);
+        }
+        ensureHelper(nullptr);
+    }
+}
+
+} // namespace railshot

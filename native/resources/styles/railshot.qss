@@ -1,0 +1,89 @@
+/* RailShotTV Chromatic Command */
+QWidget {
+  background-color: #0B0D0F;
+  color: #F0F0F0;
+  font-family: "Segoe UI", "DM Sans", sans-serif;
+  font-size: 12px;
+}
+QMainWindow, QDialog {
+  background-color: #0B0D0F;
+}
+QPushButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
+  border: 1px solid #3A3D45;
+  border-radius: 3px;
+  padding: 4px 10px;
+  color: #C8CAD0;
+  font-weight: 600;
+}
+QPushButton:hover { border-color: #4F9EFF; color: #fff; }
+QPushButton:pressed { background: #16181E; }
+QPushButton#goButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #16A34A);
+  border: 1px solid #22C55E;
+  color: #000;
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+QPushButton#streamButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF5A2C, stop:1 #CC3A18);
+  border: 1px solid #FF5A2C;
+  color: #fff;
+  font-weight: 700;
+}
+QPushButton#endStreamButton {
+  background: #7F1D1D;
+  border: 1px solid #EF4444;
+  color: #FCA5A5;
+}
+QListWidget {
+  background: #0A0C0F;
+  border: 1px solid #2A2D35;
+  outline: none;
+}
+QListWidget::item {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1A1D24;
+}
+QListWidget::item:selected {
+  background: #1A2A3A;
+  color: #4F9EFF;
+}
+QTabWidget::pane { border: 1px solid #2A2D35; background: #111318; }
+QTabBar::tab {
+  background: #141619;
+  color: #808898;
+  padding: 6px 14px;
+  border: 1px solid #2A2D35;
+}
+QTabBar::tab:selected { color: #FF5A2C; border-bottom: 2px solid #FF5A2C; }
+QLineEdit, QSpinBox, QComboBox {
+  background: #0E0F14;
+  border: 1px solid #3A3D45;
+  border-radius: 3px;
+  padding: 4px 6px;
+  color: #E2E8F0;
+}
+QSlider::groove:vertical { width: 4px; background: #1A1D24; }
+QSlider::handle:vertical {
+  height: 14px; width: 14px; margin: 0 -5px;
+  background: #C8CAD0; border-radius: 2px;
+}
+QScrollBar:vertical {
+  background: #0A0C10; width: 8px; margin: 0;
+}
+QScrollBar::handle:vertical {
+  background: #2A2D35; min-height: 20px; border-radius: 4px;
+}
+QLabel#sectionHeader {
+  color: rgba(255,255,255,0.4);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+QLabel#mono {
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 10px;
+  color: #606878;
+}

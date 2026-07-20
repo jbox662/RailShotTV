@@ -1,0 +1,101 @@
+name: Native CI
+
+on:
+  push:
+    paths:
+      - "native/**"
+      - "scripts/**"
+      - ".github/workflows/native-ci.yml"
+  pull_request:
+    paths:
+      - "native/**"
+      - "scripts/**"
+      - ".github/workflows/native-ci.yml"
+
+jobs:
+  build-test:
+    name: MSVC Build & Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          modules: qtshadertools
+          cache: true
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install LGPL FFmpeg
+        shell: pwsh
+        run: |
+          ./scripts/install-ffmpeg.ps1
+          $inner = Get-ChildItem native/third_party/ffmpeg -Directory | Select-Object -First 1
+          echo "RAILSHOT_FFMPEG_ROOT=$($inner.FullName)" >> $env:GITHUB_ENV
+          echo "FFMPEG_BIN=$($inner.FullName)\bin" >> $env:GITHUB_ENV
+
+      - name: Install WebView2 SDK
+        shell: pwsh
+        run: ./scripts/install-webview2.ps1
+
+      - name: Configure
+        working-directory: native
+        run: |
+          cmake --preset windows-msvc-release `
+            -DRAILSHOT_BUILD_TESTS=ON `
+            -DRAILSHOT_FFMPEG_ROOT="$env:RAILSHOT_FFMPEG_ROOT" `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build
+        working-directory: native
+        run: cmake --build --preset release --config RelWithDebInfo
+
+      - name: Stage runtime DLLs
+        shell: pwsh
+        run: |
+          $bin = Get-ChildItem -Recurse native/build -Filter RailShotTV.exe | Select-Object -First 1
+          if ($bin) {
+            Copy-Item "$env:FFMPEG_BIN\*.dll" $bin.DirectoryName -Force
+            & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --no-translations $bin.FullName
+          }
+          Get-ChildItem -Recurse native/build -Filter test_*.exe | ForEach-Object {
+            Copy-Item "$env:FFMPEG_BIN\*.dll" $_.DirectoryName -Force
+          }
+
+      - name: Test
+        working-directory: native
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:FFMPEG_BIN;$env:QT_ROOT_DIR\bin;" + $env:PATH
+          ctest --preset release-tests --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: RailShotTV-win64
+          path: |
+            native/build/release/bin/**
+            native/build/release/**/RailShotTV.exe
+            native/build/release/**/*.dll
+          if-no-files-found: warn
+
+  license-scan:
+    name: License & SBOM placeholders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify licensing docs present
+        run: |
+          test -f docs/licensing/EULA.txt
+          test -f docs/licensing/THIRD_PARTY_NOTICES.md
+          test -f docs/licensing/FFMPEG_BUILD.md
+          test -f LICENSE

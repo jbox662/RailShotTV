@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX installer for RailShotTV.
+  Build flow (after RelWithDebInfo + windeployqt + FFmpeg DLL copy):
+    heat/candle/light or:
+    cmake --build ... --target package
+  Point SourceDir at the staged deploy folder containing RailShotTV.exe + Qt/FFmpeg DLLs.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="RailShotTV" Language="1033" Version="0.1.0"
+           Manufacturer="RailShotTV"
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="RailShotTV native broadcast engine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of RailShotTV is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="RailShotTV" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="RuntimeDlls" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="RailShotTV" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="RailShotTV" />
+      </Directory>
+    </Directory>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="RailShotTVExe" Source="$(var.DeployDir)\RailShotTV.exe" KeyPath="yes" />
+        <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder"
+                  Name="RailShotTV" WorkingDirectory="INSTALLFOLDER"
+                  Icon="RailShotTVExe" Advertise="yes" />
+        <RemoveFolder Id="RemoveProgramMenu" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\RailShotTV" Name="installed" Type="integer" Value="1" KeyPath="no" />
+      </Component>
+      <Component Id="LicenseFiles" Guid="*">
+        <File Id="ThirdPartyNotices" Source="$(var.RepoRoot)\docs\licensing\THIRD_PARTY_NOTICES.md" />
+        <File Id="FfmpegBuildNotes" Source="$(var.RepoRoot)\docs\licensing\FFMPEG_BUILD.md" />
+      </Component>
+    </ComponentGroup>
+
+    <!--
+      RuntimeDlls: generate via scripts/harvest-wix.ps1 after stage-deploy.ps1
+        heat dir deploy -cg RuntimeDlls -gg -sfrag -srd -dr INSTALLFOLDER -out RuntimeDlls.wxs
+      Then candle/light both RailShotTV.wxs and RuntimeDlls.wxs.
+      Until harvested, include companion binaries explicitly below.
+    -->
+    <ComponentGroup Id="RuntimeDlls" Directory="INSTALLFOLDER">
+      <Component Id="BrowserHelper" Guid="B1C2D3E4-F5A6-7890-ABCD-EF1234567801">
+        <File Id="BrowserHelperExe" Source="$(var.DeployDir)\railshot_browser_helper.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="VcamDll" Guid="B1C2D3E4-F5A6-7890-ABCD-EF1234567802">
+        <File Id="VcamDllFile" Source="$(var.DeployDir)\railshot_vcam.dll" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Product>
+</Wix>

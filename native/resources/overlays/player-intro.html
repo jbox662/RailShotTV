@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  html,body{margin:0;height:100%;background:transparent;font-family:"Segoe UI",system-ui,sans-serif;overflow:hidden;}
+  .card{position:absolute;left:40px;bottom:48px;padding:18px 28px;background:linear-gradient(90deg,rgba(10,10,15,.92),rgba(26,26,36,.75));
+    border-left:4px solid #FF4D1C;color:#F8F8FF;min-width:420px;}
+  .eyebrow{font-size:12px;letter-spacing:3px;color:#FF4D1C;font-weight:700;margin-bottom:6px;}
+  .name{font-size:42px;font-weight:800;line-height:1;margin:0;}
+  .sub{margin-top:8px;color:#A0A0B8;font-size:16px;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">NOW AT THE TABLE</div>
+    <div class="name" id="player">Player Name</div>
+    <div class="sub">RailShotTV · 8-Ball</div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const n = params.get('name');
+    if (n) document.getElementById('player').textContent = n;
+  </script>
+</body>
+</html>

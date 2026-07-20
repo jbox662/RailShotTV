@@ -1,0 +1,27 @@
+---
+description: After finishing work, commit all relevant changes and push to GitHub
+alwaysApply: true
+---
+
+# Auto commit and push
+
+When you finish a task that changes files in this repo (feature, fix, docs, config, or rules):
+
+1. **Commit** — follow the repo git safety protocol:
+   - Run `git status`, `git diff`, and `git log -5 --oneline` in parallel
+   - Stage relevant files only (never secrets: `.env`, credentials, private keys)
+   - Commit with a concise message focused on **why** (1–2 sentences)
+   - Use a HEREDOC for the message; never `--no-verify` / skip hooks unless the user asks
+   - Do not amend unless the user explicitly requests it and amend conditions are met
+
+2. **Push** — immediately after a successful commit:
+   - `git push -u origin HEAD` (or `git push` if upstream exists)
+   - Requires network / full permissions as needed
+   - Never force-push to `main`/`master` unless the user explicitly requests it
+
+3. **When to skip**
+   - No file changes, or only unrelated dirty files you did not touch
+   - User says not to commit/push for this turn
+   - Commit would include secrets — warn and skip those files
+
+4. **Confirm** — after push, report the commit subject and that it was pushed (include remote branch name if useful).

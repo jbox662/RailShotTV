@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/">
+    <file>styles/railshot.qss</file>
+    <file>overlays/player-intro.html</file>
+    <file>overlays/match-point.html</file>
+    <file>overlays/break-and-run.html</file>
+  </qresource>
+</RCC>
