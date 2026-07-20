@@ -4,8 +4,6 @@
 #include <QMenu>
 #include <QInputDialog>
 #include <QLineEdit>
-#include <QLinearGradient>
-#include <QBrush>
 #include <QAction>
 #include <QPainter>
 #include <QStyledItemDelegate>
@@ -20,54 +18,41 @@ public:
     {
         painter->save();
         const QString role = index.data(Qt::UserRole + 1).toString();
-        QColor accent(QStringLiteral("#2A2D35"));
-        QColor bg = option.widget ? option.widget->palette().base().color() : QColor(QStringLiteral("#0A0C0F"));
-        QColor fg(QStringLiteral("#8892A4"));
+        QColor accent(QStringLiteral("#3A3F48"));
+        QColor bg = QColor(QStringLiteral("#1A1D21"));
+        QColor fg(QStringLiteral("#B8BCC4"));
         if (role == QLatin1String("program")) {
-            accent = QColor(QStringLiteral("#FF5A2C"));
-            bg = QColor(QStringLiteral("#2A0C0C"));
-            fg = QColor(QStringLiteral("#FFB08A"));
+            accent = QColor(QStringLiteral("#C44A2A"));
+            bg = QColor(QStringLiteral("#241A1A"));
+            fg = QColor(QStringLiteral("#E8E8E8"));
         } else if (role == QLatin1String("preview")) {
-            accent = QColor(QStringLiteral("#22C55E"));
-            bg = QColor(QStringLiteral("#0C1E10"));
-            fg = QColor(QStringLiteral("#86EFAC"));
+            accent = QColor(QStringLiteral("#2E8B57"));
+            bg = QColor(QStringLiteral("#1A221C"));
+            fg = QColor(QStringLiteral("#E8E8E8"));
         } else if (role == QLatin1String("active")) {
-            accent = QColor(QStringLiteral("#4F9EFF"));
-            bg = QColor(QStringLiteral("#0C1A30"));
-            fg = QColor(QStringLiteral("#B8D4FF"));
+            accent = QColor(QStringLiteral("#4A6FA5"));
+            bg = QColor(QStringLiteral("#1C2028"));
+            fg = QColor(QStringLiteral("#E8E8E8"));
         }
+        if (option.state & QStyle::State_MouseOver && role.isEmpty())
+            bg = QColor(QStringLiteral("#22262E"));
         painter->fillRect(option.rect, bg);
-        painter->fillRect(QRect(option.rect.left(), option.rect.top(), 5, option.rect.height()), accent);
-        // Right edge hairline so rows separate from neighbors
-        painter->setPen(QPen(QColor(QStringLiteral("#2A2D35")), 1));
-        painter->drawLine(option.rect.bottomLeft() + QPoint(5, 0), option.rect.bottomRight());
+        painter->fillRect(QRect(option.rect.left(), option.rect.top(), 3, option.rect.height()), accent);
 
         const int num = index.data(Qt::UserRole + 2).toInt();
         const QString name = index.data(Qt::DisplayRole).toString();
-        QRect badge(option.rect.left() + 12, option.rect.center().y() - 8, 16, 16);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(accent.red(), accent.green(), accent.blue(), 70));
-        painter->drawRoundedRect(badge, 3, 3);
-        painter->setPen(QPen(accent, 1));
-        painter->drawRoundedRect(badge, 3, 3);
-        painter->setPen(fg);
         QFont f = option.font;
-        f.setBold(true);
-        f.setPointSize(8);
+        f.setPointSize(10);
+        f.setBold(false);
         painter->setFont(f);
-        painter->drawText(badge, Qt::AlignCenter, QString::number(num));
-
-        QFont nameFont = option.font;
-        nameFont.setBold(true);
-        nameFont.setPointSize(11);
-        painter->setFont(nameFont);
         painter->setPen(fg);
-        painter->drawText(option.rect.adjusted(32, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft, name);
+        painter->drawText(option.rect.adjusted(10, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                          QStringLiteral("%1. %2").arg(num).arg(name));
         painter->restore();
     }
     QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override
     {
-        return QSize(160, 32);
+        return QSize(160, 26);
     }
 };
 } // namespace
@@ -75,23 +60,17 @@ public:
 SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
     : QListWidget(parent), m_engine(engine)
 {
-    setFixedWidth(180);
+    setMinimumWidth(120);
     setSelectionMode(QAbstractItemView::SingleSelection);
     setItemDelegate(new SceneItemDelegate(this));
+    setUniformItemSizes(true);
+    setSpacing(0);
+    setFocusPolicy(Qt::StrongFocus);
     setStyleSheet(QStringLiteral(
-        "QListWidget {"
-        "  background:#080A0D;"
-        "  border: none;"
-        "  border-top: 1px solid #3A3D45;"
-        "  outline: none;"
-        "}"
-        "QListWidget::item {"
-        "  padding: 0;"
-        "  border-bottom: 1px solid #1E2228;"
-        "  min-height: 34px;"
-        "}"
-        "QListWidget::item:hover { background: #14181F; }"
-        "QListWidget::item:selected { background: transparent; }"));
+        "QListWidget{background:#1A1D21;border:none;outline:none;}"
+        "QListWidget::item{padding:0;min-height:26px;border-bottom:1px solid #242830;}"
+        "QListWidget::item:hover{background:#22262E;}"
+        "QListWidget::item:selected{background:transparent;}"));
 
     connect(this, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
         m_engine->setPreviewScene(item->data(Qt::UserRole).toString());

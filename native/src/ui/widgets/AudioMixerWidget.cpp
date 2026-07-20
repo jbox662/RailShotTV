@@ -20,23 +20,18 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     setMinimumWidth(200);
     setMinimumHeight(140);
     setStyleSheet(QStringLiteral(
-        "QWidget#audioMixer {"
-        "  background:#0D0F12;"
-        "  border-top: 3px solid #A855F7;"
-        "  border-left: 2px solid #A855F7;"
-        "  border-right: 1px solid #3A3D45;"
-        "}"));
+        "QWidget#audioMixer{background:#1A1D21;border:none;}"));
 
     auto* outer = new QHBoxLayout(this);
     outer->setContentsMargins(4, 4, 4, 4);
     outer->setSpacing(4);
 
-    auto* outputsLab = new QLabel(QStringLiteral("O\nU\nT\nP\nU\nT\nS"), this);
+    auto* outputsLab = new QLabel(QStringLiteral("O\nU\nT"), this);
     outputsLab->setAlignment(Qt::AlignCenter);
-    outputsLab->setFixedWidth(16);
+    outputsLab->setFixedWidth(14);
     outputsLab->setStyleSheet(QStringLiteral(
-        "color:#7AB8FF; font-size:8px; font-weight:900; letter-spacing:1px;"
-        "background:rgba(58,106,255,0.22); border:1px solid #3A6AFF66; border-radius:2px;"));
+        "color:#6B7280; font-size:8px; font-weight:600; letter-spacing:0px;"
+        "background:transparent;"));
     outer->addWidget(outputsLab);
 
     auto* scroll = new QScrollArea(this);
@@ -48,28 +43,34 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     auto* host = new QWidget(scroll);
     m_row = new QHBoxLayout(host);
     m_row->setContentsMargins(0, 0, 0, 0);
-    m_row->setSpacing(4);
+    m_row->setSpacing(6);
     scroll->setWidget(host);
     outer->addWidget(scroll, 1);
 
-    auto* inputsLab = new QLabel(QStringLiteral("I\nN\nP\nU\nT\nS"), this);
+    auto* inputsLab = new QLabel(QStringLiteral("I\nN"), this);
     inputsLab->setAlignment(Qt::AlignCenter);
-    inputsLab->setFixedWidth(16);
+    inputsLab->setFixedWidth(14);
     inputsLab->setStyleSheet(QStringLiteral(
-        "color:#C084FC; font-size:8px; font-weight:900; letter-spacing:1px;"
-        "background:rgba(168,85,247,0.22); border:1px solid #A855F766; border-radius:2px;"));
+        "color:#6B7280; font-size:8px; font-weight:600; letter-spacing:0px;"
+        "background:transparent;"));
     outer->addWidget(inputsLab);
 
     auto* side = new QVBoxLayout();
     side->setSpacing(2);
     auto* title = new QLabel(QStringLiteral("MIX"), this);
-    title->setObjectName(QStringLiteral("panelTitleViolet"));
     title->setAlignment(Qt::AlignCenter);
+    title->setStyleSheet(QStringLiteral(
+        "color:#8B919C; font-size:9px; font-weight:600; background:transparent;"));
     m_monitorBtn = new QPushButton(QStringLiteral("MON"), this);
     m_monitorBtn->setCheckable(true);
     m_monitorBtn->setChecked(true);
     m_monitorBtn->setFixedHeight(18);
     m_monitorBtn->setToolTip(QStringLiteral("Headphone / speaker monitor"));
+    m_monitorBtn->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#2A2E36;border:1px solid #3A3F48;color:#A0A8B8;"
+        "font-size:9px;border-radius:2px;}"
+        "QPushButton:checked{background:#343944;color:#E5E7EB;border-color:#4A5058;}"
+        "QPushButton:hover{border-color:#5A6068;}"));
     connect(m_monitorBtn, &QPushButton::toggled, this, [this](bool on) {
         if (m_engine && m_engine->audio())
             m_engine->audio()->setMonitorEnabled(on);
@@ -97,31 +98,25 @@ void AudioMixerWidget::refreshMeters()
             const auto& ch = channels[ci];
             const bool master = ci == 0 || ch.name.contains(QStringLiteral("Master"), Qt::CaseInsensitive);
             auto* strip = new QWidget(this);
-            strip->setFixedWidth(master ? 72 : 60);
+            strip->setFixedWidth(master ? 68 : 56);
             strip->setStyleSheet(QStringLiteral(
-                "QWidget{background:#12151A; border:1px solid #3A3D45; border-radius:3px;}"));
+                "QWidget{background:#1A1D21; border:none;}"));
             auto* col = new QVBoxLayout(strip);
-            col->setContentsMargins(3, 3, 3, 3);
+            col->setContentsMargins(2, 2, 2, 2);
             col->setSpacing(2);
 
-            auto* badge = new QLabel(master ? QStringLiteral("MASTER") : ch.name.left(8), strip);
+            auto* badge = new QLabel(master ? QStringLiteral("Master") : ch.name.left(10), strip);
             badge->setAlignment(Qt::AlignCenter);
-            if (master) {
-                badge->setStyleSheet(QStringLiteral(
-                    "font-size:8px; font-weight:900; color:#04140A;"
-                    "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);"
-                    "border:1px solid #86EFAC; border-radius:3px; padding:2px 4px;"));
-            } else {
-                badge->setStyleSheet(QStringLiteral(
-                    "font-size:7px; font-weight:800; color:%1; background:transparent;"
-                    "border:1px solid #2A2D35; border-radius:2px; padding:1px 2px;")
-                                         .arg(ch.muted ? QStringLiteral("#EF4444")
-                                                       : QStringLiteral("#C8CAD0")));
-            }
+            badge->setStyleSheet(QStringLiteral(
+                "font-size:9px; font-weight:600; color:%1; background:transparent;"
+                "padding:1px 0px;")
+                                     .arg(ch.muted ? QStringLiteral("#EF4444")
+                                                   : (master ? QStringLiteral("#D0D4DC")
+                                                             : QStringLiteral("#A0A8B8"))));
             col->addWidget(badge);
 
             auto* meterRow = new QHBoxLayout();
-            meterRow->setSpacing(2);
+            meterRow->setSpacing(1);
             meterRow->setContentsMargins(0, 0, 0, 0);
             auto makeBar = [&](float peak) {
                 auto* meter = new QProgressBar(strip);
@@ -129,12 +124,10 @@ void AudioMixerWidget::refreshMeters()
                 meter->setRange(0, 100);
                 meter->setValue(int(peak * 100));
                 meter->setTextVisible(false);
-                meter->setFixedSize(8, 80);
+                meter->setFixedSize(7, 78);
                 meter->setStyleSheet(QStringLiteral(
-                    "QProgressBar{background:#0A0E1A;border:1px solid rgba(255,255,255,0.06);border-radius:1px;}"
-                    "QProgressBar::chunk{background:qlineargradient(x1:0,y1:1,x2:0,y2:0,"
-                    "stop:0 %1, stop:0.4 #84CC16, stop:0.7 #FBBF24, stop:1 #EF4444);}").arg(ch.id.contains(QLatin1String("mic"), Qt::CaseInsensitive)
-                        ? QStringLiteral("#22C55E") : QStringLiteral("#4F9EFF")));
+                    "QProgressBar{background:#0E1014;border:1px solid #2A2E36;border-radius:0px;}"
+                    "QProgressBar::chunk{background:#4ADE80;}"));
                 return meter;
             };
             auto* barL = makeBar(ch.peakL);
@@ -150,13 +143,18 @@ void AudioMixerWidget::refreshMeters()
             auto* db = new QLabel(QStringLiteral("0.0"), strip);
             db->setAlignment(Qt::AlignCenter);
             db->setObjectName(QStringLiteral("mono"));
-            db->setStyleSheet(QStringLiteral("font-size:8px; color:#606878;"));
+            db->setStyleSheet(QStringLiteral("font-size:8px; color:#6B7280; background:transparent;"));
             col->addWidget(db);
 
             auto* fader = new QSlider(Qt::Vertical, strip);
             fader->setRange(0, 100);
             fader->setValue(int(ch.volume * 100));
             fader->setFixedHeight(70);
+            fader->setStyleSheet(QStringLiteral(
+                "QSlider::groove:vertical{background:#2A2E36;width:4px;border-radius:2px;}"
+                "QSlider::handle:vertical{background:#C8CCD4;height:10px;width:12px;"
+                "margin:-2px -4px;border-radius:2px;border:1px solid #3A3F48;}"
+                "QSlider::handle:vertical:hover{background:#E5E7EB;}"));
             connect(fader, &QSlider::valueChanged, this, [this, id = ch.id](int v) {
                 auto state = m_engine->audio()->channelState(id);
                 state.volume = v / 100.f;
@@ -166,11 +164,16 @@ void AudioMixerWidget::refreshMeters()
 
             auto* btnRow = new QHBoxLayout();
             btnRow->setSpacing(2);
-            auto* mute = new QPushButton(ch.muted ? QStringLiteral("M") : QStringLiteral("m"), strip);
+            const QString chipStyle = QStringLiteral(
+                "QPushButton{background:#2A2E36;border:1px solid #3A3F48;color:#A0A8B8;"
+                "font-size:9px;border-radius:2px;min-width:18px;}"
+                "QPushButton:hover{border-color:#4A5058;color:#E5E7EB;}");
+            auto* mute = new QPushButton(QStringLiteral("M"), strip);
             mute->setFixedHeight(16);
             mute->setCheckable(true);
             mute->setChecked(ch.muted);
-            mute->setStyleSheet(QStringLiteral("QPushButton:checked{background:#EF4444;color:white;}"));
+            mute->setStyleSheet(chipStyle + QStringLiteral(
+                "QPushButton:checked{background:#7F1D1D;color:#FECACA;border-color:#991B1B;}"));
             connect(mute, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
                 state.muted = !state.muted;
@@ -180,7 +183,8 @@ void AudioMixerWidget::refreshMeters()
             solo->setFixedHeight(16);
             solo->setCheckable(true);
             solo->setChecked(ch.solo);
-            solo->setStyleSheet(QStringLiteral("QPushButton:checked{background:#F59E0B;color:black;}"));
+            solo->setStyleSheet(chipStyle + QStringLiteral(
+                "QPushButton:checked{background:#78350F;color:#FDE68A;border-color:#92400E;}"));
             connect(solo, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
                 state.solo = !state.solo;

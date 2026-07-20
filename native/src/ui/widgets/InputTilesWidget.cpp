@@ -34,13 +34,11 @@ protected:
     }
 };
 
-QString chromeBtnStyle(bool hot)
+QString chromeBtnStyle()
 {
-    const QString c = hot ? QStringLiteral("#00000090") : QStringLiteral("#4F9EFF80");
     return QStringLiteral(
-               "QPushButton{background:transparent;border:none;color:%1;font-size:11px;padding:1px;}"
-               "QPushButton:hover{color:%2;}")
-        .arg(c, hot ? QStringLiteral("#000") : QStringLiteral("#4F9EFF"));
+        "QPushButton{background:transparent;border:none;color:#6B7280;font-size:11px;padding:1px;}"
+        "QPushButton:hover{color:#E5E7EB;}");
 }
 } // namespace
 
@@ -48,8 +46,7 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setMinimumHeight(118);
-    setStyleSheet(QStringLiteral(
-        "background:#080A0D; border-top:2px solid #3A3D45; border-right:1px solid #2A2D35;"));
+    setStyleSheet(QStringLiteral("background:#1A1D21; border:none;"));
     m_row = new QHBoxLayout(this);
     m_row->setContentsMargins(0, 0, 0, 0);
     m_row->setSpacing(0);
@@ -71,19 +68,15 @@ void InputTilesWidget::refresh()
         auto* emptyLay = new QVBoxLayout(empty);
         emptyLay->setContentsMargins(16, 12, 16, 12);
         emptyLay->setSpacing(6);
-        auto* icon = new QLabel(QStringLiteral("◇"), empty);
-        icon->setAlignment(Qt::AlignCenter);
-        icon->setStyleSheet(QStringLiteral("color:#3A3D45; font-size:28px; background:transparent;"));
-        auto* hint = new QLabel(QStringLiteral("No inputs yet"), empty);
+        auto* hint = new QLabel(QStringLiteral("No sources"), empty);
         hint->setAlignment(Qt::AlignCenter);
         hint->setStyleSheet(QStringLiteral(
-            "color:#A0A8B8; font-size:13px; font-weight:700; background:transparent;"));
-        auto* sub = new QLabel(QStringLiteral("Click Add Input below to begin"), empty);
+            "color:#8B919C; font-size:12px; font-weight:500; background:transparent;"));
+        auto* sub = new QLabel(QStringLiteral("Use Add Input in the toolbar"), empty);
         sub->setAlignment(Qt::AlignCenter);
         sub->setWordWrap(true);
-        sub->setStyleSheet(QStringLiteral("color:#606878; font-size:11px; background:transparent;"));
+        sub->setStyleSheet(QStringLiteral("color:#5A6070; font-size:11px; background:transparent;"));
         emptyLay->addStretch(1);
-        emptyLay->addWidget(icon);
         emptyLay->addWidget(hint);
         emptyLay->addWidget(sub);
         emptyLay->addStretch(1);
@@ -102,21 +95,22 @@ void InputTilesWidget::refresh()
         tile->setCursor(Qt::PointingHandCursor);
         const bool isSel = src.id == selected;
 
-        QString bodyBg = QStringLiteral("#0D0F12");
-        QString outline;
+        QString bodyBg = QStringLiteral("#1A1D21");
+        QString accent = QStringLiteral("#2F333A");
         if (isInProgram) {
-            bodyBg = QStringLiteral("#220C0C");
-            outline = QStringLiteral("border:2px solid #FF5A2C;");
+            bodyBg = QStringLiteral("#241A1A");
+            accent = QStringLiteral("#C44A2A");
         } else if (isInPreview) {
-            bodyBg = QStringLiteral("#0C1A0E");
-            outline = QStringLiteral("border:2px solid #22C55E;");
+            bodyBg = QStringLiteral("#1A221C");
+            accent = QStringLiteral("#2E8B57");
         } else if (isSel) {
-            bodyBg = QStringLiteral("#0C1830");
-            outline = QStringLiteral("border:2px solid #4F9EFF;");
-        } else {
-            outline = QStringLiteral("border:1px solid #3A3D45; border-right:2px solid #2A2D35;");
+            bodyBg = QStringLiteral("#1C2028");
+            accent = QStringLiteral("#4A6FA5");
         }
-        tile->setStyleSheet(QStringLiteral("QFrame{background:%1;%2}").arg(bodyBg, outline));
+        tile->setStyleSheet(QStringLiteral(
+                                "QFrame{background:%1;border:none;border-bottom:1px solid #242830;"
+                                "border-left:3px solid %2;}")
+                                .arg(bodyBg, accent));
 
         tile->onSelect = [this, id = src.id] { m_engine->setSelectedSourceId(id); };
         tile->onConfigure = [this, id = src.id] {
@@ -128,41 +122,24 @@ void InputTilesWidget::refresh()
         col->setContentsMargins(0, 0, 0, 0);
         col->setSpacing(0);
 
-        QString headerBg = QStringLiteral(
-            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2E36,stop:1 #181B22);");
-        QString headerColor = QStringLiteral("#E0E2E8");
-        const bool hot = isInProgram || isInPreview;
-        if (isInProgram) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FF8C42,stop:1 #FF5A2C);");
-            headerColor = QStringLiteral("#000000");
-        } else if (isInPreview) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);");
-            headerColor = QStringLiteral("#04140A");
-        } else if (isSel) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A3A5A,stop:1 #142838);");
-            headerColor = QStringLiteral("#B8D4FF");
-        }
-
         auto* header = new QWidget(tile);
-        header->setFixedHeight(24);
-        header->setStyleSheet(headerBg + QStringLiteral("border-bottom:1px solid #4A4D55;"));
+        header->setFixedHeight(22);
+        header->setStyleSheet(QStringLiteral(
+            "background:#22262E; border-bottom:1px solid #2F333A;"));
         auto* headerLay = new QHBoxLayout(header);
         headerLay->setContentsMargins(6, 0, 4, 0);
         headerLay->setSpacing(4);
 
-        auto* name = new QLabel(QStringLiteral("%1  %2").arg(++idx).arg(src.name), header);
+        auto* name = new QLabel(QStringLiteral("%1. %2").arg(++idx).arg(src.name), header);
         name->setStyleSheet(QStringLiteral(
-            "color:%1;font-weight:700;font-size:10px;background:transparent;").arg(headerColor));
+            "color:#D0D4DC;font-weight:500;font-size:11px;background:transparent;"));
         headerLay->addWidget(name, 1);
 
         auto* gear = new QPushButton(QStringLiteral("⚙"), header);
         gear->setFixedSize(18, 18);
         gear->setCursor(Qt::PointingHandCursor);
         gear->setToolTip(QStringLiteral("Input Settings"));
-        gear->setStyleSheet(chromeBtnStyle(hot));
+        gear->setStyleSheet(chromeBtnStyle());
         connect(gear, &QPushButton::clicked, this, [this, id = src.id] {
             m_engine->setSelectedSourceId(id);
             emit configureSourceRequested(id);
@@ -172,7 +149,7 @@ void InputTilesWidget::refresh()
         vis->setFixedSize(18, 18);
         vis->setCursor(Qt::PointingHandCursor);
         vis->setToolTip(QStringLiteral("Toggle visibility"));
-        vis->setStyleSheet(chromeBtnStyle(hot));
+        vis->setStyleSheet(chromeBtnStyle());
         connect(vis, &QPushButton::clicked, this, [this, id = src.id, visFlag = src.visible] {
             m_engine->setSourceVisible(id, !visFlag);
         });
@@ -181,7 +158,7 @@ void InputTilesWidget::refresh()
         del->setFixedSize(18, 18);
         del->setCursor(Qt::PointingHandCursor);
         del->setToolTip(QStringLiteral("Remove"));
-        del->setStyleSheet(chromeBtnStyle(hot));
+        del->setStyleSheet(chromeBtnStyle());
         connect(del, &QPushButton::clicked, this, [this, id = src.id] { m_engine->removeSource(id); });
 
         headerLay->addWidget(gear);
@@ -189,16 +166,14 @@ void InputTilesWidget::refresh()
         headerLay->addWidget(del);
         col->addWidget(header);
 
-        auto* preview = new QLabel(sourceTypeToString(src.type).toUpper(), tile);
+        auto* preview = new QLabel(sourceTypeToString(src.type), tile);
         preview->setAlignment(Qt::AlignCenter);
         preview->setMinimumHeight(60);
         preview->setMaximumHeight(80);
-        const QString typeColor = src.colorHex.isEmpty() ? QStringLiteral("#4F9EFF") : src.colorHex;
         preview->setStyleSheet(QStringLiteral(
-            "background:#000000; color:%1; font-weight:900; letter-spacing:1px; font-size:11px;"
-            "border-top:1px solid #1A1D24; border-bottom:1px solid #1A1D24;"
-            "opacity:%2;")
-                                   .arg(typeColor, src.visible ? QStringLiteral("1") : QStringLiteral("0.35")));
+            "background:#141618; color:#6B7280; font-weight:500; letter-spacing:0px; font-size:11px;"
+            "border:none; opacity:%1;")
+                                   .arg(src.visible ? QStringLiteral("1") : QStringLiteral("0.4")));
         col->addWidget(preview, 1);
 
         auto* actions = new QHBoxLayout();
