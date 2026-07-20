@@ -19,6 +19,7 @@ class BottomToolbar;
 class InputTilesWidget;
 class MultiCorderPanel;
 class PlayListPanel;
+class ScoreboardControlsWidget;
 
 class DashboardPage : public QWidget {
     Q_OBJECT
@@ -27,7 +28,7 @@ public:
     ~DashboardPage() override;
     void setBasicMode(bool on);
     void resetDockLayout();
-    /// OBS-style Docks menu: checkable Scenes / Sources / Audio Mixer + Reset.
+    /// OBS-style Docks menu: checkable Scenes / Sources / Mixer / Scoreboard + Reset.
     void populateDocksMenu(QMenu* menu);
 
 signals:
@@ -68,6 +69,8 @@ private:
     QDockWidget* m_scenesDock = nullptr;
     QDockWidget* m_sourcesDock = nullptr;
     QDockWidget* m_mixerDock = nullptr;
+    QDockWidget* m_scoreboardDock = nullptr;
+    ScoreboardControlsWidget* m_scoreboardControls = nullptr;
     QByteArray m_defaultDockState;
     bool m_dockStateReady = false;
 };

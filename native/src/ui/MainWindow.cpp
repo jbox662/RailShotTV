@@ -6,7 +6,6 @@
 #include "ui/widgets/TopMenuBar.h"
 #include "ui/pages/DashboardPage.h"
 #include "ui/pages/SettingsPage.h"
-#include "ui/pages/ScoreboardPage.h"
 #include "ui/pages/SchedulePage.h"
 #include "ui/pages/ChatPage.h"
 #include "ui/pages/AnalyticsPage.h"
@@ -67,7 +66,6 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     m_stack->addWidget(new DashboardPage(engine, m_stack));
     m_stack->addWidget(new ChatPage(engine->chat(), m_stack));
     m_stack->addWidget(new AnalyticsPage(engine, m_stack));
-    m_stack->addWidget(new ScoreboardPage(engine, m_stack));
     auto* schedulePage = new SchedulePage(m_stack);
     m_stack->addWidget(schedulePage);
     m_stack->addWidget(new SettingsPage(engine, m_stack));
@@ -187,11 +185,10 @@ void MainWindow::navigateTo(const QString& pageId)
     if (pageId == QLatin1String("dashboard")) m_stack->setCurrentIndex(0);
     else if (pageId == QLatin1String("chat")) m_stack->setCurrentIndex(1);
     else if (pageId == QLatin1String("analytics")) m_stack->setCurrentIndex(2);
-    else if (pageId == QLatin1String("scoreboard")) m_stack->setCurrentIndex(3);
-    else if (pageId == QLatin1String("schedule")) m_stack->setCurrentIndex(4);
-    else if (pageId == QLatin1String("settings")) m_stack->setCurrentIndex(5);
+    else if (pageId == QLatin1String("schedule")) m_stack->setCurrentIndex(3);
+    else if (pageId == QLatin1String("settings")) m_stack->setCurrentIndex(4);
     else if (pageId == QLatin1String("sceneeditor")) {
-        m_stack->setCurrentIndex(6);
+        m_stack->setCurrentIndex(5);
         if (auto* p = m_stack->currentWidget())
             p->setFocus(Qt::OtherFocusReason);
     }

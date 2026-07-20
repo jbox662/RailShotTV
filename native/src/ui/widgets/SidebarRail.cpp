@@ -126,12 +126,6 @@ protected:
             p.drawLine(QPointF(ic.left() + 2, ic.bottom()), QPointF(ic.left() + 2, ic.top() + 8));
             p.drawLine(QPointF(ic.left() + 8, ic.bottom()), QPointF(ic.left() + 8, ic.top() + 3));
             p.drawLine(QPointF(ic.left() + 14, ic.bottom()), QPointF(ic.left() + 14, ic.top() + 6));
-        } else if (m_id == QLatin1String("scoreboard")) {
-            // Trophy cup
-            p.drawLine(QPointF(ic.left() + 4, ic.top() + 2), QPointF(ic.right() - 4, ic.top() + 2));
-            p.drawArc(QRectF(ic.left() + 3, ic.top() + 2, 12, 10), 0, -180 * 16);
-            p.drawLine(QPointF(ic.center().x(), ic.top() + 12), QPointF(ic.center().x(), ic.bottom() - 3));
-            p.drawLine(QPointF(ic.left() + 5, ic.bottom() - 2), QPointF(ic.right() - 5, ic.bottom() - 2));
         } else if (m_id == QLatin1String("schedule")) {
             p.drawRoundedRect(QRectF(ic.left() + 1, ic.top() + 3, 16, 14), 2, 2);
             p.drawLine(QPointF(ic.left() + 1, ic.top() + 7), QPointF(ic.right() - 1, ic.top() + 7));
@@ -211,7 +205,6 @@ SidebarRail::SidebarRail(QWidget* parent)
     add(QStringLiteral("dashboard"), QStringLiteral("Dashboard"), QColor(theme::kBrand));
     add(QStringLiteral("chat"), QStringLiteral("Chat"), QColor(theme::kViolet));
     add(QStringLiteral("analytics"), QStringLiteral("Analytics"), QColor(theme::kCyan));
-    add(QStringLiteral("scoreboard"), QStringLiteral("Scoreboard"), QColor(theme::kEmerald));
     add(QStringLiteral("schedule"), QStringLiteral("Schedule"), QColor(QStringLiteral("#FACC15")));
     add(QStringLiteral("settings"), QStringLiteral("Settings"), QColor(QStringLiteral("#94A3B8")));
     navLay->addStretch();

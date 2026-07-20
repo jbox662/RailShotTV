@@ -224,6 +224,8 @@ void SceneEditorPage::applyOverlayTemplate(const OverlayTemplateInfo& tmpl)
     }
     if (!id.isEmpty())
         m_engine->updateSourceTransform(id, t);
+    if (tmpl.sourceType == SourceType::Scoreboard)
+        m_engine->pushScoreboardToProgram();
     flashDrop();
 }
 

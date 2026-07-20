@@ -4,6 +4,7 @@
 #include "ui/widgets/SceneListWidget.h"
 #include "ui/widgets/InputTilesWidget.h"
 #include "ui/widgets/AudioMixerWidget.h"
+#include "ui/widgets/ScoreboardControlsWidget.h"
 #include "ui/widgets/BottomToolbar.h"
 #include "ui/widgets/GoLiveDialog.h"
 #include "ui/widgets/SourcePropertiesDialog.h"
@@ -93,6 +94,7 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
     });
     menu->addAction(QStringLiteral("Basketball Board"), page, [engine] {
         addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Basketball Board"), 0.15, 0.05, 0.7, 0.12);
+        engine->pushScoreboardToProgram();
     });
     menu->addAction(QStringLiteral("Player Lower Third"), page, [engine] {
         if (!addBrowserPreset(engine, QStringLiteral("Player Lower Third"), QStringLiteral("player-intro.html"),
@@ -274,6 +276,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
             menu.addAction(m_sourcesDock->toggleViewAction());
         if (m_mixerDock)
             menu.addAction(m_mixerDock->toggleViewAction());
+        if (m_scoreboardDock)
+            menu.addAction(m_scoreboardDock->toggleViewAction());
         menu.exec(m_dockHost->mapToGlobal(pos));
     });
 
@@ -320,6 +324,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_tiles->setMinimumWidth(220);
     m_mixer = new AudioMixerWidget(engine, nullptr);
     m_mixer->setMinimumWidth(220);
+    m_scoreboardControls = new ScoreboardControlsWidget(engine, nullptr);
+    m_scoreboardControls->setMinimumWidth(200);
 
     m_scenesDock = makeDock(QStringLiteral("Scenes"), QStringLiteral("scenesDock"),
                             scenesCol, QStringLiteral("#4F9EFF"));
@@ -327,6 +333,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
                              m_tiles, QStringLiteral("#FF5A2C"));
     m_mixerDock = makeDock(QStringLiteral("Audio Mixer"), QStringLiteral("mixerDock"),
                            m_mixer, QStringLiteral("#A855F7"));
+    m_scoreboardDock = makeDock(QStringLiteral("Scoreboard"), QStringLiteral("scoreboardDock"),
+                                m_scoreboardControls, QStringLiteral("#22C55E"));
 
     applyDefaultDockLayout();
     m_defaultDockState = m_dockHost->saveState();
@@ -374,6 +382,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         const QString id = m_engine->addSource(r.type, r.name);
         if (!id.isEmpty() && !r.settings.isEmpty())
             m_engine->updateSourceSettings(id, r.settings);
+        if (r.type == SourceType::Scoreboard)
+            m_engine->pushScoreboardToProgram();
         m_engine->setSelectedSourceId(id);
     });
 
@@ -449,26 +459,30 @@ QDockWidget* DashboardPage::makeDock(const QString& title, const QString& object
 
 void DashboardPage::applyDefaultDockLayout()
 {
-    if (!m_dockHost || !m_scenesDock || !m_sourcesDock || !m_mixerDock)
+    if (!m_dockHost || !m_scenesDock || !m_sourcesDock || !m_mixerDock || !m_scoreboardDock)
         return;
 
     m_dockHost->removeDockWidget(m_scenesDock);
     m_dockHost->removeDockWidget(m_sourcesDock);
     m_dockHost->removeDockWidget(m_mixerDock);
+    m_dockHost->removeDockWidget(m_scoreboardDock);
 
     m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_scenesDock);
     m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_sourcesDock);
     m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_mixerDock);
+    m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_scoreboardDock);
     m_dockHost->splitDockWidget(m_scenesDock, m_sourcesDock, Qt::Horizontal);
     m_dockHost->splitDockWidget(m_sourcesDock, m_mixerDock, Qt::Horizontal);
+    m_dockHost->splitDockWidget(m_mixerDock, m_scoreboardDock, Qt::Horizontal);
 
     m_scenesDock->show();
     m_sourcesDock->show();
     m_mixerDock->show();
+    m_scoreboardDock->show();
 
-    // Balanced desk: Scenes | Sources | Mixer (~1 : 2.2 : 1.4)
-    m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock},
-                            {200, 440, 280}, Qt::Horizontal);
+    // Scenes | Sources | Mixer | Scoreboard
+    m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock, m_scoreboardDock},
+                            {180, 360, 240, 220}, Qt::Horizontal);
 }
 
 void DashboardPage::scheduleSaveDockState()
@@ -481,9 +495,10 @@ void DashboardPage::saveDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     auto ui = m_engine->settings()->uiState();
-    ui.insert(QStringLiteral("dashboardDockStateV2"),
+    ui.insert(QStringLiteral("dashboardDockStateV3"),
               QString::fromLatin1(m_dockHost->saveState().toBase64()));
-    ui.remove(QStringLiteral("dashboardDockState")); // drop first-pass layout
+    ui.remove(QStringLiteral("dashboardDockState"));
+    ui.remove(QStringLiteral("dashboardDockStateV2"));
     m_engine->settings()->setUiState(ui);
     m_engine->settings()->sync();
 }
@@ -492,7 +507,7 @@ void DashboardPage::restoreDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     const auto ui = m_engine->settings()->uiState();
-    const QString b64 = ui.value(QStringLiteral("dashboardDockStateV2")).toString();
+    const QString b64 = ui.value(QStringLiteral("dashboardDockStateV3")).toString();
     if (b64.isEmpty()) return;
     const QByteArray state = QByteArray::fromBase64(b64.toLatin1());
     if (!state.isEmpty())
@@ -508,6 +523,7 @@ void DashboardPage::resetDockLayout()
         auto ui = m_engine->settings()->uiState();
         ui.remove(QStringLiteral("dashboardDockState"));
         ui.remove(QStringLiteral("dashboardDockStateV2"));
+        ui.remove(QStringLiteral("dashboardDockStateV3"));
         m_engine->settings()->setUiState(ui);
         m_engine->settings()->sync();
     }
@@ -529,6 +545,7 @@ void DashboardPage::populateDocksMenu(QMenu* menu)
     addToggle(m_scenesDock);
     addToggle(m_sourcesDock);
     addToggle(m_mixerDock);
+    addToggle(m_scoreboardDock);
     menu->addSeparator();
     menu->addAction(QStringLiteral("Reset Desk Layout"), this, &DashboardPage::resetDockLayout);
 }

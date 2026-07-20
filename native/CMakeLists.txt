@@ -299,6 +299,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/InputTilesWidget.cpp
     src/ui/widgets/AudioMixerWidget.h
     src/ui/widgets/AudioMixerWidget.cpp
+    src/ui/widgets/ScoreboardControlsWidget.h
+    src/ui/widgets/ScoreboardControlsWidget.cpp
     src/ui/widgets/TransitionPanel.h
     src/ui/widgets/TransitionPanel.cpp
     src/ui/widgets/TopMenuBar.h
@@ -331,8 +333,6 @@ add_library(railshot_ui STATIC
     src/ui/pages/DashboardPage.cpp
     src/ui/pages/SettingsPage.h
     src/ui/pages/SettingsPage.cpp
-    src/ui/pages/ScoreboardPage.h
-    src/ui/pages/ScoreboardPage.cpp
     src/ui/pages/SchedulePage.h
     src/ui/pages/SchedulePage.cpp
     src/ui/pages/ChatPage.h
