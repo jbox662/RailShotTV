@@ -1,288 +1,303 @@
 #include "ui/widgets/InputTilesWidget.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
-#include <QPushButton>
-#include <QLabel>
+#include "core/Types.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QScrollArea>
 #include <QFrame>
+#include <QLabel>
+#include <QToolButton>
+#include <QPushButton>
 #include <QMenu>
 #include <QMouseEvent>
-#include <QAction>
+#include <QStyle>
 #include <functional>
 
 namespace railshot {
 
 namespace {
-class TileFrame : public QFrame {
+
+QString typeIconGlyph(SourceType t)
+{
+    switch (t) {
+    case SourceType::Browser: return QStringLiteral("🌐");
+    case SourceType::Camera: return QStringLiteral("📷");
+    case SourceType::Display: return QStringLiteral("🖥");
+    case SourceType::Window: return QStringLiteral("🗔");
+    case SourceType::Game: return QStringLiteral("🎮");
+    case SourceType::Image: return QStringLiteral("🖼");
+    case SourceType::Text: return QStringLiteral("T");
+    case SourceType::Media: return QStringLiteral("▶");
+    case SourceType::Ndi: return QStringLiteral("📡");
+    case SourceType::Color: return QStringLiteral("◼");
+    case SourceType::AudioInput: return QStringLiteral("🎤");
+    case SourceType::AudioOutput: return QStringLiteral("🔊");
+    case SourceType::Scoreboard: return QStringLiteral("🏆");
+    case SourceType::LowerThird: return QStringLiteral("▭");
+    case SourceType::Alert: return QStringLiteral("⚠");
+    default: return QStringLiteral("◇");
+    }
+}
+
+/// OBS SourceTreeItem-style row: [icon] name ………… [eye] [lock]
+class SourceBar : public QFrame {
 public:
-    using QFrame::QFrame;
     QString sourceId;
     std::function<void()> onSelect;
     std::function<void()> onConfigure;
 
+    SourceBar(QWidget* parent = nullptr)
+        : QFrame(parent)
+    {
+        setObjectName(QStringLiteral("sourceBar"));
+        setCursor(Qt::PointingHandCursor);
+        setFixedHeight(32);
+        setMouseTracking(true);
+    }
+
 protected:
     void mousePressEvent(QMouseEvent* e) override
     {
-        if (e->button() == Qt::LeftButton && onSelect) onSelect();
+        if (e->button() == Qt::LeftButton && onSelect)
+            onSelect();
         QFrame::mousePressEvent(e);
     }
     void mouseDoubleClickEvent(QMouseEvent* e) override
     {
-        if (onConfigure) onConfigure();
+        if (onConfigure)
+            onConfigure();
         QFrame::mouseDoubleClickEvent(e);
     }
 };
 
-QString chromeBtnStyle(bool hot)
+QToolButton* makeToolBtn(const QString& text, const QString& tip, QWidget* parent)
 {
-    const QString c = hot ? QStringLiteral("#00000090") : QStringLiteral("#4F9EFF");
-    return QStringLiteral(
-               "QPushButton{background:transparent;border:none;color:%1;font-size:12px;font-weight:700;padding:1px;}"
-               "QPushButton:hover{color:%2;}")
-        .arg(c, hot ? QStringLiteral("#000") : QStringLiteral("#B8D4FF"));
+    auto* b = new QToolButton(parent);
+    b->setText(text);
+    b->setToolTip(tip);
+    b->setAutoRaise(true);
+    b->setFixedSize(28, 28);
+    b->setCursor(Qt::PointingHandCursor);
+    b->setStyleSheet(QStringLiteral(
+        "QToolButton{background:transparent;color:#C8CAD0;border:none;font-size:14px;font-weight:700;}"
+        "QToolButton:hover{color:#FFFFFF;background:#2A2D35;border-radius:3px;}"
+        "QToolButton:disabled{color:#505860;}"));
+    return b;
 }
+
 } // namespace
 
 InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("inputTiles"));
-    setMinimumHeight(118);
-    // Scope to #inputTiles — bare border/background rules cascade onto child labels
-    // and paint the uneven purple horizontal lines in the empty state.
+    setMinimumWidth(180);
     setStyleSheet(QStringLiteral(
-        "QWidget#inputTiles {"
-        "  background:#080A0D;"
-        "  border:none;"
-        "}"));
-    m_row = new QHBoxLayout(this);
-    m_row->setContentsMargins(0, 0, 0, 0);
-    m_row->setSpacing(0);
+        "QWidget#inputTiles{background:#1A1E24;border:none;}"
+        "QScrollArea{background:transparent;border:none;}"
+        "QWidget#sourcesListHost{background:#1A1E24;border:none;}"
+        "QFrame#sourceBar{"
+        "  background:#1A1E24; border:1px solid transparent; border-radius:2px;"
+        "}"
+        "QFrame#sourceBar[selected=\"true\"]{"
+        "  background:#243044; border:1px solid #4F9EFF;"
+        "}"
+        "QFrame#sourceBar:hover{background:#222830;}"
+        "QLabel{background:transparent;border:none;}"));
+
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+
+    m_scroll = new QScrollArea(this);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+
+    m_listHost = new QWidget(m_scroll);
+    m_listHost->setObjectName(QStringLiteral("sourcesListHost"));
+    m_listLay = new QVBoxLayout(m_listHost);
+    m_listLay->setContentsMargins(4, 4, 4, 4);
+    m_listLay->setSpacing(2);
+    m_listLay->addStretch(1);
+    m_scroll->setWidget(m_listHost);
+    root->addWidget(m_scroll, 1);
+
+    // OBS sourcesToolbar: +  remove  |  properties  |  up  down
+    auto* tools = new QWidget(this);
+    tools->setFixedHeight(36);
+    tools->setStyleSheet(QStringLiteral(
+        "background:#14181E; border-top:1px solid #2A2D35;"));
+    auto* toolsLay = new QHBoxLayout(tools);
+    toolsLay->setContentsMargins(6, 4, 6, 4);
+    toolsLay->setSpacing(2);
+
+    auto* addBtn = makeToolBtn(QStringLiteral("+"), QStringLiteral("Add Source"), tools);
+    auto* remBtn = makeToolBtn(QStringLiteral("🗑"), QStringLiteral("Remove Source"), tools);
+    auto* propsBtn = makeToolBtn(QStringLiteral("⚙"), QStringLiteral("Properties"), tools);
+    auto* upBtn = makeToolBtn(QStringLiteral("▲"), QStringLiteral("Move Up"), tools);
+    auto* downBtn = makeToolBtn(QStringLiteral("▼"), QStringLiteral("Move Down"), tools);
+
+    connect(addBtn, &QToolButton::clicked, this, &InputTilesWidget::addSourceRequested);
+    connect(remBtn, &QToolButton::clicked, this, &InputTilesWidget::onRemove);
+    connect(propsBtn, &QToolButton::clicked, this, &InputTilesWidget::onProperties);
+    connect(upBtn, &QToolButton::clicked, this, &InputTilesWidget::onMoveUp);
+    connect(downBtn, &QToolButton::clicked, this, &InputTilesWidget::onMoveDown);
+
+    toolsLay->addWidget(addBtn);
+    toolsLay->addWidget(remBtn);
+    toolsLay->addSpacing(8);
+    toolsLay->addWidget(propsBtn);
+    toolsLay->addSpacing(8);
+    toolsLay->addWidget(upBtn);
+    toolsLay->addWidget(downBtn);
+    toolsLay->addStretch(1);
+    root->addWidget(tools);
+
     connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, &InputTilesWidget::refresh);
     connect(m_engine, &EngineController::selectedSourceChanged, this, [this](const QString&) { refresh(); });
     refresh();
 }
 
+void InputTilesWidget::onRemove()
+{
+    const QString id = m_engine->selectedSourceId();
+    if (!id.isEmpty())
+        m_engine->removeSource(id);
+}
+
+void InputTilesWidget::onProperties()
+{
+    const QString id = m_engine->selectedSourceId();
+    if (!id.isEmpty())
+        emit configureSourceRequested(id);
+}
+
+void InputTilesWidget::onMoveUp()
+{
+    const QString id = m_engine->selectedSourceId();
+    if (!id.isEmpty())
+        m_engine->moveSourceZOrder(id, 1);
+}
+
+void InputTilesWidget::onMoveDown()
+{
+    const QString id = m_engine->selectedSourceId();
+    if (!id.isEmpty())
+        m_engine->moveSourceZOrder(id, -1);
+}
+
 void InputTilesWidget::refresh()
 {
-    while (QLayoutItem* child = m_row->takeAt(0)) {
-        if (child->widget()) child->widget()->deleteLater();
+    while (QLayoutItem* child = m_listLay->takeAt(0)) {
+        if (child->widget())
+            child->widget()->deleteLater();
         delete child;
     }
+
     const auto p = m_engine->projectSnapshot();
-    // Prefer Preview scene (dock follows what you're editing), then active.
-    const QString sceneId = !p.previewSceneId.isEmpty() ? p.previewSceneId
-                            : !p.activeSceneId.isEmpty()  ? p.activeSceneId
-                                                          : QString();
+    const QString sceneId = p.editSceneId();
     const auto* scene = p.findScene(sceneId);
+    const QString selected = m_engine->selectedSourceId();
+
     if (!scene || scene->sources.isEmpty()) {
-        auto* empty = new QWidget(this);
-        empty->setObjectName(QStringLiteral("sourcesEmpty"));
+        auto* empty = new QLabel(QStringLiteral("No sources — click + to add"), m_listHost);
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setWordWrap(true);
         empty->setStyleSheet(QStringLiteral(
-            "QWidget#sourcesEmpty{background:transparent;border:none;}"
-            "QWidget#sourcesEmpty QLabel{background:transparent;border:none;}"));
-        auto* emptyLay = new QVBoxLayout(empty);
-        emptyLay->setContentsMargins(20, 16, 20, 16);
-        emptyLay->setSpacing(6);
-        auto* icon = new QLabel(QStringLiteral("◇"), empty);
-        icon->setAlignment(Qt::AlignCenter);
-        icon->setStyleSheet(QStringLiteral(
-            "color:#FF5A2C88; font-size:26px; background:transparent; border:none;"));
-        auto* hint = new QLabel(QStringLiteral("No inputs yet"), empty);
-        hint->setAlignment(Qt::AlignCenter);
-        hint->setStyleSheet(QStringLiteral(
-            "color:#E0E2E8; font-family:'DM Sans'; font-size:13px; font-weight:700;"
-            "background:transparent; border:none;"));
-        auto* sub = new QLabel(QStringLiteral("Click Add Input in the toolbar to begin"), empty);
-        sub->setAlignment(Qt::AlignCenter);
-        sub->setWordWrap(true);
-        sub->setStyleSheet(QStringLiteral(
-            "color:#8892A4; font-size:11px; background:transparent; border:none;"));
-        emptyLay->addStretch(1);
-        emptyLay->addWidget(icon);
-        emptyLay->addWidget(hint);
-        emptyLay->addWidget(sub);
-        emptyLay->addStretch(1);
-        m_row->addWidget(empty, 1);
+            "color:#8892A4; font-size:11px; padding:24px 12px;"));
+        m_listLay->addWidget(empty);
+        m_listLay->addStretch(1);
         return;
     }
-    const QString selected = m_engine->selectedSourceId();
-    const bool isInProgram = !sceneId.isEmpty() && sceneId == p.programSceneId;
-    const bool isInPreview = !sceneId.isEmpty() && sceneId == p.previewSceneId;
-    int idx = 0;
-    for (const auto& src : scene->sources) {
-        auto* tile = new TileFrame(this);
-        tile->sourceId = src.id;
-        tile->setMinimumWidth(160);
-        tile->setMaximumWidth(200);
-        tile->setCursor(Qt::PointingHandCursor);
+
+    // OBS draws bottom→top for z-order; list shows top of stack at top of list
+    // (last in vector is drawn last / on top). Show reverse so top layer is first.
+    for (int i = scene->sources.size() - 1; i >= 0; --i) {
+        const auto& src = scene->sources[i];
+        auto* bar = new SourceBar(m_listHost);
+        bar->sourceId = src.id;
         const bool isSel = src.id == selected;
+        bar->setProperty("selected", isSel);
+        bar->style()->unpolish(bar);
+        bar->style()->polish(bar);
 
-        QString bodyBg = QStringLiteral("#0D0F12");
-        QString outline = QStringLiteral("border:1px solid #3A3D45; border-right:2px solid #2A2D35;");
-        if (isInProgram) {
-            bodyBg = QStringLiteral("#220C0C");
-            outline = QStringLiteral("border:2px solid #FF5A2C;");
-        } else if (isInPreview) {
-            bodyBg = QStringLiteral("#0C1A0E");
-            outline = QStringLiteral("border:2px solid #22C55E;");
-        } else if (isSel) {
-            bodyBg = QStringLiteral("#0C1830");
-            outline = QStringLiteral("border:2px solid #4F9EFF;");
-        }
-        tile->setStyleSheet(QStringLiteral("QFrame{background:%1;%2}").arg(bodyBg, outline));
-
-        tile->onSelect = [this, id = src.id] { m_engine->setSelectedSourceId(id); };
-        tile->onConfigure = [this, id = src.id] {
+        bar->onSelect = [this, id = src.id] { m_engine->setSelectedSourceId(id); };
+        bar->onConfigure = [this, id = src.id] {
             m_engine->setSelectedSourceId(id);
             emit configureSourceRequested(id);
         };
 
-        auto* col = new QVBoxLayout(tile);
-        col->setContentsMargins(0, 0, 0, 0);
-        col->setSpacing(0);
+        auto* lay = new QHBoxLayout(bar);
+        lay->setContentsMargins(8, 0, 6, 0);
+        lay->setSpacing(8);
 
-        QString headerBg = QStringLiteral(
-            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2E36,stop:1 #181B22);");
-        QString headerColor = QStringLiteral("#E0E2E8");
-        const bool hot = isInProgram || isInPreview;
-        if (isInProgram) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FF8C42,stop:1 #FF5A2C);");
-            headerColor = QStringLiteral("#000000");
-        } else if (isInPreview) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);");
-            headerColor = QStringLiteral("#04140A");
-        } else if (isSel) {
-            headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A3A5A,stop:1 #142838);");
-            headerColor = QStringLiteral("#B8D4FF");
-        }
+        auto* icon = new QLabel(typeIconGlyph(src.type), bar);
+        icon->setFixedWidth(22);
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setStyleSheet(QStringLiteral("font-size:13px; color:%1;")
+                                .arg(src.colorHex.isEmpty() ? QStringLiteral("#C8CAD0") : src.colorHex));
 
-        auto* header = new QWidget(tile);
-        header->setFixedHeight(24);
-        header->setStyleSheet(headerBg + QStringLiteral("border-bottom:1px solid #4A4D55;"));
-        auto* headerLay = new QHBoxLayout(header);
-        headerLay->setContentsMargins(6, 0, 4, 0);
-        headerLay->setSpacing(4);
-
-        auto* name = new QLabel(QStringLiteral("%1  %2").arg(++idx).arg(src.name), header);
+        auto* name = new QLabel(src.name, bar);
         name->setStyleSheet(QStringLiteral(
-            "color:%1;font-weight:800;font-size:10px;background:transparent;").arg(headerColor));
-        headerLay->addWidget(name, 1);
+            "color:#E8ECF4; font-family:'DM Sans'; font-size:12px; font-weight:600;"));
+        if (!src.visible)
+            name->setStyleSheet(QStringLiteral(
+                "color:#606878; font-family:'DM Sans'; font-size:12px; font-weight:600;"));
 
-        auto* gear = new QPushButton(QStringLiteral("⚙"), header);
-        gear->setFixedSize(18, 18);
-        gear->setCursor(Qt::PointingHandCursor);
-        gear->setToolTip(QStringLiteral("Input Settings"));
-        gear->setStyleSheet(chromeBtnStyle(hot));
-        connect(gear, &QPushButton::clicked, this, [this, id = src.id] {
-            m_engine->setSelectedSourceId(id);
-            emit configureSourceRequested(id);
-        });
-
-        auto* vis = new QPushButton(src.visible ? QStringLiteral("👁") : QStringLiteral("–"), header);
-        vis->setFixedSize(18, 18);
+        auto* vis = new QToolButton(bar);
+        vis->setText(src.visible ? QStringLiteral("👁") : QStringLiteral("◌"));
+        vis->setToolTip(src.visible ? QStringLiteral("Hide") : QStringLiteral("Show"));
+        vis->setAutoRaise(true);
+        vis->setFixedSize(24, 24);
         vis->setCursor(Qt::PointingHandCursor);
-        vis->setToolTip(QStringLiteral("Toggle visibility"));
-        vis->setStyleSheet(chromeBtnStyle(hot));
-        connect(vis, &QPushButton::clicked, this, [this, id = src.id, visFlag = src.visible] {
-            m_engine->setSourceVisible(id, !visFlag);
+        vis->setStyleSheet(QStringLiteral(
+            "QToolButton{background:transparent;border:none;font-size:12px;}"
+            "QToolButton:hover{background:#2A2D35;border-radius:3px;}"));
+        connect(vis, &QToolButton::clicked, this, [this, id = src.id, v = src.visible] {
+            m_engine->setSourceVisible(id, !v);
         });
 
-        auto* del = new QPushButton(QStringLiteral("✕"), header);
-        del->setFixedSize(18, 18);
-        del->setCursor(Qt::PointingHandCursor);
-        del->setToolTip(QStringLiteral("Remove"));
-        del->setStyleSheet(chromeBtnStyle(hot));
-        connect(del, &QPushButton::clicked, this, [this, id = src.id] { m_engine->removeSource(id); });
-
-        headerLay->addWidget(gear);
-        headerLay->addWidget(vis);
-        headerLay->addWidget(del);
-        col->addWidget(header);
-
-        auto* preview = new QLabel(sourceTypeToString(src.type).toUpper(), tile);
-        preview->setAlignment(Qt::AlignCenter);
-        preview->setMinimumHeight(60);
-        preview->setMaximumHeight(80);
-        const QString typeColor = src.colorHex.isEmpty() ? QStringLiteral("#4F9EFF") : src.colorHex;
-        preview->setStyleSheet(QStringLiteral(
-            "background:#000000; color:%1; font-weight:900; letter-spacing:1px; font-size:11px;"
-            "border-top:1px solid #1A1D24; border-bottom:1px solid #1A1D24;"
-            "opacity:%2;")
-                                   .arg(typeColor, src.visible ? QStringLiteral("1") : QStringLiteral("0.35")));
-        col->addWidget(preview, 1);
-
-        auto* actions = new QHBoxLayout();
-        actions->setContentsMargins(4, 4, 4, 4);
-        actions->setSpacing(4);
-
-        auto* up = new QPushButton(QStringLiteral("◀"), tile);
-        up->setObjectName(QStringLiteral("toolbarChromeBtn"));
-        up->setFixedSize(22, 20);
-        up->setToolTip(QStringLiteral("Move up in z-order"));
-        connect(up, &QPushButton::clicked, this, [this, id = src.id] {
-            m_engine->moveSourceZOrder(id, 1);
-        });
-        auto* down = new QPushButton(QStringLiteral("▶"), tile);
-        down->setObjectName(QStringLiteral("toolbarChromeBtn"));
-        down->setFixedSize(22, 20);
-        down->setToolTip(QStringLiteral("Move down in z-order"));
-        connect(down, &QPushButton::clicked, this, [this, id = src.id] {
-            m_engine->moveSourceZOrder(id, -1);
+        auto* lock = new QToolButton(bar);
+        lock->setText(src.locked ? QStringLiteral("🔒") : QStringLiteral("🔓"));
+        lock->setToolTip(src.locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"));
+        lock->setAutoRaise(true);
+        lock->setFixedSize(24, 24);
+        lock->setCursor(Qt::PointingHandCursor);
+        lock->setStyleSheet(QStringLiteral(
+            "QToolButton{background:transparent;border:none;font-size:12px;}"
+            "QToolButton:hover{background:#2A2D35;border-radius:3px;}"));
+        connect(lock, &QToolButton::clicked, this, [this, id = src.id, l = src.locked] {
+            m_engine->setSourceLocked(id, !l);
         });
 
-        auto* miniGo = new QPushButton(QStringLiteral("GO"), tile);
-        miniGo->setFixedHeight(20);
-        miniGo->setObjectName(QStringLiteral("tileMiniGo"));
-        miniGo->setStyleSheet(QStringLiteral(
-            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
-            "border:1px solid #86EFAC;color:#04140A;font-weight:900;font-size:9px;border-radius:3px;padding:0 8px;}"
-            "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #86EFAC,stop:1 #22C55E);}"));
-        miniGo->setToolTip(QStringLiteral("Take transition"));
-        connect(miniGo, &QPushButton::clicked, this, [this] { m_engine->go(); });
+        lay->addWidget(icon);
+        lay->addWidget(name, 1);
+        lay->addWidget(vis);
+        lay->addWidget(lock);
 
-        auto* cut = new QPushButton(QStringLiteral("Cut"), tile);
-        cut->setFixedHeight(20);
-        cut->setObjectName(QStringLiteral("tileMiniCut"));
-        cut->setStyleSheet(QStringLiteral(
-            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
-            "border:1px solid #4F9EFF;color:#B8D4FF;font-weight:800;font-size:9px;border-radius:3px;padding:0 8px;}"
-            "QPushButton:hover{border-color:#8AB4FF;color:#fff;}"));
-        connect(cut, &QPushButton::clicked, this, [this] {
-            m_engine->go(TransitionType::Cut);
-        });
-
-        actions->addWidget(up);
-        actions->addWidget(down);
-        actions->addStretch();
-        actions->addWidget(miniGo);
-        actions->addWidget(cut);
-        col->addLayout(actions);
-
-        tile->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(tile, &QWidget::customContextMenuRequested, this,
-                [this, tile, id = src.id, visible = src.visible](const QPoint& pos) {
+        bar->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(bar, &QWidget::customContextMenuRequested, this,
+                [this, bar, id = src.id, visible = src.visible, locked = src.locked](const QPoint& pos) {
             QMenu menu;
-            menu.addAction(QStringLiteral("Input Settings"), this, [this, id] {
+            menu.addAction(QStringLiteral("Properties"), this, [this, id] {
                 m_engine->setSelectedSourceId(id);
                 emit configureSourceRequested(id);
             });
-            menu.addAction(visible ? QStringLiteral("Hide") : QStringLiteral("Show"), this, [this, id, visible] {
-                m_engine->setSourceVisible(id, !visible);
-            });
+            menu.addAction(visible ? QStringLiteral("Hide") : QStringLiteral("Show"), this,
+                           [this, id, visible] { m_engine->setSourceVisible(id, !visible); });
+            menu.addAction(locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"), this,
+                           [this, id, locked] { m_engine->setSourceLocked(id, !locked); });
             menu.addSeparator();
             auto* rem = menu.addAction(QStringLiteral("Remove"));
             connect(rem, &QAction::triggered, this, [this, id] { m_engine->removeSource(id); });
-            menu.exec(tile->mapToGlobal(pos));
+            menu.exec(bar->mapToGlobal(pos));
         });
 
-        m_row->addWidget(tile, 1);
+        m_listLay->addWidget(bar);
     }
-    m_row->addStretch();
+    m_listLay->addStretch(1);
 }
 
 } // namespace railshot

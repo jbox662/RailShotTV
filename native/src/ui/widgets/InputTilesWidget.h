@@ -1,10 +1,14 @@
 #pragma once
 #include <QWidget>
-#include <QHBoxLayout>
+
+class QVBoxLayout;
+class QScrollArea;
+class QToolButton;
 
 namespace railshot {
 class EngineController;
 
+/// OBS Sources dock: vertical source bars + bottom toolbar (+ − ⚙ ↑ ↓).
 class InputTilesWidget : public QWidget {
     Q_OBJECT
 public:
@@ -12,11 +16,19 @@ public:
     void refresh();
 
 signals:
+    void addSourceRequested();
     void configureSourceRequested(const QString& sourceId);
 
 private:
+    void onRemove();
+    void onProperties();
+    void onMoveUp();
+    void onMoveDown();
+
     EngineController* m_engine = nullptr;
-    QHBoxLayout* m_row = nullptr;
+    QScrollArea* m_scroll = nullptr;
+    QWidget* m_listHost = nullptr;
+    QVBoxLayout* m_listLay = nullptr;
 };
 
 } // namespace railshot

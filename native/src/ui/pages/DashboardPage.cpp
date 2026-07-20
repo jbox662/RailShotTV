@@ -374,6 +374,18 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         dlg.exec();
     });
 
+    connect(m_tiles, &InputTilesWidget::addSourceRequested, this, [this] {
+        AddSourceDialog dlg(m_engine, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        const auto r = dlg.result();
+        if (!r.accepted) return;
+        const QString id = m_engine->addSource(r.type, r.name, r.settings);
+        if (r.type == SourceType::Scoreboard)
+            m_engine->pushScoreboardToProgram();
+        // OBS: create adds a Sources list bar; Properties opens from gear / double-click.
+        m_engine->setSelectedSourceId(id);
+    });
+
     connect(m_toolbar, &BottomToolbar::addInputRequested, this, [this] {
         AddSourceDialog dlg(m_engine, this);
         if (dlg.exec() != QDialog::Accepted) return;
@@ -383,10 +395,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         if (r.type == SourceType::Scoreboard)
             m_engine->pushScoreboardToProgram();
         m_engine->setSelectedSourceId(id);
-        if (!id.isEmpty()) {
-            SourcePropertiesDialog props(m_engine, id, this);
-            props.exec();
-        }
     });
 
     connect(m_toolbar, &BottomToolbar::goLiveRequested, this, [this] {
