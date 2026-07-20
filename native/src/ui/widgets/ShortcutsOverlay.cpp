@@ -1,4 +1,5 @@
 #include "ui/widgets/ShortcutsOverlay.h"
+#include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -92,6 +93,7 @@ ShortcutsOverlay::ShortcutsOverlay(QWidget* parent)
     lay->addStretch();
     scroll->setWidget(body);
     root->addWidget(scroll, 1);
+    motion::playModalEnter(this);
 }
 
 } // namespace railshot

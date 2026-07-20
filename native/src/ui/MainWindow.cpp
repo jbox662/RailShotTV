@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 #include "ui/Theme.h"
+#include "ui/Motion.h"
 #include "ui/HotkeyDispatcher.h"
 #include "ui/widgets/SidebarRail.h"
 #include "ui/widgets/TopMenuBar.h"
@@ -157,7 +158,17 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::updateLiveChrome(bool streaming)
 {
-    if (m_liveTopBorder) m_liveTopBorder->setVisible(streaming);
+    if (m_liveTopBorder) {
+        if (streaming) {
+            if (!m_liveTopBorder->isVisible())
+                motion::animateLiveBorderIn(m_liveTopBorder);
+            else
+                m_liveTopBorder->setVisible(true);
+        } else {
+            m_liveTopBorder->setVisible(false);
+            m_liveTopBorder->setMaximumWidth(QWIDGETSIZE_MAX);
+        }
+    }
     if (m_sidebar) m_sidebar->setLive(streaming);
 }
 

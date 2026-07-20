@@ -280,6 +280,8 @@ add_library(railshot_ui STATIC
     src/ui/MainWindow.cpp
     src/ui/Theme.h
     src/ui/Theme.cpp
+    src/ui/Motion.h
+    src/ui/Motion.cpp
     src/ui/widgets/PreviewWidget.h
     src/ui/widgets/PreviewWidget.cpp
     src/ui/widgets/SceneListWidget.h

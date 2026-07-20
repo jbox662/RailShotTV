@@ -2,6 +2,7 @@
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "ui/Theme.h"
+#include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QSlider>
 #include <QLabel>
@@ -98,6 +99,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot&) { refreshScenePad(); });
     refreshScenePad();
     updateGoArmed();
+    motion::installPressScale(m_go);
 }
 
 void TransitionPanel::restyleTypes()

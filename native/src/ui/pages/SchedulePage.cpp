@@ -1,5 +1,6 @@
 #include "ui/pages/SchedulePage.h"
 #include "ui/Theme.h"
+#include "ui/Motion.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -193,6 +194,7 @@ SchedulePage::SchedulePage(QWidget* parent)
                 auto* pulse = new QLabel(QStringLiteral("● LIVE"), card);
                 pulse->setObjectName(QStringLiteral("livePulse"));
                 col->addWidget(pulse);
+                motion::pulseOpacity(pulse, 1800);
             }
             cl->addLayout(col, 1);
             listLay->addWidget(card);

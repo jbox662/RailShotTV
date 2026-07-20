@@ -1,6 +1,7 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "core/EngineController.h"
 #include "capture/MediaFoundationCamera.h"
+#include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -232,6 +233,7 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
 
     m_typeList->setCurrentRow(0);
     rebuildFields();
+    motion::playModalEnter(this);
 }
 
 void AddSourceDialog::selectType(int index)

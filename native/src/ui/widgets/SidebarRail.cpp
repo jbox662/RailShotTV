@@ -1,5 +1,6 @@
 #include "ui/widgets/SidebarRail.h"
 #include "ui/Theme.h"
+#include "ui/Motion.h"
 #include <QLabel>
 #include <QPainter>
 #include <QPaintEvent>
@@ -156,24 +157,24 @@ void SidebarRail::setLive(bool live)
 {
     m_live = live;
     if (m_liveBlock) m_liveBlock->setVisible(live);
+    auto* liveDot = m_liveBlock ? m_liveBlock->findChild<QLabel*>(QStringLiteral("sidebarLiveDot")) : nullptr;
     if (live) {
-        if (!findChild<QTimer*>(QStringLiteral("livePulseTimer"))) {
-            auto* t = new QTimer(this);
-            t->setObjectName(QStringLiteral("livePulseTimer"));
-            connect(t, &QTimer::timeout, this, [this] {
-                if (auto* dot = m_liveBlock ? m_liveBlock->findChild<QLabel*>() : nullptr) {
-                    static bool bright = false;
-                    bright = !bright;
-                    dot->setStyleSheet(bright
-                        ? QStringLiteral("background:#FF8C42;border-radius:5px;border:2px solid #FF5A2C;")
-                        : QStringLiteral("background:#FF5A2C;border-radius:5px;border:2px solid #FF3A0C;"));
-                }
-            });
-            t->start(700);
+        if (liveDot) {
+            liveDot->setStyleSheet(QStringLiteral(
+                "background:#FF5A2C;border-radius:5px;border:2px solid #FF3A0C;"));
+            motion::pulseOpacity(liveDot, 1800);
         }
-    } else if (auto* t = findChild<QTimer*>(QStringLiteral("livePulseTimer"))) {
-        t->stop();
-        t->deleteLater();
+        if (m_liveBlock)
+            motion::startLiveRipple(m_liveBlock);
+    } else {
+        if (liveDot)
+            motion::stopPulse(liveDot);
+        if (m_liveBlock)
+            motion::stopLiveRipple(m_liveBlock);
+        if (auto* t = findChild<QTimer*>(QStringLiteral("livePulseTimer"))) {
+            t->stop();
+            t->deleteLater();
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 #include "ui/widgets/BottomToolbar.h"
 #include "core/EngineController.h"
+#include "ui/Motion.h"
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QStyle>
@@ -143,6 +144,9 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
                                   .arg(int(s.gpuPercent))
                                   .arg(int(s.cpuPercent)));
     });
+
+    motion::installPressScale(m_streamBtn);
+    motion::installPressScale(m_recordBtn);
 }
 
 void BottomToolbar::setMixerOpen(bool open)

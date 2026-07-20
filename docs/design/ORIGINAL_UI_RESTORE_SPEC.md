@@ -832,7 +832,7 @@ Use this as an implementation order for native Qt:
 7. **Modals** — Go Live 4-step; Input Select 780px; Input Settings 460 drawer; shortcuts overlay.
 8. **Secondary pages** — Chat / Scoreboard / Schedule / Analytics / Settings layouts + accents.
 9. **Scene Editor / overlays** — Library categories + 17 templates; transitions rail.
-10. **Motion** — Button press, live pulse, mixer slide, modal in — match timings in §1.6.
+10. **Motion** — Button press, live pulse, mixer slide, modal in — match timings in §1.6. **Done (Phase 5).**
 
 ### Acceptance criteria (visual)
 
@@ -843,6 +843,7 @@ Use this as an implementation order for native Qt:
 - [x] Panel headers use chromatic left-border + gradient tint classes
 - [x] No flat single-color toolbars — use 180° gradients + inset highlight
 - [x] Empty states use muted copy + icon, never blank white
+- [x] Motion tokens (§1.6): live ripple/pulse, live-border-in, mixer slide easing, modal enter, primary CTA press
 
 ---
 

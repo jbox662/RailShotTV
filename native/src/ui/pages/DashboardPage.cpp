@@ -11,6 +11,7 @@
 #include "ui/widgets/MultiCorderPanel.h"
 #include "ui/widgets/PlayListPanel.h"
 #include "ui/Theme.h"
+#include "ui/Motion.h"
 #include "core/EngineController.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
@@ -27,7 +28,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QPropertyAnimation>
-#include <QEasingCurve>
 #include <QResizeEvent>
 #include <QEvent>
 
@@ -284,7 +284,7 @@ void DashboardPage::setMixerOpen(bool open)
     anim->setDuration(250);
     anim->setStartValue(m_mixer->width());
     anim->setEndValue(target);
-    anim->setEasingCurve(QEasingCurve::OutCubic);
+    anim->setEasingCurve(motion::themeEasing());
     m_mixer->setMinimumWidth(0);
     if (open)
         m_mixer->setMaximumWidth(320);

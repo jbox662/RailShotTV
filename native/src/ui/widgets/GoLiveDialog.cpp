@@ -1,6 +1,7 @@
 #include "ui/widgets/GoLiveDialog.h"
 #include "core/EngineController.h"
 #include "core/SecretStore.h"
+#include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -169,6 +170,7 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     liveLab->setStyleSheet(QStringLiteral(
         "font-family:'Bebas Neue'; font-size:36px; color:#FF5A2C; letter-spacing:2px;"));
     auto* pulse = new QLabel(QStringLiteral("● ON AIR"), live);
+    pulse->setObjectName(QStringLiteral("goLiveOnAir"));
     pulse->setAlignment(Qt::AlignCenter);
     pulse->setStyleSheet(QStringLiteral("color:#EF4444; font-weight:800; font-size:14px; padding-top:12px;"));
     auto* done = new QPushButton(QStringLiteral("Close"), live);
@@ -181,11 +183,18 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     m_stack->addWidget(live);
 
     showStep(0);
+    motion::playModalEnter(this);
 }
 
 void GoLiveDialog::showStep(int step)
 {
     m_stack->setCurrentIndex(step);
+    if (auto* onAir = findChild<QLabel*>(QStringLiteral("goLiveOnAir"))) {
+        if (step == 3)
+            motion::pulseOpacity(onAir, 1800);
+        else
+            motion::stopPulse(onAir);
+    }
 }
 
 void GoLiveDialog::runChecks()
