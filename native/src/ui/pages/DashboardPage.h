@@ -8,6 +8,7 @@ class QEvent;
 class QHideEvent;
 class QMainWindow;
 class QDockWidget;
+class QMenu;
 
 namespace railshot {
 class EngineController;
@@ -26,6 +27,8 @@ public:
     ~DashboardPage() override;
     void setBasicMode(bool on);
     void resetDockLayout();
+    /// OBS-style Docks menu: checkable Scenes / Sources / Audio Mixer + Reset.
+    void populateDocksMenu(QMenu* menu);
 
 signals:
     void openSceneEditorRequested();

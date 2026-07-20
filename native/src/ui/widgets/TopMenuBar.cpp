@@ -97,6 +97,13 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     connect(addChrome(QStringLiteral("Save As")), &QPushButton::clicked, this, &TopMenuBar::saveProjectAs);
     connect(addChrome(QStringLiteral("Last")), &QPushButton::clicked, this, &TopMenuBar::openLastProject);
 
+    auto* docksBtn = addChrome(QStringLiteral("Docks"));
+    m_docksMenu = new QMenu(docksBtn);
+    docksBtn->setMenu(m_docksMenu);
+    connect(m_docksMenu, &QMenu::aboutToShow, this, [this] {
+        emit docksMenuAboutToShow(m_docksMenu);
+    });
+
     row->addStretch();
 
     m_fullscreen = addChrome(QStringLiteral("Fullscreen"));

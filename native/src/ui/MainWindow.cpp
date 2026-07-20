@@ -96,7 +96,10 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
             navigateTo(QStringLiteral("sceneeditor"));
         });
         connect(m_top, &TopMenuBar::basicModeChanged, dash, &DashboardPage::setBasicMode);
+        connect(m_top, &TopMenuBar::docksMenuAboutToShow, dash, &DashboardPage::populateDocksMenu);
         dash->setBasicMode(m_top->basicMode());
+        if (m_top->docksMenu())
+            dash->populateDocksMenu(m_top->docksMenu());
     }
     connect(sceneEditor, &SceneEditorPage::backToDashboard, this, [this] {
         navigateTo(QStringLiteral("dashboard"));

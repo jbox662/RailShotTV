@@ -2,6 +2,7 @@
 #include <QWidget>
 class QLabel;
 class QPushButton;
+class QMenu;
 
 namespace railshot {
 class EngineController;
@@ -12,6 +13,7 @@ public:
     explicit TopMenuBar(EngineController* engine, QWidget* parent = nullptr);
     void setBasicMode(bool on);
     bool basicMode() const { return m_basicMode; }
+    QMenu* docksMenu() const { return m_docksMenu; }
 
 signals:
     void openProject();
@@ -22,6 +24,8 @@ signals:
     void openSettings();
     void toggleShortcuts();
     void basicModeChanged(bool on);
+    /// Fired just before the Docks menu opens so Dashboard can refill toggles.
+    void docksMenuAboutToShow(QMenu* menu);
 
 private:
     EngineController* m_engine = nullptr;
@@ -30,6 +34,7 @@ private:
     QPushButton* m_pauseInputs = nullptr;
     QPushButton* m_basic = nullptr;
     QPushButton* m_help = nullptr;
+    QMenu* m_docksMenu = nullptr;
     bool m_fullscreenOn = false;
     bool m_inputsPaused = false;
     bool m_basicMode = false;

@@ -494,6 +494,25 @@ void DashboardPage::resetDockLayout()
     m_dockStateReady = true;
 }
 
+void DashboardPage::populateDocksMenu(QMenu* menu)
+{
+    if (!menu) return;
+    menu->clear();
+    auto addToggle = [menu](QDockWidget* dock) {
+        if (!dock) return;
+        QAction* act = dock->toggleViewAction();
+        act->setText(dock->windowTitle());
+        act->setCheckable(true);
+        act->setChecked(dock->isVisible());
+        menu->addAction(act);
+    };
+    addToggle(m_scenesDock);
+    addToggle(m_sourcesDock);
+    addToggle(m_mixerDock);
+    menu->addSeparator();
+    menu->addAction(QStringLiteral("Reset Desk Layout"), this, &DashboardPage::resetDockLayout);
+}
+
 void DashboardPage::hideEvent(QHideEvent* event)
 {
     saveDockState();
