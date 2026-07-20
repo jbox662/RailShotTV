@@ -35,8 +35,11 @@ PreviewSurface::~PreviewSurface()
 
 void PreviewSurface::setDevice(D3D11Device* device)
 {
+    if (m_device == device)
+        return;
     m_device = device;
     releaseSwapChain();
+    m_hasFrame = false;
 }
 
 void PreviewSurface::setLabel(const QString& label, const QColor& color)
@@ -57,24 +60,39 @@ void PreviewSurface::releaseSwapChain()
 #ifdef _WIN32
     if (m_rtv) { m_rtv->Release(); m_rtv = nullptr; }
     if (m_swap) { m_swap->Release(); m_swap = nullptr; }
+    m_swapW = 0;
+    m_swapH = 0;
 #endif
 }
 
-bool PreviewSurface::ensureSwapChain()
+bool PreviewSurface::ensureSwapChain(unsigned width, unsigned height)
 {
 #ifdef _WIN32
-    if (m_swap || !m_device || !m_device->device()) return m_swap != nullptr;
-    HWND hwnd = reinterpret_cast<HWND>(winId());
-    ComPtr<IDXGIDevice> dxgiDevice;
-    m_device->device()->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
-    ComPtr<IDXGIAdapter> adapter;
-    dxgiDevice->GetAdapter(&adapter);
-    ComPtr<IDXGIFactory2> factory;
-    adapter->GetParent(IID_PPV_ARGS(&factory));
+    if (!m_device || !m_device->device() || width == 0 || height == 0)
+        return false;
+    if (m_swap && m_swapW == width && m_swapH == height)
+        return true;
+    releaseSwapChain();
 
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    if (!hwnd || !IsWindow(hwnd))
+        return false;
+
+    ComPtr<IDXGIDevice> dxgiDevice;
+    if (FAILED(m_device->device()->QueryInterface(IID_PPV_ARGS(&dxgiDevice))))
+        return false;
+    ComPtr<IDXGIAdapter> adapter;
+    if (FAILED(dxgiDevice->GetAdapter(&adapter)))
+        return false;
+    ComPtr<IDXGIFactory2> factory;
+    if (FAILED(adapter->GetParent(IID_PPV_ARGS(&factory))))
+        return false;
+
+    // Buffer size matches the compositor canvas; DXGI_SCALING_STRETCH scales to the HWND.
+    // CopyResource requires identical dimensions — widget-sized buffers would always fail at 1920x1080.
     DXGI_SWAP_CHAIN_DESC1 scd{};
-    scd.Width = static_cast<UINT>(qMax(1, width()));
-    scd.Height = static_cast<UINT>(qMax(1, height()));
+    scd.Width = static_cast<UINT>(width);
+    scd.Height = static_cast<UINT>(height);
     scd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     scd.SampleDesc.Count = 1;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -85,10 +103,20 @@ bool PreviewSurface::ensureSwapChain()
     if (FAILED(factory->CreateSwapChainForHwnd(m_device->device(), hwnd, &scd, nullptr, nullptr, &m_swap)))
         return false;
     ComPtr<ID3D11Texture2D> back;
-    m_swap->GetBuffer(0, IID_PPV_ARGS(&back));
-    m_device->device()->CreateRenderTargetView(back.Get(), nullptr, &m_rtv);
+    if (FAILED(m_swap->GetBuffer(0, IID_PPV_ARGS(&back)))) {
+        releaseSwapChain();
+        return false;
+    }
+    if (FAILED(m_device->device()->CreateRenderTargetView(back.Get(), nullptr, &m_rtv))) {
+        releaseSwapChain();
+        return false;
+    }
+    m_swapW = width;
+    m_swapH = height;
     return true;
 #else
+    Q_UNUSED(width);
+    Q_UNUSED(height);
     return false;
 #endif
 }
@@ -97,12 +125,24 @@ void PreviewSurface::presentTexture(ID3D11Texture2D* texture)
 {
 #ifdef _WIN32
     if (!texture || !m_device) return;
-    if (!ensureSwapChain()) return;
+
+    D3D11_TEXTURE2D_DESC td{};
+    texture->GetDesc(&td);
+    if (!ensureSwapChain(td.Width, td.Height))
+        return;
+
     ComPtr<ID3D11Texture2D> back;
-    m_swap->GetBuffer(0, IID_PPV_ARGS(&back));
+    if (FAILED(m_swap->GetBuffer(0, IID_PPV_ARGS(&back))))
+        return;
+
+    // Same size as compositor target → CopyResource succeeds; Present stretches to the widget.
     m_device->context()->CopyResource(back.Get(), texture);
-    m_swap->Present(1, 0);
-    m_hasFrame = true;
+    if (FAILED(m_swap->Present(1, 0)))
+        return;
+    if (!m_hasFrame) {
+        m_hasFrame = true;
+        update(); // drop empty-state QPainter fill
+    }
 #else
     Q_UNUSED(texture);
 #endif
@@ -141,7 +181,8 @@ void PreviewSurface::paintEvent(QPaintEvent*)
 void PreviewSurface::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    releaseSwapChain();
+    // HWND size changed; keep canvas-sized buffers — DXGI stretch handles the window.
+    // Recreate only if the HWND was recreated (winId change); otherwise Present scales.
 }
 
 } // namespace railshot

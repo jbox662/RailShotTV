@@ -29,12 +29,14 @@ protected:
     QPaintEngine* paintEngine() const override { return nullptr; }
 
 private:
-    bool ensureSwapChain();
+    bool ensureSwapChain(unsigned width, unsigned height);
     void releaseSwapChain();
 
     D3D11Device* m_device = nullptr;
     IDXGISwapChain1* m_swap = nullptr;
     ID3D11RenderTargetView* m_rtv = nullptr;
+    unsigned m_swapW = 0;
+    unsigned m_swapH = 0;
     QString m_label;
     QColor m_labelColor{0x22, 0xC5, 0x5E};
     QString m_empty = QStringLiteral("No Signal");

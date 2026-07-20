@@ -129,68 +129,70 @@ private:
 };
 } // namespace
 
-class PreviewWidget::CanvasOverlay : public QWidget {
+class PreviewWidget::CanvasOverlay : public QObject {
 public:
-    CanvasOverlay(EngineController* engine, PreviewWidget* owner, bool program)
-        : QWidget(owner), m_engine(engine), m_owner(owner), m_program(program)
+    CanvasOverlay(EngineController* engine, PreviewWidget* owner, QWidget* surface, bool program)
+        : QObject(owner), m_engine(engine), m_owner(owner), m_surface(surface), m_program(program)
     {
-        setAttribute(Qt::WA_TransparentForMouseEvents, false);
-        setMouseTracking(true);
-        setCursor(Qt::ArrowCursor);
+        if (m_surface) {
+            m_surface->setMouseTracking(true);
+            m_surface->installEventFilter(this);
+        }
         if (program && engine) {
             connect(engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
-                if (m_live != s.streaming) {
-                    m_live = s.streaming;
-                    update();
-                }
+                m_live = s.streaming;
             });
             m_live = engine->telemetrySnapshot().streaming;
         }
     }
 
-    void setInteractive(bool on) { m_interactive = on; update(); }
+    void setInteractive(bool on) { m_interactive = on; }
 
-protected:
-    void paintEvent(QPaintEvent*) override
+    bool eventFilter(QObject* watched, QEvent* event) override
     {
-        // Stage frame/brackets live on StageChrome (margins around HWND).
-        // This overlay only draws interactive selection chrome on Preview.
-        if (!m_interactive || !m_engine) return;
-        const auto sel = m_engine->selectedSource();
-        if (!sel || !sel->visible) return;
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing);
-        const QRectF r = normToWidget(sel->transform, size());
-        p.setPen(QPen(QColor(QStringLiteral("#4F9EFF")), 2.0));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(r);
-        const qreal hs = 7.0;
-        p.setBrush(QColor(QStringLiteral("#4F9EFF")));
-        p.setPen(QPen(Qt::white, 1));
-        for (const QPointF& c : {r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight(),
-                                 QPointF(r.center().x(), r.top()), QPointF(r.center().x(), r.bottom()),
-                                 QPointF(r.left(), r.center().y()), QPointF(r.right(), r.center().y())})
-            p.drawRect(QRectF(c.x() - hs / 2, c.y() - hs / 2, hs, hs));
-        p.setPen(QColor(QStringLiteral("#F8F8FF")));
-        p.drawText(r.adjusted(4, 4, -4, -4), Qt::AlignTop | Qt::AlignLeft, sel->name);
+        if (!m_interactive || !m_engine || watched != m_surface)
+            return QObject::eventFilter(watched, event);
+
+        switch (event->type()) {
+        case QEvent::MouseButtonPress:
+            return handlePress(static_cast<QMouseEvent*>(event));
+        case QEvent::MouseMove:
+            handleMove(static_cast<QMouseEvent*>(event));
+            return m_dragging;
+        case QEvent::MouseButtonRelease:
+            if (m_dragging) {
+                m_dragging = false;
+                m_handle = Handle::None;
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+        return QObject::eventFilter(watched, event);
     }
 
-    void mousePressEvent(QMouseEvent* e) override
+private:
+    QSize surfaceSize() const
     {
-        if (!m_interactive || !m_engine || e->button() != Qt::LeftButton) {
-            QWidget::mousePressEvent(e);
-            return;
-        }
+        return m_surface ? m_surface->size() : QSize();
+    }
+
+    bool handlePress(QMouseEvent* e)
+    {
+        if (e->button() != Qt::LeftButton)
+            return false;
         const auto p = m_engine->projectSnapshot();
         const auto* sc = p.findScene(p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
-        if (!sc) return;
+        if (!sc) return false;
 
         Handle hit = Handle::None;
         QString hitId;
+        const QSize sz = surfaceSize();
         for (int i = sc->sources.size() - 1; i >= 0; --i) {
             const auto& src = sc->sources[i];
             if (!src.visible) continue;
-            const QRectF r = normToWidget(src.transform, size());
+            const QRectF r = normToWidget(src.transform, sz);
             hit = hitHandle(r, e->position());
             if (hit != Handle::None) {
                 hitId = src.id;
@@ -200,31 +202,28 @@ protected:
         if (hitId.isEmpty()) {
             m_engine->setSelectedSourceId({});
             emit m_owner->sourceSelected({});
-            update();
-            return;
+            return true;
         }
         m_engine->setSelectedSourceId(hitId);
         emit m_owner->sourceSelected(hitId);
         const auto src = m_engine->selectedSource();
-        if (!src || src->locked) {
-            update();
-            return;
-        }
+        if (!src || src->locked)
+            return true;
         m_dragging = true;
         m_handle = hit;
         m_dragStart = e->position();
         m_startTransform = src->transform;
-        update();
+        return true;
     }
 
-    void mouseMoveEvent(QMouseEvent* e) override
+    void handleMove(QMouseEvent* e)
     {
-        if (!m_dragging || !m_engine) return;
+        if (!m_dragging) return;
         auto src = m_engine->selectedSource();
         if (!src || src->locked) return;
 
         const QPointF delta = e->position() - m_dragStart;
-        const auto d = widgetDeltaToNorm(delta, size());
+        const auto d = widgetDeltaToNorm(delta, surfaceSize());
         Transform t = m_startTransform;
         constexpr double kMin = 0.02;
 
@@ -261,19 +260,11 @@ protected:
             break;
         }
         m_engine->updateSourceTransform(src->id, t);
-        update();
     }
 
-    void mouseReleaseEvent(QMouseEvent* e) override
-    {
-        Q_UNUSED(e);
-        m_dragging = false;
-        m_handle = Handle::None;
-    }
-
-private:
     EngineController* m_engine = nullptr;
     PreviewWidget* m_owner = nullptr;
+    QWidget* m_surface = nullptr;
     bool m_program = false;
     bool m_interactive = false;
     bool m_live = false;
@@ -392,14 +383,10 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
 
-    m_overlay = new CanvasOverlay(engine, this, program);
+    // Hit-testing lives as an event filter on the D3D surface. Never stack a Qt
+    // sibling over the HWND — that covers composed frames (Preview-only blank bug).
+    m_overlay = new CanvasOverlay(engine, this, m_surface, program);
     m_overlay->setInteractive(!program);
-    // Preview only: interactive handles. Program: no overlay over HWND.
-    if (program) {
-        m_overlay->hide();
-    } else {
-        stack->addWidget(m_overlay);
-    }
     stageLay->addWidget(stackHost, 1);
     col->addWidget(stage, 1);
 
@@ -411,14 +398,12 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     }
 
     if (engine) {
-        connect(engine, &EngineController::selectedSourceChanged, m_overlay, QOverload<>::of(&QWidget::update));
         connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this, sceneName, clearBtn] {
             const auto p = m_engine->projectSnapshot();
             const QString id = m_program ? p.programSceneId : p.previewSceneId;
             const auto* sc = p.findScene(id);
             sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
             clearBtn->setVisible(!id.isEmpty());
-            if (m_overlay) m_overlay->update();
         });
         const auto p = engine->projectSnapshot();
         const QString id = program ? p.programSceneId : p.previewSceneId;
@@ -437,8 +422,6 @@ void PreviewWidget::tick()
                           : m_engine->compositor()->previewTexture();
     if (tex)
         m_surface->presentTexture(tex);
-    if (m_overlay)
-        m_overlay->update();
 }
 
 bool PreviewWidget::eventFilter(QObject* watched, QEvent* event)
