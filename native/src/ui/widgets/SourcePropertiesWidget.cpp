@@ -16,11 +16,15 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     : QWidget(parent), m_engine(engine)
 {
     setFixedWidth(220);
-    setStyleSheet(QStringLiteral("background:#0F1114; border-left:1px solid #1A1D24;"));
+    setStyleSheet(QStringLiteral(
+        "background:#0F1114;"
+        "border-left: 1px solid #1A1D24;"
+        "border-top: 2px solid #4F9EFF;"));
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(8, 8, 8, 8);
+    root->setContentsMargins(10, 10, 10, 10);
     auto* title = new QLabel(QStringLiteral("SOURCE"), this);
-    title->setStyleSheet(QStringLiteral("color:#3B82F6; font-weight:800; letter-spacing:1px;"));
+    title->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-weight:800; letter-spacing:1.5px; font-size:11px; background:transparent;"));
     root->addWidget(title);
 
     m_empty = new QLabel(QStringLiteral("Select a source on Preview"), this);

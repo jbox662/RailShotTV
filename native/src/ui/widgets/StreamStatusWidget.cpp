@@ -10,11 +10,15 @@ StreamStatusWidget::StreamStatusWidget(EngineController* engine, QWidget* parent
     : QWidget(parent), m_engine(engine)
 {
     setFixedWidth(168);
-    setStyleSheet(QStringLiteral("background:#0F1114; border-left:2px solid #FF4D1C;"));
+    setStyleSheet(QStringLiteral(
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #12151A, stop:1 #0F1114);"
+        "border-left: 3px solid #FF5A2C;"));
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(10, 10, 10, 10);
+    root->setContentsMargins(12, 12, 12, 12);
     auto* title = new QLabel(QStringLiteral("STREAM STATUS"), this);
-    title->setStyleSheet(QStringLiteral("color:#FF4D1C; font-weight:800; letter-spacing:1px; font-size:11px;"));
+    title->setObjectName(QStringLiteral("panelTitleBrand"));
+    title->setStyleSheet(QStringLiteral(
+        "color:#FF5A2C; font-weight:800; letter-spacing:1.5px; font-size:11px; background:transparent;"));
     root->addWidget(title);
 
     auto make = [this, root](const QString& label) {
@@ -33,9 +37,7 @@ StreamStatusWidget::StreamStatusWidget(EngineController* engine, QWidget* parent
     root->addStretch();
 
     m_end = new QPushButton(QStringLiteral("END STREAM"), this);
-    m_end->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#FF4D1C;color:white;font-weight:800;padding:8px;border:none;}"
-        "QPushButton:disabled{background:#3A3A50;color:#808898;}"));
+    m_end->setObjectName(QStringLiteral("endStreamButton"));
     m_end->setEnabled(false);
     connect(m_end, &QPushButton::clicked, this, [this] {
         if (m_engine) m_engine->stopStreaming();

@@ -1,89 +1,238 @@
-/* RailShotTV Chromatic Command */
+/* RailShotTV — Chromatic Command (ported from client Dashboard) */
+
 QWidget {
   background-color: #0B0D0F;
   color: #F0F0F0;
-  font-family: "Segoe UI", "DM Sans", sans-serif;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
   font-size: 12px;
 }
 QMainWindow, QDialog {
   background-color: #0B0D0F;
 }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
 QPushButton {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
-  border: 1px solid #3A3D45;
-  border-radius: 3px;
-  padding: 4px 10px;
-  color: #C8CAD0;
+  border: 1px solid #4A4D55;
+  border-radius: 4px;
+  padding: 5px 12px;
+  color: #D0D2D8;
   font-weight: 600;
 }
-QPushButton:hover { border-color: #4F9EFF; color: #fff; }
-QPushButton:pressed { background: #16181E; }
+QPushButton:hover {
+  border-color: #4F9EFF;
+  color: #FFFFFF;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32363F, stop:1 #242830);
+}
+QPushButton:pressed {
+  background: #16181E;
+}
+QPushButton:checked {
+  border-color: #FF5A2C;
+  color: #FF5A2C;
+}
+
 QPushButton#goButton {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #16A34A);
-  border: 1px solid #22C55E;
-  color: #000;
+  border: 2px solid #22C55E;
+  border-radius: 6px;
+  color: #04140A;
   font-weight: 900;
-  font-size: 15px;
-  letter-spacing: 1px;
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 10px;
 }
+QPushButton#goButton:hover {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ADE80, stop:1 #22C55E);
+  color: #000;
+}
+
+QPushButton#cutButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3A6AFF, stop:1 #2A50CC);
+  border: 1px solid #4F9EFF;
+  color: #FFFFFF;
+  font-weight: 800;
+}
+
 QPushButton#streamButton {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF5A2C, stop:1 #CC3A18);
   border: 1px solid #FF5A2C;
-  color: #fff;
-  font-weight: 700;
+  border-radius: 5px;
+  color: #FFFFFF;
+  font-weight: 800;
+  padding: 6px 16px;
 }
+QPushButton#streamButton:hover {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF7A4C, stop:1 #FF5A2C);
+}
+
 QPushButton#endStreamButton {
-  background: #7F1D1D;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7F1D1D, stop:1 #5A1010);
   border: 1px solid #EF4444;
   color: #FCA5A5;
+  font-weight: 800;
 }
+
+QPushButton#recordButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
+  border: 1px solid #EF444480;
+  color: #FCA5A5;
+  font-weight: 700;
+}
+
+QPushButton#panelAddButton {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A3AFF, stop:1 #1230CC);
+  border: 1px solid #3A6AFF;
+  color: #FFFFFF;
+  font-weight: 800;
+  min-width: 28px;
+  padding: 2px 8px;
+}
+
+QPushButton#mixerToggle {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A3AFF, stop:1 #1230CC);
+  border: 1px solid #3A6AFF;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+/* ── Lists / tabs / fields ───────────────────────────────────────────────── */
 QListWidget {
   background: #0A0C0F;
   border: 1px solid #2A2D35;
   outline: none;
+  border-radius: 0;
 }
 QListWidget::item {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid #1A1D24;
+  border-left: 3px solid transparent;
 }
 QListWidget::item:selected {
   background: #1A2A3A;
   color: #4F9EFF;
+  border-left: 3px solid #4F9EFF;
 }
-QTabWidget::pane { border: 1px solid #2A2D35; background: #111318; }
+QListWidget::item:hover {
+  background: #12151A;
+}
+
+QTabWidget::pane {
+  border: 1px solid #2A2D35;
+  background: #111318;
+}
 QTabBar::tab {
   background: #141619;
   color: #808898;
-  padding: 6px 14px;
+  padding: 7px 16px;
   border: 1px solid #2A2D35;
 }
-QTabBar::tab:selected { color: #FF5A2C; border-bottom: 2px solid #FF5A2C; }
-QLineEdit, QSpinBox, QComboBox {
+QTabBar::tab:selected {
+  color: #FF5A2C;
+  border-bottom: 2px solid #FF5A2C;
+  background: #1A1D22;
+}
+
+QLineEdit, QSpinBox, QComboBox, QPlainTextEdit, QKeySequenceEdit {
   background: #0E0F14;
   border: 1px solid #3A3D45;
-  border-radius: 3px;
-  padding: 4px 6px;
+  border-radius: 4px;
+  padding: 5px 8px;
   color: #E2E8F0;
+  selection-background-color: #FF5A2C55;
 }
-QSlider::groove:vertical { width: 4px; background: #1A1D24; }
+QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
+  border-color: #4F9EFF;
+}
+
+QSlider::groove:horizontal {
+  height: 4px;
+  background: #1A1D24;
+  border-radius: 2px;
+}
+QSlider::handle:horizontal {
+  width: 12px;
+  height: 12px;
+  margin: -4px 0;
+  background: #4F9EFF;
+  border-radius: 6px;
+}
+QSlider::groove:vertical {
+  width: 4px;
+  background: #1A1D24;
+  border-radius: 2px;
+}
 QSlider::handle:vertical {
-  height: 14px; width: 14px; margin: 0 -5px;
-  background: #C8CAD0; border-radius: 2px;
+  height: 14px;
+  width: 14px;
+  margin: 0 -5px;
+  background: #C8CAD0;
+  border: 1px solid #4F9EFF;
+  border-radius: 3px;
 }
+
+QProgressBar {
+  background: #12151A;
+  border: 1px solid #2A2D35;
+  border-radius: 2px;
+  text-align: center;
+}
+QProgressBar::chunk {
+  background: qlineargradient(x1:0, y1:1, x2:0, y2:0,
+    stop:0 #22C55E, stop:0.55 #84CC16, stop:0.8 #FBBF24, stop:1 #EF4444);
+}
+
 QScrollBar:vertical {
-  background: #0A0C10; width: 8px; margin: 0;
+  background: #0A0C10;
+  width: 8px;
+  margin: 0;
 }
 QScrollBar::handle:vertical {
-  background: #2A2D35; min-height: 20px; border-radius: 4px;
+  background: #2A2D35;
+  min-height: 20px;
+  border-radius: 4px;
 }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+QStatusBar {
+  background: #0F1114;
+  color: #606878;
+  border-top: 1px solid #1A1D24;
+}
+
+/* ── Named labels ────────────────────────────────────────────────────────── */
 QLabel#sectionHeader {
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.45);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
 }
 QLabel#mono {
-  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-family: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
   font-size: 10px;
   color: #606878;
+}
+QLabel#brandWordmark {
+  font-family: "Bebas Neue", "Arial Narrow", "Segoe UI", sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: #F0F0F0;
+}
+QLabel#panelTitleBlue {
+  color: #4F9EFF;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+QLabel#panelTitleViolet {
+  color: #A855F7;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+QLabel#panelTitleBrand {
+  color: #FF5A2C;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.5px;
 }

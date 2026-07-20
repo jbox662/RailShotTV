@@ -71,11 +71,11 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
         const QRectF r = normToWidget(sel->transform, size());
-        p.setPen(QPen(QColor(QStringLiteral("#3B82F6")), 2.0));
+        p.setPen(QPen(QColor(QStringLiteral("#4F9EFF")), 2.0));
         p.setBrush(Qt::NoBrush);
         p.drawRect(r);
         const qreal hs = 7.0;
-        p.setBrush(QColor(QStringLiteral("#3B82F6")));
+        p.setBrush(QColor(QStringLiteral("#4F9EFF")));
         for (const QPointF& c : {r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight()})
             p.drawRect(QRectF(c.x() - hs / 2, c.y() - hs / 2, hs, hs));
         p.setPen(QColor(QStringLiteral("#F8F8FF")));
@@ -94,7 +94,6 @@ protected:
 
         Handle hit = Handle::None;
         QString hitId;
-        // Top-most first
         for (int i = sc->sources.size() - 1; i >= 0; --i) {
             const auto& src = sc->sources[i];
             if (!src.visible) continue;
@@ -192,29 +191,49 @@ private:
 PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* parent)
     : QWidget(parent), m_engine(engine), m_program(program)
 {
+    const QString accent = program ? QStringLiteral("#FF5A2C") : QStringLiteral("#22C55E");
+    const QString accentDim = program ? QStringLiteral("rgba(255,90,44,0.35)")
+                                      : QStringLiteral("rgba(34,197,94,0.30)");
+
+    setStyleSheet(QStringLiteral(
+        "background: #0D0F12;"
+        "border: 2px solid %1;")
+                      .arg(accentDim));
+
     auto* col = new QVBoxLayout(this);
     col->setContentsMargins(0, 0, 0, 0);
     col->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(24);
-    header->setStyleSheet(QStringLiteral("background:#141619; border-bottom:1px solid #2A2D35;"));
+    header->setFixedHeight(26);
+    header->setStyleSheet(QStringLiteral(
+        "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %1, stop:0.12 transparent);"
+        "border-bottom: 1px solid #1A1D24;")
+                              .arg(program ? QStringLiteral("rgba(255,90,44,0.18)")
+                                           : QStringLiteral("rgba(34,197,94,0.18)")));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(10, 0, 10, 0);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
-    title->setStyleSheet(program
-                             ? QStringLiteral("color:#FF5A2C; font-weight:700;")
-                             : QStringLiteral("color:#22C55E; font-weight:700;"));
+    title->setStyleSheet(QStringLiteral(
+        "color:%1; font-weight:800; font-size:11px; letter-spacing:2px; background:transparent;")
+                             .arg(accent));
     h->addWidget(title);
     if (!program) {
         auto* hint = new QLabel(QStringLiteral("Drag to position · corners to resize"), header);
-        hint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+        hint->setStyleSheet(QStringLiteral("color:#4A5060; font-size:10px; background:transparent;"));
         h->addWidget(hint);
+    } else {
+        auto* badge = new QLabel(QStringLiteral("PGM"), header);
+        badge->setStyleSheet(QStringLiteral(
+            "background:#FF5A2C; color:#fff; font-size:9px; font-weight:800;"
+            "padding:2px 6px; border-radius:3px;"));
+        h->addWidget(badge);
     }
     h->addStretch();
     col->addWidget(header);
 
     auto* stackHost = new QWidget(this);
+    stackHost->setStyleSheet(QStringLiteral("background:#080A0D;"));
     auto* stack = new QStackedLayout(stackHost);
     stack->setStackingMode(QStackedLayout::StackAll);
     stack->setContentsMargins(0, 0, 0, 0);
@@ -223,8 +242,8 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     if (engine && engine->graphicsDevice())
         m_surface->setDevice(engine->graphicsDevice());
     m_surface->setLabel(program ? QStringLiteral("PGM") : QStringLiteral("PVW"),
-                        program ? QColor(QStringLiteral("#FF5A2C")) : QColor(QStringLiteral("#22C55E")));
-    m_surface->setEmptyMessage(program ? QStringLiteral("No Output") : QStringLiteral("No Preview"));
+                        QColor(accent));
+    m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
 
     m_overlay = new CanvasOverlay(engine, this);

@@ -22,6 +22,8 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QDialog>
+#include <QLabel>
+#include <QPushButton>
 
 namespace railshot {
 
@@ -83,7 +85,40 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* inputsRow = new QHBoxLayout();
     inputsRow->setContentsMargins(0, 0, 0, 0);
     inputsRow->setSpacing(0);
-    auto* scenes = new SceneListWidget(engine, this);
+
+    auto* scenesCol = new QWidget(this);
+    scenesCol->setFixedWidth(180);
+    scenesCol->setStyleSheet(QStringLiteral("background:#0A0C0F; border-right:1px solid #1A1D24;"));
+    auto* scenesLay = new QVBoxLayout(scenesCol);
+    scenesLay->setContentsMargins(0, 0, 0, 0);
+    scenesLay->setSpacing(0);
+    auto* scenesHeader = new QWidget(scenesCol);
+    scenesHeader->setFixedHeight(28);
+    scenesHeader->setStyleSheet(QStringLiteral(
+        "background:#0F1114; border-bottom:1px solid #1A1D24; border-top:2px solid #4F9EFF;"));
+    auto* scenesHeaderLay = new QHBoxLayout(scenesHeader);
+    scenesHeaderLay->setContentsMargins(10, 0, 8, 0);
+    auto* scenesTitle = new QLabel(QStringLiteral("SCENES"), scenesHeader);
+    scenesTitle->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-weight:800; font-size:11px; letter-spacing:1.5px; background:transparent;"));
+    auto* addScene = new QPushButton(QStringLiteral("+"), scenesHeader);
+    addScene->setObjectName(QStringLiteral("panelAddButton"));
+    addScene->setFixedSize(24, 20);
+    connect(addScene, &QPushButton::clicked, this, [this] {
+        m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
+    });
+    scenesHeaderLay->addWidget(scenesTitle);
+    scenesHeaderLay->addStretch();
+    scenesHeaderLay->addWidget(addScene);
+    scenesLay->addWidget(scenesHeader);
+
+    auto* scenes = new SceneListWidget(engine, scenesCol);
+    scenes->setStyleSheet(QStringLiteral(
+        "QListWidget { background:#0A0C0F; border:none; }"
+        "QListWidget::item { padding:10px 12px; border-bottom:1px solid #15181E;"
+        "  border-left:3px solid transparent; color:#C8CAD0; font-weight:600; }"
+        "QListWidget::item:selected { background:#122033; color:#4F9EFF; border-left:3px solid #4F9EFF; }"
+        "QListWidget::item:hover { background:#12151A; }"));
     scenes->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(scenes, &QWidget::customContextMenuRequested, this, [this, scenes](const QPoint& pos) {
         QMenu menu;
@@ -96,7 +131,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         });
         menu.exec(scenes->mapToGlobal(pos));
     });
-    inputsRow->addWidget(scenes);
+    scenesLay->addWidget(scenes, 1);
+    inputsRow->addWidget(scenesCol);
     inputsRow->addWidget(new InputTilesWidget(engine, this), 1);
     inputsRow->addWidget(new SourcePropertiesWidget(engine, this));
     inputsRow->addWidget(new AudioMixerWidget(engine, this));

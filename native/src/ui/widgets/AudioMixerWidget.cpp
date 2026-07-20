@@ -16,14 +16,18 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
 {
     setMinimumHeight(160);
     setMaximumHeight(220);
-    setStyleSheet(QStringLiteral("background:#0A0C10; border-top:1px solid #1A1D24;"));
+    setStyleSheet(QStringLiteral(
+        "background:#0D0F12;"
+        "border-top: 2px solid #A855F7;"
+        "border-left: 1px solid #1A1D24;"));
     auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(4, 4, 4, 4);
+    outer->setContentsMargins(6, 6, 6, 4);
     outer->setSpacing(2);
 
     auto* top = new QHBoxLayout();
     auto* title = new QLabel(QStringLiteral("MIX"), this);
-    title->setStyleSheet(QStringLiteral("color:#8B5CF6; font-weight:800; font-size:10px; letter-spacing:1px;"));
+    title->setStyleSheet(QStringLiteral(
+        "color:#A855F7; font-weight:800; font-size:11px; letter-spacing:1.5px; background:transparent;"));
     m_monitorBtn = new QPushButton(QStringLiteral("MON"), this);
     m_monitorBtn->setCheckable(true);
     m_monitorBtn->setChecked(true);
