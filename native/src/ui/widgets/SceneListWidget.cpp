@@ -25,25 +25,30 @@ public:
         QColor fg(QStringLiteral("#8892A4"));
         if (role == QLatin1String("program")) {
             accent = QColor(QStringLiteral("#FF5A2C"));
-            bg = QColor(QStringLiteral("#1A0808"));
-            fg = QColor(QStringLiteral("#FF8A6A"));
+            bg = QColor(QStringLiteral("#2A0C0C"));
+            fg = QColor(QStringLiteral("#FFB08A"));
         } else if (role == QLatin1String("preview")) {
             accent = QColor(QStringLiteral("#22C55E"));
-            bg = QColor(QStringLiteral("#081208"));
-            fg = QColor(QStringLiteral("#6EE7A0"));
+            bg = QColor(QStringLiteral("#0C1E10"));
+            fg = QColor(QStringLiteral("#86EFAC"));
         } else if (role == QLatin1String("active")) {
             accent = QColor(QStringLiteral("#4F9EFF"));
-            bg = QColor(QStringLiteral("#0A1220"));
-            fg = QColor(QStringLiteral("#C8DAFF"));
+            bg = QColor(QStringLiteral("#0C1A30"));
+            fg = QColor(QStringLiteral("#B8D4FF"));
         }
         painter->fillRect(option.rect, bg);
-        painter->fillRect(QRect(option.rect.left(), option.rect.top(), 3, option.rect.height()), accent);
+        painter->fillRect(QRect(option.rect.left(), option.rect.top(), 5, option.rect.height()), accent);
+        // Right edge hairline so rows separate from neighbors
+        painter->setPen(QPen(QColor(QStringLiteral("#2A2D35")), 1));
+        painter->drawLine(option.rect.bottomLeft() + QPoint(5, 0), option.rect.bottomRight());
 
         const int num = index.data(Qt::UserRole + 2).toInt();
         const QString name = index.data(Qt::DisplayRole).toString();
-        QRect badge(option.rect.left() + 10, option.rect.center().y() - 8, 16, 16);
+        QRect badge(option.rect.left() + 12, option.rect.center().y() - 8, 16, 16);
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(accent.red(), accent.green(), accent.blue(), 40));
+        painter->setBrush(QColor(accent.red(), accent.green(), accent.blue(), 70));
+        painter->drawRoundedRect(badge, 3, 3);
+        painter->setPen(QPen(accent, 1));
         painter->drawRoundedRect(badge, 3, 3);
         painter->setPen(fg);
         QFont f = option.font;
@@ -75,16 +80,17 @@ SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
     setItemDelegate(new SceneItemDelegate(this));
     setStyleSheet(QStringLiteral(
         "QListWidget {"
-        "  background:#0A0C0F;"
+        "  background:#080A0D;"
         "  border: none;"
+        "  border-top: 1px solid #3A3D45;"
         "  outline: none;"
         "}"
         "QListWidget::item {"
         "  padding: 0;"
-        "  border-bottom: 1px solid #15181E;"
-        "  min-height: 32px;"
+        "  border-bottom: 1px solid #1E2228;"
+        "  min-height: 34px;"
         "}"
-        "QListWidget::item:hover { background: #12151A; }"
+        "QListWidget::item:hover { background: #14181F; }"
         "QListWidget::item:selected { background: transparent; }"));
 
     connect(this, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {

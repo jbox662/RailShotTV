@@ -23,8 +23,9 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     setStyleSheet(QStringLiteral(
         "QWidget#audioMixer {"
         "  background:#0D0F12;"
-        "  border-top: 2px solid #A855F7;"
-        "  border-left: 1px solid #1A1D24;"
+        "  border-top: 3px solid #A855F7;"
+        "  border-left: 2px solid #A855F7;"
+        "  border-right: 1px solid #3A3D45;"
         "}"));
 
     auto* outer = new QHBoxLayout(this);
@@ -35,8 +36,8 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     outputsLab->setAlignment(Qt::AlignCenter);
     outputsLab->setFixedWidth(16);
     outputsLab->setStyleSheet(QStringLiteral(
-        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px;"
-        "background:rgba(26,58,255,0.08); border-radius:2px;"));
+        "color:#7AB8FF; font-size:8px; font-weight:900; letter-spacing:1px;"
+        "background:rgba(58,106,255,0.22); border:1px solid #3A6AFF66; border-radius:2px;"));
     outer->addWidget(outputsLab);
 
     auto* scroll = new QScrollArea(this);
@@ -56,8 +57,8 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     inputsLab->setAlignment(Qt::AlignCenter);
     inputsLab->setFixedWidth(16);
     inputsLab->setStyleSheet(QStringLiteral(
-        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px;"
-        "background:rgba(26,58,255,0.08); border-radius:2px;"));
+        "color:#C084FC; font-size:8px; font-weight:900; letter-spacing:1px;"
+        "background:rgba(168,85,247,0.22); border:1px solid #A855F766; border-radius:2px;"));
     outer->addWidget(inputsLab);
 
     auto* side = new QVBoxLayout();
@@ -97,23 +98,26 @@ void AudioMixerWidget::refreshMeters()
             const auto& ch = channels[ci];
             const bool master = ci == 0 || ch.name.contains(QStringLiteral("Master"), Qt::CaseInsensitive);
             auto* strip = new QWidget(this);
-            strip->setFixedWidth(master ? 68 : 58);
+            strip->setFixedWidth(master ? 72 : 60);
+            strip->setStyleSheet(QStringLiteral(
+                "QWidget{background:#12151A; border:1px solid #3A3D45; border-radius:3px;}"));
             auto* col = new QVBoxLayout(strip);
-            col->setContentsMargins(2, 2, 2, 2);
+            col->setContentsMargins(3, 3, 3, 3);
             col->setSpacing(2);
 
             auto* badge = new QLabel(master ? QStringLiteral("MASTER") : ch.name.left(8), strip);
             badge->setAlignment(Qt::AlignCenter);
             if (master) {
                 badge->setStyleSheet(QStringLiteral(
-                    "font-size:7px; font-weight:800; color:#04140A;"
-                    "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #22C55E,stop:1 #16A34A);"
-                    "border-radius:3px; padding:2px 4px;"));
+                    "font-size:8px; font-weight:900; color:#04140A;"
+                    "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);"
+                    "border:1px solid #86EFAC; border-radius:3px; padding:2px 4px;"));
             } else {
                 badge->setStyleSheet(QStringLiteral(
-                    "font-size:7px; font-weight:800; color:%1; background:transparent;")
+                    "font-size:7px; font-weight:800; color:%1; background:transparent;"
+                    "border:1px solid #2A2D35; border-radius:2px; padding:1px 2px;")
                                          .arg(ch.muted ? QStringLiteral("#EF4444")
-                                                       : QStringLiteral("#808898")));
+                                                       : QStringLiteral("#C8CAD0")));
             }
             col->addWidget(badge);
 

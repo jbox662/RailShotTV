@@ -4,6 +4,7 @@
 #include "ui/Theme.h"
 #include "ui/Motion.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QSlider>
 #include <QLabel>
 #include <QGridLayout>
@@ -15,18 +16,18 @@ namespace railshot {
 TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
-    setFixedWidth(120);
+    setFixedWidth(124);
     setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
-        "border-left: 1px solid #2A2D35;"
-        "border-right: 1px solid #2A2D35;"));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #0D0F12);"
+        "border-left: 2px solid #3A6AFF88;"
+        "border-right: 2px solid #3A6AFF88;"));
     auto* col = new QVBoxLayout(this);
     col->setContentsMargins(6, 8, 6, 8);
-    col->setSpacing(2);
+    col->setSpacing(3);
 
     m_go = new QPushButton(QStringLiteral("GO"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
-    m_go->setMinimumHeight(40);
+    m_go->setMinimumHeight(44);
     m_go->setCursor(Qt::PointingHandCursor);
     connect(m_go, &QPushButton::clicked, this, [this] {
         if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
@@ -37,7 +38,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     m_activeLabel = new QLabel(QStringLiteral("CUT"), this);
     m_activeLabel->setAlignment(Qt::AlignCenter);
     m_activeLabel->setStyleSheet(QStringLiteral(
-        "color:#606878; font-family:'DM Sans'; font-size:9px; letter-spacing:1px;"));
+        "color:#7AB8FF; font-family:'DM Sans'; font-size:9px; font-weight:800; letter-spacing:1.5px;"));
     col->addWidget(m_activeLabel);
 
     const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Merge"),
@@ -45,6 +46,9 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     auto* group = new QButtonGroup(this);
     group->setExclusive(true);
     for (const auto& t : types) {
+        auto* row = new QHBoxLayout();
+        row->setContentsMargins(0, 0, 0, 0);
+        row->setSpacing(0);
         auto* b = new QPushButton(t, this);
         b->setObjectName(QStringLiteral("transTypeBtn"));
         b->setCheckable(true);
@@ -59,7 +63,14 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
                                     m_engine->projectSnapshot().transitionMs);
             restyleTypes();
         });
-        col->addWidget(b);
+        auto* opt = new QPushButton(QStringLiteral("▾"), this);
+        opt->setObjectName(QStringLiteral("transOptBtn"));
+        opt->setFixedWidth(18);
+        opt->setCursor(Qt::PointingHandCursor);
+        opt->setToolTip(QStringLiteral("%1 options").arg(t));
+        row->addWidget(b, 1);
+        row->addWidget(opt);
+        col->addLayout(row);
     }
     restyleTypes();
 
@@ -141,13 +152,13 @@ void TransitionPanel::updateGoArmed()
     m_go->setStyleSheet(armed
                             ? QStringLiteral(
                                   "QPushButton#goButton {"
-                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #22C55E,stop:1 #16A34A);"
-                                  "  border:2px solid #86EFAC; border-radius:4px; color:#000;"
-                                  "  font-weight:900; font-size:15px; letter-spacing:2px; padding:10px;"
+                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
+                                  "  border:3px solid #86EFAC; border-radius:4px; color:#04140A;"
+                                  "  font-weight:900; font-size:16px; letter-spacing:2px; padding:10px;"
                                   "}"
                                   "QPushButton#goButton:hover {"
-                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #22C55E);"
-                                  "  border:2px solid #BBF7D0;"
+                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #86EFAC,stop:1 #22C55E);"
+                                  "  border:3px solid #BBF7D0;"
                                   "}")
                             : QString());
     m_go->style()->unpolish(m_go);

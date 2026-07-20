@@ -96,25 +96,30 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
 {
     setWindowTitle(QStringLiteral("Input Select"));
+    setObjectName(QStringLiteral("addSourceDialog"));
     resize(780, 520);
     setMaximumHeight(int(0.88 * 900));
     setStyleSheet(QStringLiteral(
-        "QDialog{background:#141618;border:1px solid #3A3D45;}"
-        "QListWidget{background:#0F1114;border:none;outline:none;color:#C8CAD0;}"
-        "QListWidget::item{padding:8px 12px;border-left:3px solid transparent;}"
-        "QListWidget::item:selected{background:#1A3A6A;}"
-        "QLineEdit,QPlainTextEdit,QComboBox{background:#0A0C10;border:1px solid #3A3D45;"
-        "  color:#D0D2D8;border-radius:3px;padding:6px;}"
-        "QLabel{color:#D0D2D8;background:transparent;}"));
+        "QDialog#addSourceDialog{background:#0F1114;border:2px solid #4A4D55;}"
+        "QListWidget{background:#0A0C0F;border:none;border-right:2px solid #3A3D45;outline:none;color:#E0E2E8;}"
+        "QListWidget::item{padding:10px 14px;border-left:4px solid transparent;border-bottom:1px solid #1A1D24;}"
+        "QListWidget::item:selected{background:#102438;}"
+        "QListWidget::item:hover{background:#14181F;}"
+        "QLineEdit,QPlainTextEdit,QComboBox{background:#0A0C10;border:1px solid #4A4D55;"
+        "  color:#E0E2E8;border-radius:3px;padding:7px;}"
+        "QLineEdit:focus,QComboBox:focus{border:2px solid #4F9EFF;}"
+        "QLabel{color:#E0E2E8;background:transparent;}"));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* header = new QLabel(QStringLiteral("  Input Select"), this);
-    header->setFixedHeight(36);
+    auto* header = new QLabel(QStringLiteral("  INPUT SELECT"), this);
+    header->setFixedHeight(40);
     header->setStyleSheet(QStringLiteral(
-        "background:#0F1114; border-bottom:1px solid #2A2D35; font-weight:700; font-size:13px; padding-left:12px;"));
+        "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.5 transparent);"
+        "border-bottom:2px solid #3A3D45; border-left:3px solid #4F9EFF;"
+        "font-weight:900; font-size:12px; letter-spacing:2px; color:#4F9EFF; padding-left:12px;"));
     root->addWidget(header);
 
     auto* body = new QHBoxLayout();
@@ -224,15 +229,19 @@ AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
     root->addLayout(body, 1);
 
     auto* footer = new QFrame(this);
-    footer->setFixedHeight(48);
-    footer->setStyleSheet(QStringLiteral("background:#0F1114; border-top:1px solid #2A2D35;"));
+    footer->setFixedHeight(52);
+    footer->setStyleSheet(QStringLiteral(
+        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #16181E,stop:1 #0F1114);"
+        "border-top:2px solid #3A3D45;"));
     auto* foot = new QHBoxLayout(footer);
     foot->setContentsMargins(16, 8, 16, 8);
     auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
+    cancel->setObjectName(QStringLiteral("toolbarChromeBtn"));
     auto* ok = new QPushButton(QStringLiteral("OK"), footer);
     ok->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A6AFF,stop:1 #1050CC);"
-        "color:white;font-weight:700;border:1px solid #3A6AFF;border-radius:4px;padding:6px 22px;}"));
+        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1050CC);"
+        "color:white;font-weight:900;border:2px solid #5A8AFF;border-radius:4px;padding:7px 24px;}"
+        "QPushButton:hover{border-color:#8AB4FF;background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #5A8AFF,stop:1 #3A6AFF);}"));
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(ok, &QPushButton::clicked, this, &AddSourceDialog::acceptConfigured);
     foot->addStretch();

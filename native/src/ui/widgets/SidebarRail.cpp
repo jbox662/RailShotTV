@@ -95,18 +95,18 @@ protected:
         p.setRenderHint(QPainter::Antialiasing);
         const QColor accent = m_accent.isValid() ? m_accent : QColor(QStringLiteral("#6B7280"));
         if (m_active) {
-            QRadialGradient glow(rect().center(), 22);
-            glow.setColorAt(0, QColor(accent.red(), accent.green(), accent.blue(), 110));
+            QRadialGradient glow(rect().center(), 26);
+            glow.setColorAt(0, QColor(accent.red(), accent.green(), accent.blue(), 160));
             glow.setColorAt(1, QColor(accent.red(), accent.green(), accent.blue(), 0));
             p.setPen(Qt::NoPen);
             p.setBrush(glow);
-            p.drawEllipse(rect().adjusted(-2, -2, 2, 2));
-            p.setBrush(QColor(accent.red(), accent.green(), accent.blue(), 40));
-            p.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), 140), 1));
+            p.drawEllipse(rect().adjusted(-4, -4, 4, 4));
+            p.setBrush(QColor(accent.red(), accent.green(), accent.blue(), 70));
+            p.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), 220), 2));
             p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 8, 8);
         } else if (underMouse()) {
-            p.setPen(QPen(QColor(255, 255, 255, 28), 1));
-            p.setBrush(QColor(255, 255, 255, 16));
+            p.setPen(QPen(QColor(255, 255, 255, 40), 1));
+            p.setBrush(QColor(255, 255, 255, 22));
             p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 8, 8);
         }
         const QColor stroke = m_active ? accent : QColor(QStringLiteral("#6B7280"));
@@ -158,8 +158,8 @@ SidebarRail::SidebarRail(QWidget* parent)
     setObjectName(QStringLiteral("sidebarRail"));
     setStyleSheet(QStringLiteral(
         "QWidget#sidebarRail {"
-        "  background: #0F1114;"
-        "  border-right: 1px solid rgba(255,255,255,0.08);"
+        "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #141619, stop:1 #0F1114);"
+        "  border-right: 2px solid #FF5A2C55;"
         "}"));
 
     auto* layout = new QVBoxLayout(this);
@@ -168,7 +168,8 @@ SidebarRail::SidebarRail(QWidget* parent)
 
     auto* logoCell = new QWidget(this);
     logoCell->setFixedSize(56, 46);
-    logoCell->setStyleSheet(QStringLiteral("border-bottom: 1px solid rgba(255,255,255,0.08); background: transparent;"));
+    logoCell->setStyleSheet(QStringLiteral(
+        "border-bottom: 1px solid #FF5A2C40; background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1210,stop:1 transparent);"));
     auto* logoLay = new QHBoxLayout(logoCell);
     logoLay->setContentsMargins(0, 0, 0, 0);
     logoLay->addWidget(new LogoBadge(logoCell), 0, Qt::AlignCenter);

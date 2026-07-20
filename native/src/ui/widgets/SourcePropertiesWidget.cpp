@@ -23,23 +23,26 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     setFixedWidth(460);
     setStyleSheet(QStringLiteral(
         "QWidget#inputSettingsDrawer {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #13151A, stop:1 #0F1114);"
-        "  border-left: 1px solid #2A2D35;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #16181E, stop:1 #0F1114);"
+        "  border-left: 3px solid #4F9EFF;"
         "}"
-        "QTabBar::tab { background:#0F1114; color:#808898; padding:8px 10px; font-size:10px; font-weight:700;"
-        "  border:none; border-bottom:2px solid transparent; }"
-        "QTabBar::tab:selected { color:#4F9EFF; border-bottom:2px solid #4F9EFF; }"
-        "QLineEdit, QDoubleSpinBox { background:#0A0C10; border:1px solid #3A3D45; color:#D0D2D8;"
-        "  border-radius:3px; padding:4px 6px; font-size:11px; }"
-        "QLabel#sectionTitle { color:#4F9EFF; font-size:9px; font-weight:700; letter-spacing:1px; }"));
+        "QTabBar::tab { background:#12151A; color:#8892A4; padding:9px 12px; font-size:10px; font-weight:800;"
+        "  border:1px solid #2A2D35; border-bottom:2px solid transparent; }"
+        "QTabBar::tab:selected { color:#7AB8FF; border-bottom:2px solid #4F9EFF; background:#0C1830; }"
+        "QLineEdit, QDoubleSpinBox { background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8;"
+        "  border-radius:3px; padding:5px 7px; font-size:11px; }"
+        "QLineEdit:focus, QDoubleSpinBox:focus { border:2px solid #4F9EFF; }"
+        "QLabel#sectionTitle { color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px; }"));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(40);
-    header->setStyleSheet(QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;"));
+    header->setFixedHeight(42);
+    header->setStyleSheet(QStringLiteral(
+        "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.55 transparent);"
+        "border-bottom:2px solid #3A3D45; border-left:3px solid #4F9EFF;"));
     auto* headerLay = new QHBoxLayout(header);
     headerLay->setContentsMargins(14, 0, 10, 0);
     m_title = new QLabel(QStringLiteral("INPUT SETTINGS"), header);
@@ -210,15 +213,18 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
 
     auto* footer = new QWidget(m_formHost);
     footer->setFixedHeight(48);
-    footer->setStyleSheet(QStringLiteral("background:#0F1114; border-top:1px solid #2A2D35;"));
+    footer->setStyleSheet(QStringLiteral(
+        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #16181E,stop:1 #0F1114);"
+        "border-top:2px solid #3A3D45;"));
     auto* footLay = new QHBoxLayout(footer);
     footLay->setContentsMargins(14, 8, 14, 8);
     auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
     auto* applyBtn = new QPushButton(QStringLiteral("Apply"), footer);
     applyBtn->setObjectName(QStringLiteral("primaryButton"));
     applyBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A6AFF,stop:1 #1050CC);"
-        "color:white;font-weight:700;border:1px solid #3A6AFF;border-radius:4px;padding:6px 18px;}"));
+        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1050CC);"
+        "color:white;font-weight:900;border:2px solid #5A8AFF;border-radius:4px;padding:7px 20px;}"
+        "QPushButton:hover{border-color:#8AB4FF;}"));
     connect(cancel, &QPushButton::clicked, this, &SourcePropertiesWidget::closeRequested);
     connect(applyBtn, &QPushButton::clicked, this, &SourcePropertiesWidget::applyAll);
     footLay->addStretch();

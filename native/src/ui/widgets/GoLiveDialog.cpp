@@ -15,23 +15,24 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
 {
     setWindowTitle(QStringLiteral("Go Live"));
+    setObjectName(QStringLiteral("goLiveDialog"));
     setFixedWidth(520);
     setStyleSheet(QStringLiteral(
-        "QDialog{background:#141926;border:1px solid #2A3350;border-radius:12px;}"
-        "QLabel{color:#D0D2D8;background:transparent;}"
-        "QLineEdit{background:#0A0C10;border:1px solid #3A3D45;border-radius:4px;"
-        "  color:#D0D2D8;padding:8px;font-size:12px;}"
-        "QLineEdit:focus{border-color:#FF5A2C;}"));
+        "QDialog#goLiveDialog{background:#12151C;border:2px solid #FF5A2C88;border-radius:10px;}"
+        "QLabel{color:#E0E2E8;background:transparent;}"
+        "QLineEdit{background:#0A0C10;border:1px solid #4A4D55;border-radius:4px;"
+        "  color:#E0E2E8;padding:8px;font-size:12px;}"
+        "QLineEdit:focus{border:2px solid #FF5A2C;}"));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     auto* accent = new QFrame(this);
-    accent->setFixedHeight(3);
+    accent->setFixedHeight(4);
     accent->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-        "stop:0 #FF5A2C, stop:0.5 #FF6B35, stop:1 #A855F7); border:none;"));
+        "stop:0 #FF5A2C, stop:0.45 #FF8C42, stop:1 #A855F7); border:none;"));
     root->addWidget(accent);
 
     m_stack = new QStackedWidget(this);
@@ -46,7 +47,7 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     auto* title = new QLabel(QStringLiteral("GO LIVE"), config);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet(QStringLiteral(
-        "font-family:'Bebas Neue'; font-size:28px; letter-spacing:2px; color:#F0F0F0;"));
+        "font-family:'Bebas Neue'; font-size:32px; letter-spacing:3px; color:#FF5A2C;"));
     cfg->addWidget(title);
 
     auto* platGrid = new QHBoxLayout();

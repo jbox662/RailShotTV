@@ -87,17 +87,17 @@ protected:
         p.setRenderHint(QPainter::Antialiasing, false);
         const QColor accent = m_program ? QColor(QStringLiteral("#FF5A2C"))
                                         : QColor(QStringLiteral("#22C55E"));
-        const int a = m_program ? (m_live ? 200 : 120) : 160;
+        const int a = m_program ? (m_live ? 255 : 180) : 220;
         QColor border = accent;
         border.setAlpha(a);
-        p.setPen(QPen(border, 2));
+        p.setPen(QPen(border, 3));
         p.setBrush(Qt::NoBrush);
         // Outer frame in the margin ring
         p.drawRect(rect().adjusted(1, 1, -2, -2));
 
-        const int L = 18;
-        const int inset = 6;
-        p.setPen(QPen(accent, 3, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        const int L = 22;
+        const int inset = 5;
+        p.setPen(QPen(accent, 4, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
         auto corner = [&](int x, int y, int dx, int dy) {
             p.drawLine(x, y, x + dx * L, y);
             p.drawLine(x, y, x, y + dy * L);
@@ -290,30 +290,31 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     setStyleSheet(QStringLiteral(
         "background: #0D0F12;"
-        "border-right: 1px solid #2A2D35;"));
+        "border-right: 2px solid %1;")
+                      .arg(program ? QStringLiteral("#FF5A2C55") : QStringLiteral("#22C55E55")));
 
     auto* col = new QVBoxLayout(this);
     col->setContentsMargins(0, 0, 0, 0);
     col->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(24);
+    header->setFixedHeight(28);
     header->setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
-        "border-bottom: 1px solid #2A2D35;"));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
+        "border-bottom: 2px solid %1;")
+                              .arg(accent));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(10, 0, 10, 0);
-    h->setSpacing(6);
+    h->setSpacing(8);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
     title->setObjectName(program ? QStringLiteral("programLabel") : QStringLiteral("previewLabel"));
-    // Solid chip style — never violet; PROGRAM always brand orange
     title->setStyleSheet(program
                              ? QStringLiteral(
-                                   "color:#FFFFFF; font-weight:800; font-size:10px; letter-spacing:1px;"
-                                   "background:#FF5A2C; border-radius:2px; padding:2px 8px;")
+                                   "color:#FFFFFF; font-weight:900; font-size:11px; letter-spacing:1.5px;"
+                                   "background:#FF5A2C; border:1px solid #FF8C42; border-radius:2px; padding:3px 10px;")
                              : QStringLiteral(
-                                   "color:#04140A; font-weight:800; font-size:10px; letter-spacing:1px;"
-                                   "background:#22C55E; border-radius:2px; padding:2px 8px;"));
+                                   "color:#04140A; font-weight:900; font-size:11px; letter-spacing:1.5px;"
+                                   "background:#22C55E; border:1px solid #4ADE80; border-radius:2px; padding:3px 10px;"));
     h->addWidget(title);
     h->addStretch();
 

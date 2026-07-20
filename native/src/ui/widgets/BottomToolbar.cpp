@@ -23,12 +23,12 @@ protected:
             QPainter p(this);
             p.setRenderHint(QPainter::Antialiasing);
             QRadialGradient g(rect().center(), qMax(width(), height()) * 0.75);
-            g.setColorAt(0, QColor(255, 90, 44, 90));
-            g.setColorAt(0.55, QColor(255, 90, 44, 35));
+            g.setColorAt(0, QColor(255, 90, 44, 130));
+            g.setColorAt(0.55, QColor(255, 90, 44, 55));
             g.setColorAt(1, QColor(255, 90, 44, 0));
             p.setPen(Qt::NoPen);
             p.setBrush(g);
-            p.drawEllipse(rect().adjusted(-6, -4, 6, 4));
+            p.drawEllipse(rect().adjusted(-10, -6, 10, 6));
         }
         QPushButton::paintEvent(e);
     }
@@ -38,13 +38,13 @@ protected:
 BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
-    setFixedHeight(48);
+    setFixedHeight(50);
     setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #171A1F, stop:1 #0F1114);"
-        "border-top: 1px solid #3A3D45;"));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #0C0E12);"
+        "border-top: 2px solid #4A4D55;"));
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(10, 6, 10, 6);
-    row->setSpacing(5);
+    row->setContentsMargins(10, 7, 10, 7);
+    row->setSpacing(6);
 
     auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
     add->setObjectName(QStringLiteral("toolbarChromeBtn"));
@@ -174,11 +174,15 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         else
             m_recordBtn->setText(QStringLiteral("+ Record"));
 
-        m_statusPill->setText(QStringLiteral("1080p60  ·  %1 FPS  ·  ENC %2  ·  GPU %3%  ·  CPU %4%")
-                                  .arg(int(s.fpsRender))
-                                  .arg(int(s.fpsEncode))
-                                  .arg(int(s.gpuPercent))
-                                  .arg(int(s.cpuPercent)));
+        m_statusPill->setText(
+            QStringLiteral("<span style='color:#22C55E;font-weight:800;'>1080p60</span>"
+                           "  ·  <span style='color:#E0E2E8;'>%1 FPS</span>"
+                           "  ·  ENC %2  ·  GPU %3%  ·  CPU %4%")
+                .arg(int(s.fpsRender))
+                .arg(int(s.fpsEncode))
+                .arg(int(s.gpuPercent))
+                .arg(int(s.cpuPercent)));
+        m_statusPill->setTextFormat(Qt::RichText);
         m_streamBtn->update();
     });
 

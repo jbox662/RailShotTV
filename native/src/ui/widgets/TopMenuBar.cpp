@@ -15,19 +15,19 @@ namespace railshot {
 TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
-    setFixedHeight(36);
+    setFixedHeight(38);
     setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
-        "border-bottom: 1px solid #2A2D35;"));
+        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
+        "border-bottom: 2px solid #3A3D45;"));
     auto* row = new QHBoxLayout(this);
-    row->setContentsMargins(8, 0, 8, 0);
-    row->setSpacing(2);
+    row->setContentsMargins(10, 0, 10, 0);
+    row->setSpacing(3);
 
     auto* brand = new QLabel(this);
     brand->setObjectName(QStringLiteral("brandWordmark"));
     brand->setText(QStringLiteral(
-        "<span style='font-family:\"Bebas Neue\",\"Arial Narrow\",sans-serif; font-size:16px; letter-spacing:0.04em;'>"
-        "<span style='color:#F0F0F0;font-weight:400;'>RAILSHOT</span>"
+        "<span style='font-family:\"Bebas Neue\",\"Arial Narrow\",sans-serif; font-size:18px; letter-spacing:0.06em;'>"
+        "<span style='color:#F8F8FF;font-weight:400;'>RAILSHOT</span>"
         "<span style='color:#FF5A2C;font-weight:400;'> TV</span></span>"));
     row->addWidget(brand);
     row->addSpacing(12);

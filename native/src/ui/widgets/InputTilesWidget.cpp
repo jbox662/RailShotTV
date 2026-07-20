@@ -47,8 +47,9 @@ QString chromeBtnStyle(bool hot)
 InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
-    setMinimumHeight(110);
-    setStyleSheet(QStringLiteral("background:#0A0C0F; border-top:1px solid #1A1D24;"));
+    setMinimumHeight(118);
+    setStyleSheet(QStringLiteral(
+        "background:#080A0D; border-top:2px solid #3A3D45; border-right:1px solid #2A2D35;"));
     m_row = new QHBoxLayout(this);
     m_row->setContentsMargins(0, 0, 0, 0);
     m_row->setSpacing(0);
@@ -114,16 +115,16 @@ void InputTilesWidget::refresh()
         QString bodyBg = QStringLiteral("#0D0F12");
         QString outline;
         if (isInProgram) {
-            bodyBg = QStringLiteral("#1A0A0A");
-            outline = QStringLiteral("border:2px solid #FF5A2C60;");
+            bodyBg = QStringLiteral("#220C0C");
+            outline = QStringLiteral("border:2px solid #FF5A2C;");
         } else if (isInPreview) {
-            bodyBg = QStringLiteral("#0A150A");
-            outline = QStringLiteral("border:2px solid #22C55E60;");
+            bodyBg = QStringLiteral("#0C1A0E");
+            outline = QStringLiteral("border:2px solid #22C55E;");
         } else if (isSel) {
-            bodyBg = QStringLiteral("#0A1220");
-            outline = QStringLiteral("border:2px solid #4F9EFF60;");
+            bodyBg = QStringLiteral("#0C1830");
+            outline = QStringLiteral("border:2px solid #4F9EFF;");
         } else {
-            outline = QStringLiteral("border-right:1px solid #2A2D35;");
+            outline = QStringLiteral("border:1px solid #3A3D45; border-right:2px solid #2A2D35;");
         }
         tile->setStyleSheet(QStringLiteral("QFrame{background:%1;%2}").arg(bodyBg, outline));
 
@@ -138,26 +139,26 @@ void InputTilesWidget::refresh()
         col->setSpacing(0);
 
         QString headerBg = QStringLiteral(
-            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1E2128,stop:1 #181B22);");
-        QString headerColor = QStringLiteral("#C0C2C8");
+            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2E36,stop:1 #181B22);");
+        QString headerColor = QStringLiteral("#E0E2E8");
         const bool hot = isInProgram || isInPreview;
         if (isInProgram) {
             headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FF5A2C,stop:1 #CC3A14);");
+                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FF8C42,stop:1 #FF5A2C);");
             headerColor = QStringLiteral("#000000");
         } else if (isInPreview) {
             headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #22C55E,stop:1 #16A34A);");
-            headerColor = QStringLiteral("#000000");
+                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);");
+            headerColor = QStringLiteral("#04140A");
         } else if (isSel) {
             headerBg = QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A2A3A,stop:1 #141E2A);");
-            headerColor = QStringLiteral("#C8DAFF");
+                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A3A5A,stop:1 #142838);");
+            headerColor = QStringLiteral("#B8D4FF");
         }
 
         auto* header = new QWidget(tile);
-        header->setFixedHeight(22);
-        header->setStyleSheet(headerBg + QStringLiteral("border-bottom:1px solid #2A2D35;"));
+        header->setFixedHeight(24);
+        header->setStyleSheet(headerBg + QStringLiteral("border-bottom:1px solid #4A4D55;"));
         auto* headerLay = new QHBoxLayout(header);
         headerLay->setContentsMargins(6, 0, 4, 0);
         headerLay->setSpacing(4);
@@ -202,23 +203,27 @@ void InputTilesWidget::refresh()
         preview->setAlignment(Qt::AlignCenter);
         preview->setMinimumHeight(60);
         preview->setMaximumHeight(80);
+        const QString typeColor = src.colorHex.isEmpty() ? QStringLiteral("#4F9EFF") : src.colorHex;
         preview->setStyleSheet(QStringLiteral(
-            "background:#000000; color:%1; font-weight:700; letter-spacing:0.5px; font-size:10px;"
+            "background:#000000; color:%1; font-weight:900; letter-spacing:1px; font-size:11px;"
+            "border-top:1px solid #1A1D24; border-bottom:1px solid #1A1D24;"
             "opacity:%2;")
-                                   .arg(src.colorHex, src.visible ? QStringLiteral("1") : QStringLiteral("0.35")));
+                                   .arg(typeColor, src.visible ? QStringLiteral("1") : QStringLiteral("0.35")));
         col->addWidget(preview, 1);
 
         auto* actions = new QHBoxLayout();
-        actions->setContentsMargins(4, 3, 4, 3);
-        actions->setSpacing(3);
+        actions->setContentsMargins(4, 4, 4, 4);
+        actions->setSpacing(4);
 
         auto* up = new QPushButton(QStringLiteral("◀"), tile);
+        up->setObjectName(QStringLiteral("toolbarChromeBtn"));
         up->setFixedSize(22, 20);
         up->setToolTip(QStringLiteral("Move up in z-order"));
         connect(up, &QPushButton::clicked, this, [this, id = src.id] {
             m_engine->moveSourceZOrder(id, 1);
         });
         auto* down = new QPushButton(QStringLiteral("▶"), tile);
+        down->setObjectName(QStringLiteral("toolbarChromeBtn"));
         down->setFixedSize(22, 20);
         down->setToolTip(QStringLiteral("Move down in z-order"));
         connect(down, &QPushButton::clicked, this, [this, id = src.id] {
@@ -227,12 +232,13 @@ void InputTilesWidget::refresh()
 
         auto* miniGo = new QPushButton(QStringLiteral("GO"), tile);
         miniGo->setFixedHeight(20);
-        miniGo->setObjectName(QStringLiteral("goButton"));
+        miniGo->setObjectName(QStringLiteral("tileMiniGo"));
         miniGo->setToolTip(QStringLiteral("Take transition"));
         connect(miniGo, &QPushButton::clicked, this, [this] { m_engine->go(); });
 
         auto* cut = new QPushButton(QStringLiteral("Cut"), tile);
         cut->setFixedHeight(20);
+        cut->setObjectName(QStringLiteral("tileMiniCut"));
         connect(cut, &QPushButton::clicked, this, [this] {
             m_engine->go(TransitionType::Cut);
         });

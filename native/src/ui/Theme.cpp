@@ -33,26 +33,27 @@ void registerFonts()
 QString panelHeaderStyle(PanelAccent accent)
 {
     const char* border = kBlue;
-    const char* tint = "rgba(79,158,255,0.14)";
+    const char* tint = "rgba(79,158,255,0.28)";
     switch (accent) {
     case PanelAccent::Brand:
-        border = kBrand; tint = "rgba(255,90,44,0.14)"; break;
+        border = kBrand; tint = "rgba(255,90,44,0.28)"; break;
     case PanelAccent::Blue:
-        border = kBlue; tint = "rgba(79,158,255,0.14)"; break;
+        border = kBlue; tint = "rgba(79,158,255,0.28)"; break;
     case PanelAccent::Violet:
-        border = kViolet; tint = "rgba(168,85,247,0.14)"; break;
+        border = kViolet; tint = "rgba(168,85,247,0.28)"; break;
     case PanelAccent::Emerald:
-        border = kEmerald; tint = "rgba(34,197,94,0.14)"; break;
+        border = kEmerald; tint = "rgba(34,197,94,0.28)"; break;
     case PanelAccent::Cyan:
-        border = kCyan; tint = "rgba(34,211,238,0.14)"; break;
+        border = kCyan; tint = "rgba(34,211,238,0.28)"; break;
     case PanelAccent::Amber:
-        border = kAmber; tint = "rgba(251,191,36,0.14)"; break;
+        border = kAmber; tint = "rgba(251,191,36,0.28)"; break;
     case PanelAccent::Pink:
-        border = "#EC4899"; tint = "rgba(236,72,153,0.14)"; break;
+        border = "#EC4899"; tint = "rgba(236,72,153,0.28)"; break;
     }
     return QStringLiteral(
-               "border-left: 2px solid %1;"
-               "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %2, stop:0.65 transparent);")
+               "border-left: 3px solid %1;"
+               "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 %2, stop:0.55 transparent);"
+               "border-bottom: 1px solid #3A3D45;")
         .arg(QString::fromLatin1(border), QString::fromLatin1(tint));
 }
 
@@ -79,9 +80,9 @@ QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* p
     }
     bar->setStyleSheet(QStringLiteral(
         "QWidget#pageHeader {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #141619, stop:1 #0F1114);"
-        "  border-bottom: 1px solid #2A2D35;"
-        "  border-top: 2px solid %1;"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #0F1114);"
+        "  border-bottom: 1px solid #3A3D45;"
+        "  border-top: 3px solid %1;"
         "}").arg(QString::fromLatin1(accentHex)));
 
     auto* lay = new QHBoxLayout(bar);
@@ -99,8 +100,8 @@ QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* p
     auto* title = new QLabel(pageTitle.toUpper(), bar);
     title->setObjectName(QStringLiteral("pageHeaderTitle"));
     title->setStyleSheet(QStringLiteral(
-        "font-family:'DM Sans'; font-size:11px; font-weight:700; letter-spacing:2px;"
-        "color:#8892A4; background:transparent;"));
+        "font-family:'DM Sans'; font-size:12px; font-weight:800; letter-spacing:2px;"
+        "color:%1; background:transparent;").arg(QString::fromLatin1(accentHex)));
 
     lay->addWidget(brand);
     lay->addWidget(tv);

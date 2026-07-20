@@ -45,7 +45,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
 
     m_liveTopBorder = new QFrame(central);
     m_liveTopBorder->setObjectName(QStringLiteral("liveTopBorder"));
-    m_liveTopBorder->setFixedHeight(3);
+    m_liveTopBorder->setFixedHeight(4);
     m_liveTopBorder->setVisible(false);
     outer->addWidget(m_liveTopBorder);
 
@@ -78,7 +78,8 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     outer->addLayout(root, 1);
     setCentralWidget(central);
 
-    statusBar()->setStyleSheet(QStringLiteral("background:#0F1114; color:#606878;"));
+    statusBar()->setStyleSheet(QStringLiteral(
+        "background:#0F1114; color:#8892A4; border-top:1px solid #3A3D45;"));
     statusBar()->showMessage(QStringLiteral("Ready"));
 
     m_hotkeys = new HotkeyDispatcher(engine, this);
@@ -187,6 +188,9 @@ void MainWindow::navigateTo(const QString& pageId)
         if (auto* p = m_stack->currentWidget())
             p->setFocus(Qt::OtherFocusReason);
     }
+    // Dashboard keeps the broadcast TopMenuBar; secondary pages use their own page headers.
+    if (m_top)
+        m_top->setVisible(pageId == QLatin1String("dashboard"));
 }
 
 void MainWindow::openProjectDialog()

@@ -142,30 +142,29 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     inputsRow->setSpacing(0);
 
     auto* scenesCol = new QWidget(this);
-    scenesCol->setFixedWidth(180);
-    scenesCol->setStyleSheet(QStringLiteral("background:#0A0C0F; border-right:1px solid #2A2D35;"));
+    scenesCol->setFixedWidth(188);
+    scenesCol->setObjectName(QStringLiteral("chromePanel"));
+    scenesCol->setStyleSheet(QStringLiteral(
+        "background:#0A0C0F; border-right: 2px solid #4F9EFF66; border-top: 1px solid #3A3D45;"));
     auto* scenesLay = new QVBoxLayout(scenesCol);
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
     auto* scenesHeader = new QWidget(scenesCol);
-    scenesHeader->setFixedHeight(28);
+    scenesHeader->setFixedHeight(30);
     scenesHeader->setStyleSheet(
         QStringLiteral(
-            "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(79,158,255,0.14), stop:0.65 transparent);"
-            "border-bottom:1px solid #1A1D24; border-left:2px solid #4F9EFF;"));
+            "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(79,158,255,0.32), stop:0.55 transparent);"
+            "border-bottom:1px solid #3A3D45; border-left:3px solid #4F9EFF;"));
     auto* scenesHeaderLay = new QHBoxLayout(scenesHeader);
     scenesHeaderLay->setContentsMargins(10, 0, 8, 0);
-    auto* scenesTitle = new QLabel(QStringLiteral("Scenes"), scenesHeader);
+    auto* scenesTitle = new QLabel(QStringLiteral("SCENES"), scenesHeader);
     scenesTitle->setObjectName(QStringLiteral("panelTitleBlue"));
     scenesTitle->setStyleSheet(QStringLiteral(
-        "color:#4F9EFF; font-weight:800; font-size:10px; letter-spacing:1.5px; background:transparent;"
-        "text-transform:uppercase;"));
+        "color:#4F9EFF; font-weight:900; font-size:10px; letter-spacing:2px; background:transparent;"));
     auto* addScene = new QPushButton(QStringLiteral("+"), scenesHeader);
     addScene->setObjectName(QStringLiteral("panelAddButton"));
-    addScene->setFixedSize(24, 20);
-    addScene->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A3AFF,stop:1 #1230CC);"
-        "border:1px solid #3A6AFF;border-radius:3px;color:white;font-weight:800;}"));
+    addScene->setFixedSize(24, 22);
+    addScene->setCursor(Qt::PointingHandCursor);
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
