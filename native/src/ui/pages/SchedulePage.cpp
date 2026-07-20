@@ -91,11 +91,11 @@ SchedulePage::SchedulePage(QWidget* parent)
     auto* listLay = new QVBoxLayout(listInner);
     listLay->setContentsMargins(0, 0, 0, 0);
     listLay->setSpacing(8);
-    auto* empty = new QLabel(QStringLiteral("No events found — click Add Event to schedule a stream"), listInner);
-    empty->setAlignment(Qt::AlignCenter);
+    auto* empty = theme::makeEmptyState(QStringLiteral("◷"),
+        QStringLiteral("No events found — click Add Event to schedule a stream"), listInner);
     empty->setMinimumHeight(120);
-    empty->setStyleSheet(QStringLiteral(
-        "color:#606878; border:1px dashed #2A3350; border-radius:8px; font-size:13px;"));
+    empty->setStyleSheet(empty->styleSheet()
+        + QStringLiteral("border:1px dashed #2A3350; border-radius:8px;"));
     listLay->addWidget(empty);
     listHost->setWidget(listInner);
     content->addWidget(listHost, 1);

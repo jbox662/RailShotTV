@@ -76,9 +76,9 @@ void SceneListWidget::refresh()
     clear();
     const auto p = m_engine->projectSnapshot();
     if (p.scenes.isEmpty()) {
-        auto* empty = new QListWidgetItem(QStringLiteral("No scenes yet. Click + to add one."), this);
+        auto* empty = new QListWidgetItem(QStringLiteral("◌  No scenes yet — click +"), this);
         empty->setFlags(Qt::NoItemFlags);
-        empty->setForeground(QColor(QStringLiteral("#404450")));
+        empty->setForeground(QColor(QStringLiteral("#606878")));
         return;
     }
     for (const auto& sc : p.scenes) {

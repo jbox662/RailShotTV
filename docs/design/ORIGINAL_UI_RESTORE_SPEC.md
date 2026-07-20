@@ -836,13 +836,13 @@ Use this as an implementation order for native Qt:
 
 ### Acceptance criteria (visual)
 
-- [ ] RAILSHOT + orange TV wordmark on every page top bar / dashboard
-- [ ] Preview always green, Program always orange, selection blue
-- [ ] GO button glows green when Preview armed
-- [ ] Stream CTA glows brand orange when idle
-- [ ] Panel headers use chromatic left-border + gradient tint classes
-- [ ] No flat single-color toolbars — use 180° gradients + inset highlight
-- [ ] Empty states use muted copy + icon, never blank white
+- [x] RAILSHOT + orange TV wordmark on every page top bar / dashboard
+- [x] Preview always green, Program always orange, selection blue
+- [x] GO button glows green when Preview armed
+- [x] Stream CTA glows brand orange when idle
+- [x] Panel headers use chromatic left-border + gradient tint classes
+- [x] No flat single-color toolbars — use 180° gradients + inset highlight
+- [x] Empty states use muted copy + icon, never blank white
 
 ---
 

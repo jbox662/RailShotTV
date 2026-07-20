@@ -4,6 +4,8 @@
 #include <QColor>
 #include <QWidget>
 
+class QLabel;
+
 namespace railshot {
 namespace theme {
 
@@ -46,6 +48,8 @@ QColor color(const char* hex);
 QString panelHeaderStyle(PanelAccent accent);
 void applyPanelHeader(QWidget* widget, PanelAccent accent);
 QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* parent);
+/** Muted empty-state label with glyph + copy (never blank white). */
+QLabel* makeEmptyState(const QString& glyph, const QString& message, QWidget* parent);
 
 } // namespace theme
 } // namespace railshot

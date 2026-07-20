@@ -1,6 +1,8 @@
 #include "ui/widgets/TopMenuBar.h"
 #include "core/EngineController.h"
+#include "core/SettingsStore.h"
 #include "ui/Theme.h"
+#include <QSignalBlocker>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
@@ -100,9 +102,16 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
         if (!on) m_pauseInputs->setObjectName(QStringLiteral("menuChromeBtn"));
     });
 
-    connect(addChrome(QStringLiteral("Basic")), &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, QStringLiteral("Basic"),
-                                 QStringLiteral("Basic mode — simplified layout coming soon."));
+    m_basic = addChrome(QStringLiteral("Basic"));
+    m_basic->setCheckable(true);
+    connect(m_basic, &QPushButton::toggled, this, [this](bool on) {
+        setBasicMode(on);
+        emit basicModeChanged(on);
+        if (m_engine) {
+            auto ui = m_engine->settings()->uiState();
+            ui.insert(QStringLiteral("basicMode"), on);
+            m_engine->settings()->setUiState(ui);
+        }
     });
     connect(addChrome(QStringLiteral("Settings")), &QPushButton::clicked, this, &TopMenuBar::openSettings);
 
@@ -125,6 +134,28 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
                               .arg(int(s.fpsRender > 0 ? s.fpsRender : 30))
                               .arg(s.streaming ? qMax(cpu, 12) : qMax(cpu, 3)));
     });
+
+    if (m_engine) {
+        const bool basic = m_engine->settings()->uiState().value(QStringLiteral("basicMode")).toBool(false);
+        if (basic)
+            setBasicMode(true);
+    }
+}
+
+void TopMenuBar::setBasicMode(bool on)
+{
+    m_basicMode = on;
+    if (m_basic) {
+        QSignalBlocker block(m_basic);
+        m_basic->setChecked(on);
+        m_basic->setText(on ? QStringLiteral("Advanced") : QStringLiteral("Basic"));
+        m_basic->setStyleSheet(on
+            ? QStringLiteral(
+                  "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A3A2A,stop:1 #122018);"
+                  "border:1px solid #22C55E60;border-radius:3px;color:#22C55E;font-size:11px;padding:3px 10px;}")
+            : QString());
+        if (!on) m_basic->setObjectName(QStringLiteral("menuChromeBtn"));
+    }
 }
 
 } // namespace railshot

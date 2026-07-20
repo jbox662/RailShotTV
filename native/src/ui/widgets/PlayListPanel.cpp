@@ -1,4 +1,5 @@
 #include "ui/widgets/PlayListPanel.h"
+#include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include <QVBoxLayout>
@@ -26,7 +27,9 @@ PlayListPanel::PlayListPanel(EngineController* engine, QWidget* parent)
 
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
-    header->setStyleSheet(QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;"));
+    header->setStyleSheet(
+        QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;")
+        + theme::panelHeaderStyle(theme::PanelAccent::Violet));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(12, 0, 8, 0);
     auto* title = new QLabel(QStringLiteral("PLAYLIST"), header);
@@ -71,7 +74,7 @@ void PlayListPanel::refresh()
     m_list->clear();
     const auto p = m_engine->projectSnapshot();
     if (p.scenes.isEmpty()) {
-        auto* empty = new QListWidgetItem(QStringLiteral("No scenes — add one on Dashboard"), m_list);
+        auto* empty = new QListWidgetItem(QStringLiteral("◌  No scenes — add one on Dashboard"), m_list);
         empty->setFlags(Qt::NoItemFlags);
         empty->setForeground(QColor(QStringLiteral("#606878")));
         return;

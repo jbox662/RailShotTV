@@ -3,6 +3,7 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QStyle>
+#include <QPoint>
 
 namespace railshot {
 
@@ -69,16 +70,21 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     multi->setCursor(Qt::PointingHandCursor);
     connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
     row->addWidget(multi);
+    m_multiBtn = multi;
 
     auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
     playlist->setCursor(Qt::PointingHandCursor);
     connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
     row->addWidget(playlist);
+    m_playlistBtn = playlist;
 
-    auto* overlay = new QPushButton(QStringLiteral("Overlay"), this);
+    auto* overlay = new QPushButton(QStringLiteral("Overlay  ▾"), this);
     overlay->setCursor(Qt::PointingHandCursor);
-    connect(overlay, &QPushButton::clicked, this, &BottomToolbar::overlayRequested);
+    connect(overlay, &QPushButton::clicked, this, [this, overlay] {
+        emit overlayMenuRequested(overlay->mapToGlobal(QPoint(0, overlay->height())));
+    });
     row->addWidget(overlay);
+    m_overlayBtn = overlay;
 
     auto* replayBtn = new QPushButton(QStringLiteral("Save Replay"), this);
     connect(replayBtn, &QPushButton::clicked, this, [this] {
@@ -148,6 +154,13 @@ void BottomToolbar::setMixerOpen(bool open)
         m_mixerBtn->style()->unpolish(m_mixerBtn);
         m_mixerBtn->style()->polish(m_mixerBtn);
     }
+}
+
+void BottomToolbar::setBasicMode(bool on)
+{
+    if (m_multiBtn) m_multiBtn->setVisible(!on);
+    if (m_playlistBtn) m_playlistBtn->setVisible(!on);
+    // Overlay stays available but catalogue is simplified via Dashboard
 }
 
 } // namespace railshot

@@ -89,6 +89,8 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
         connect(dash, &DashboardPage::openSceneEditorRequested, this, [this] {
             navigateTo(QStringLiteral("sceneeditor"));
         });
+        connect(m_top, &TopMenuBar::basicModeChanged, dash, &DashboardPage::setBasicMode);
+        dash->setBasicMode(m_top->basicMode());
     }
     connect(sceneEditor, &SceneEditorPage::backToDashboard, this, [this] {
         navigateTo(QStringLiteral("dashboard"));
@@ -104,6 +106,24 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     });
     connect(m_top, &TopMenuBar::saveProject, this, &MainWindow::saveProjectDialog);
     connect(m_top, &TopMenuBar::newProject, this, [this] {
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("New Project"));
+        box.setIcon(QMessageBox::Warning);
+        box.setText(QStringLiteral("Clear all scenes and start a new project?"));
+        box.setInformativeText(QStringLiteral("Unsaved changes will be lost. This cannot be undone."));
+        box.setStyleSheet(QStringLiteral(
+            "QMessageBox{background:#1A1D22;}"
+            "QLabel{color:#D0D2D8;}"
+            "QPushButton{min-width:100px;padding:6px 14px;}"));
+        auto* cancel = box.addButton(QStringLiteral("Cancel"), QMessageBox::RejectRole);
+        auto* clear = box.addButton(QStringLiteral("Clear & Start New"), QMessageBox::DestructiveRole);
+        clear->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#EF4444;color:white;font-weight:800;border:1px solid #F87171;}"));
+        box.exec();
+        if (box.clickedButton() != clear) {
+            Q_UNUSED(cancel);
+            return;
+        }
         m_engine->newProject();
         statusBar()->showMessage(QStringLiteral("New project"), 2000);
     });

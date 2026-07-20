@@ -25,7 +25,11 @@ QPushButton:hover {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32363F, stop:1 #242830);
 }
 QPushButton:pressed {
-  background: #16181E;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #16181E, stop:1 #12141A);
+  border-color: #3A3D45;
+  color: #A0A8B8;
+  padding-top: 6px;
+  padding-bottom: 4px;
 }
 QPushButton:checked {
   border-color: #FF5A2C;
@@ -48,6 +52,12 @@ QPushButton#goButton {
 }
 QPushButton#goButton:hover {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ADE80, stop:1 #22C55E);
+}
+QPushButton#goButton:pressed {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #16A34A, stop:1 #15803D);
+  border: 1px solid #16A34A;
+  padding-top: 11px;
+  padding-bottom: 9px;
 }
 QPushButton#goButton:disabled {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A3A2A, stop:1 #1E281E);
@@ -92,6 +102,12 @@ QPushButton#streamButton {
 }
 QPushButton#streamButton:hover {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF7A4C, stop:1 #FF5A2C);
+}
+QPushButton#streamButton:pressed {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #CC3A18, stop:1 #A32E14);
+  border: 1px solid #CC3A18;
+  padding-top: 7px;
+  padding-bottom: 5px;
 }
 
 QPushButton#endStreamButton {

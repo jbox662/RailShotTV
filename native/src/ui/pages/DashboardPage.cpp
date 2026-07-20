@@ -10,7 +10,9 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "ui/widgets/MultiCorderPanel.h"
 #include "ui/widgets/PlayListPanel.h"
+#include "ui/Theme.h"
 #include "core/EngineController.h"
+#include "core/Types.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
@@ -32,7 +34,8 @@
 namespace railshot {
 
 namespace {
-bool addBrowserPreset(EngineController* engine, const QString& name, const QString& resourcePath)
+bool addBrowserPreset(EngineController* engine, const QString& name, const QString& resourcePath,
+                      double x = 0.05, double y = 0.72, double w = 0.55, double h = 0.22)
 {
     const QString qrc = QStringLiteral(":/overlays/%1").arg(resourcePath);
     QFile f(qrc);
@@ -55,10 +58,65 @@ bool addBrowserPreset(EngineController* engine, const QString& name, const QStri
     if (id.isEmpty()) return false;
     engine->updateSourceSettings(id, settings);
     Transform t;
-    t.x = 0.05; t.y = 0.72; t.w = 0.55; t.h = 0.22;
+    t.x = x; t.y = y; t.w = w; t.h = h;
     engine->updateSourceTransform(id, t);
     engine->setSelectedSourceId(id);
     return true;
+}
+
+QString addTypedOverlay(EngineController* engine, SourceType type, const QString& name,
+                        double x, double y, double w, double h)
+{
+    const QString id = engine->addSource(type, name);
+    if (id.isEmpty()) return {};
+    Transform t;
+    t.x = x; t.y = y; t.w = w; t.h = h;
+    engine->updateSourceTransform(id, t);
+    engine->setSelectedSourceId(id);
+    return id;
+}
+
+void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* page)
+{
+    auto* openEd = menu->addAction(QStringLiteral("Open Scene Editor"));
+    QObject::connect(openEd, &QAction::triggered, page, &DashboardPage::openSceneEditorRequested);
+    menu->addSeparator();
+    menu->addAction(QStringLiteral("Billiards Scoreboard"), page, [engine] {
+        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Billiards Scoreboard"), 0.05, 0.78, 0.9, 0.18);
+        engine->pushScoreboardToProgram();
+    });
+    menu->addAction(QStringLiteral("Basketball Board"), page, [engine] {
+        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Basketball Board"), 0.15, 0.05, 0.7, 0.12);
+    });
+    menu->addAction(QStringLiteral("Player Lower Third"), page, [engine] {
+        if (!addBrowserPreset(engine, QStringLiteral("Player Lower Third"), QStringLiteral("player-intro.html"),
+                              0.05, 0.78, 0.55, 0.18))
+            addTypedOverlay(engine, SourceType::LowerThird, QStringLiteral("Player Lower Third"), 0.05, 0.78, 0.55, 0.18);
+    });
+    menu->addAction(QStringLiteral("Team Lower Third"), page, [engine] {
+        addTypedOverlay(engine, SourceType::LowerThird, QStringLiteral("Team Lower Third"), 0.05, 0.78, 0.55, 0.18);
+    });
+    menu->addAction(QStringLiteral("Score Ticker"), page, [engine] {
+        if (!addBrowserPreset(engine, QStringLiteral("Score Ticker"), QStringLiteral("match-point.html"),
+                              0.0, 0.92, 1.0, 0.08))
+            addTypedOverlay(engine, SourceType::Browser, QStringLiteral("Score Ticker"), 0.0, 0.92, 1.0, 0.08);
+    });
+    menu->addAction(QStringLiteral("Sub Alert"), page, [engine] {
+        addTypedOverlay(engine, SourceType::Alert, QStringLiteral("Sub Alert"), 0.3, 0.3, 0.4, 0.3);
+    });
+    menu->addAction(QStringLiteral("Logo Overlay"), page, [engine] {
+        addTypedOverlay(engine, SourceType::Image, QStringLiteral("Logo Overlay"), 0.85, 0.05, 0.12, 0.12);
+    });
+    menu->addAction(QStringLiteral("Camera Frame"), page, [engine] {
+        if (!addBrowserPreset(engine, QStringLiteral("Camera Frame"), QStringLiteral("break-and-run.html"),
+                              0.0, 0.0, 1.0, 1.0))
+            addTypedOverlay(engine, SourceType::Browser, QStringLiteral("Camera Frame"), 0.0, 0.0, 1.0, 1.0);
+    });
+    menu->addSeparator();
+    menu->addAction(QStringLiteral("Break and Run"), page, [engine] {
+        addBrowserPreset(engine, QStringLiteral("Break and Run"), QStringLiteral("break-and-run.html"),
+                         0.2, 0.25, 0.6, 0.4);
+    });
 }
 } // namespace
 
@@ -92,9 +150,11 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     scenesLay->setSpacing(0);
     auto* scenesHeader = new QWidget(scenesCol);
     scenesHeader->setFixedHeight(28);
-    scenesHeader->setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
-        "border-bottom:1px solid #1A1D24; border-top:2px solid #4F9EFF;"));
+    scenesHeader->setStyleSheet(
+        QStringLiteral(
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
+            "border-bottom:1px solid #1A1D24; border-top:2px solid #4F9EFF;")
+        + theme::panelHeaderStyle(theme::PanelAccent::Blue));
     auto* scenesHeaderLay = new QHBoxLayout(scenesHeader);
     scenesHeaderLay->setContentsMargins(10, 0, 8, 0);
     auto* scenesTitle = new QLabel(QStringLiteral("SCENES"), scenesHeader);
@@ -187,26 +247,10 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         setPlayListOpen(open);
         if (open) setMultiCorderOpen(false);
     });
-    connect(m_toolbar, &BottomToolbar::overlayRequested, this, [this] {
-        emit openSceneEditorRequested();
-    });
-
-    m_toolbar->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_toolbar, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
-        QMenu menu;
-        menu.addAction(QStringLiteral("Preset: Player Intro"), this, [this] {
-            if (!addBrowserPreset(m_engine, QStringLiteral("Player Intro"), QStringLiteral("player-intro.html")))
-                QMessageBox::warning(this, QStringLiteral("Preset"), QStringLiteral("Could not load player-intro.html"));
-        });
-        menu.addAction(QStringLiteral("Preset: Match Point"), this, [this] {
-            if (!addBrowserPreset(m_engine, QStringLiteral("Match Point"), QStringLiteral("match-point.html")))
-                QMessageBox::warning(this, QStringLiteral("Preset"), QStringLiteral("Could not load match-point.html"));
-        });
-        menu.addAction(QStringLiteral("Preset: Break and Run"), this, [this] {
-            if (!addBrowserPreset(m_engine, QStringLiteral("Break and Run"), QStringLiteral("break-and-run.html")))
-                QMessageBox::warning(this, QStringLiteral("Preset"), QStringLiteral("Could not load break-and-run.html"));
-        });
-        menu.exec(m_toolbar->mapToGlobal(pos));
+    connect(m_toolbar, &BottomToolbar::overlayMenuRequested, this, [this](const QPoint& globalPos) {
+        QMenu menu(this);
+        populateOverlayMenu(&menu, m_engine, this);
+        menu.exec(globalPos);
     });
 
     auto* tick = new QTimer(this);
@@ -217,6 +261,18 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     tick->start(16);
 
     setFocusPolicy(Qt::StrongFocus);
+}
+
+void DashboardPage::setBasicMode(bool on)
+{
+    if (m_toolbar)
+        m_toolbar->setBasicMode(on);
+    if (on) {
+        setMultiCorderOpen(false);
+        setPlayListOpen(false);
+        if (m_mixerOpen)
+            setMixerOpen(false);
+    }
 }
 
 void DashboardPage::setMixerOpen(bool open)

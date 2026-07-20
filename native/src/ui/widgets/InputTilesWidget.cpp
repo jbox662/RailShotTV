@@ -1,4 +1,5 @@
 #include "ui/widgets/InputTilesWidget.h"
+#include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include <QPushButton>
@@ -57,11 +58,8 @@ void InputTilesWidget::refresh()
     const auto p = m_engine->projectSnapshot();
     const auto* scene = p.findScene(p.activeSceneId);
     if (!scene || scene->sources.isEmpty()) {
-        auto* empty = new QLabel(QStringLiteral("No inputs — click Add Input to begin"), this);
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(QStringLiteral(
-            "color:#4A5060; font-size:12px; background:transparent; padding:16px;"));
-        m_row->addWidget(empty);
+        m_row->addWidget(theme::makeEmptyState(QStringLiteral("◇"),
+            QStringLiteral("No inputs — click Add Input to begin"), this));
         return;
     }
     const QString selected = m_engine->selectedSourceId();

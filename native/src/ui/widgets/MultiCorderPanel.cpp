@@ -1,4 +1,5 @@
 #include "ui/widgets/MultiCorderPanel.h"
+#include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include <QHBoxLayout>
@@ -25,7 +26,9 @@ MultiCorderPanel::MultiCorderPanel(EngineController* engine, QWidget* parent)
 
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
-    header->setStyleSheet(QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;"));
+    header->setStyleSheet(
+        QStringLiteral("background:#0F1114; border-bottom:1px solid #2A2D35;")
+        + theme::panelHeaderStyle(theme::PanelAccent::Brand));
     auto* h = new QHBoxLayout(header);
     h->setContentsMargins(12, 0, 8, 0);
     auto* title = new QLabel(QStringLiteral("MULTICORDER"), header);
@@ -68,10 +71,8 @@ void MultiCorderPanel::refresh()
     const auto p = m_engine->projectSnapshot();
     const auto* scene = p.findScene(p.activeSceneId);
     if (!scene || scene->sources.isEmpty()) {
-        auto* empty = new QLabel(QStringLiteral("No sources in active scene"), this);
-        empty->setStyleSheet(QStringLiteral("color:#606878; padding:16px;"));
-        empty->setAlignment(Qt::AlignCenter);
-        m_list->addWidget(empty);
+        m_list->addWidget(theme::makeEmptyState(QStringLiteral("▣"),
+            QStringLiteral("No sources in active scene"), this));
         m_list->addStretch();
         return;
     }

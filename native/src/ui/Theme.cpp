@@ -4,6 +4,7 @@
 #include <QFontDatabase>
 #include <QDebug>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QLabel>
 
 namespace railshot {
@@ -107,6 +108,20 @@ QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* p
     lay->addWidget(title);
     lay->addStretch();
     return bar;
+}
+
+QLabel* makeEmptyState(const QString& glyph, const QString& message, QWidget* parent)
+{
+    auto* wrap = new QLabel(parent);
+    wrap->setAlignment(Qt::AlignCenter);
+    wrap->setWordWrap(true);
+    wrap->setMinimumHeight(72);
+    wrap->setText(QStringLiteral("<div style='color:#4A5060;font-size:22px;padding-bottom:6px;'>%1</div>"
+                                 "<div style='color:#606878;font-size:12px;'>%2</div>")
+                      .arg(glyph.toHtmlEscaped(), message.toHtmlEscaped()));
+    wrap->setStyleSheet(QStringLiteral("background:transparent; padding:16px;"));
+    wrap->setTextFormat(Qt::RichText);
+    return wrap;
 }
 
 QString loadStyleSheet()

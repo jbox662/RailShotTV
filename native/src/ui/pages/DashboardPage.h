@@ -19,6 +19,7 @@ class DashboardPage : public QWidget {
     Q_OBJECT
 public:
     explicit DashboardPage(EngineController* engine, QWidget* parent = nullptr);
+    void setBasicMode(bool on);
 
 signals:
     void openSceneEditorRequested();
