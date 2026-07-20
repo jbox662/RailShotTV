@@ -164,18 +164,6 @@ QPushButton#panelAddButton {
   border-radius: 3px;
 }
 
-QPushButton#mixerToggle {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E2128, stop:1 #16181E);
-  border: 1px solid #3A3D45;
-  color: #C0C2C8;
-  font-weight: 700;
-}
-QPushButton#mixerToggle:checked {
-  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A3AFF, stop:1 #1230CC);
-  border: 1px solid #3A6AFF;
-  color: #FFFFFF;
-}
-
 QPushButton#menuChromeBtn {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E2128, stop:1 #16181E);
   border: 1px solid #3A3D45;

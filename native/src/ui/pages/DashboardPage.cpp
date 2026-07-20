@@ -186,7 +186,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     root->addLayout(inputsRow);
 
     m_toolbar = new BottomToolbar(engine, this);
-    m_toolbar->setMixerOpen(true);
     root->addWidget(m_toolbar);
 
     m_drawerBackdrop = new QFrame(this);
@@ -235,11 +234,6 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         dlg.exec();
     });
 
-    // Mixer stays visible; toolbar button reflects open state only
-    connect(m_toolbar, &BottomToolbar::mixerToggleRequested, this, [this] {
-        m_toolbar->setMixerOpen(true);
-    });
-
     connect(m_toolbar, &BottomToolbar::multiCorderRequested, this, [this] {
         const bool open = !m_multi->isVisible();
         setMultiCorderOpen(open);
@@ -273,19 +267,6 @@ void DashboardPage::setBasicMode(bool on)
     if (on) {
         setMultiCorderOpen(false);
         setPlayListOpen(false);
-    }
-}
-
-void DashboardPage::setMixerOpen(bool open)
-{
-    // Keep mixer permanently visible in the inputs strip.
-    Q_UNUSED(open);
-    m_mixerOpen = true;
-    if (m_toolbar)
-        m_toolbar->setMixerOpen(true);
-    if (m_mixer) {
-        m_mixer->setMinimumWidth(280);
-        m_mixer->setMaximumWidth(360);
     }
 }
 

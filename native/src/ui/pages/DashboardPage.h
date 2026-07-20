@@ -29,7 +29,6 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    void setMixerOpen(bool open);
     void openDrawer();
     void closeDrawer();
     void layoutDrawer();
@@ -47,7 +46,6 @@ private:
     QFrame* m_drawerBackdrop = nullptr;
     MultiCorderPanel* m_multi = nullptr;
     PlayListPanel* m_playlist = nullptr;
-    bool m_mixerOpen = true;
 };
 
 } // namespace railshot

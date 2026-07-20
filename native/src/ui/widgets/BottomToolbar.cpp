@@ -153,14 +153,6 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     row->addStretch();
 
-    m_mixerBtn = new QPushButton(QStringLiteral("Audio Mixer"), this);
-    m_mixerBtn->setObjectName(QStringLiteral("mixerToggle"));
-    m_mixerBtn->setCheckable(true);
-    m_mixerBtn->setCursor(Qt::PointingHandCursor);
-    m_mixerBtn->setMinimumHeight(30);
-    connect(m_mixerBtn, &QPushButton::clicked, this, &BottomToolbar::mixerToggleRequested);
-    row->addWidget(m_mixerBtn);
-
     m_statusPill = new QLabel(QStringLiteral("1080p60  ·  — FPS  ·  GPU —  ·  CPU —"), this);
     m_statusPill->setObjectName(QStringLiteral("statusPill"));
     row->addWidget(m_statusPill);
@@ -192,17 +184,6 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     motion::installPressScale(m_streamBtn);
     motion::installPressScale(m_recordBtn);
-}
-
-void BottomToolbar::setMixerOpen(bool open)
-{
-    m_mixerOpen = open;
-    if (m_mixerBtn) {
-        m_mixerBtn->setChecked(open);
-        m_mixerBtn->setProperty("open", open);
-        m_mixerBtn->style()->unpolish(m_mixerBtn);
-        m_mixerBtn->style()->polish(m_mixerBtn);
-    }
 }
 
 void BottomToolbar::setBasicMode(bool on)
