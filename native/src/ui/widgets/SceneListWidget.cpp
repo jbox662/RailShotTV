@@ -7,14 +7,72 @@
 #include <QLinearGradient>
 #include <QBrush>
 #include <QAction>
+#include <QPainter>
+#include <QStyledItemDelegate>
 
 namespace railshot {
+
+namespace {
+class SceneItemDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    {
+        painter->save();
+        const QString role = index.data(Qt::UserRole + 1).toString();
+        QColor accent(QStringLiteral("#2A2D35"));
+        QColor bg = option.widget ? option.widget->palette().base().color() : QColor(QStringLiteral("#0A0C0F"));
+        QColor fg(QStringLiteral("#8892A4"));
+        if (role == QLatin1String("program")) {
+            accent = QColor(QStringLiteral("#FF5A2C"));
+            bg = QColor(QStringLiteral("#1A0808"));
+            fg = QColor(QStringLiteral("#FF8A6A"));
+        } else if (role == QLatin1String("preview")) {
+            accent = QColor(QStringLiteral("#22C55E"));
+            bg = QColor(QStringLiteral("#081208"));
+            fg = QColor(QStringLiteral("#6EE7A0"));
+        } else if (role == QLatin1String("active")) {
+            accent = QColor(QStringLiteral("#4F9EFF"));
+            bg = QColor(QStringLiteral("#0A1220"));
+            fg = QColor(QStringLiteral("#C8DAFF"));
+        }
+        painter->fillRect(option.rect, bg);
+        painter->fillRect(QRect(option.rect.left(), option.rect.top(), 3, option.rect.height()), accent);
+
+        const int num = index.data(Qt::UserRole + 2).toInt();
+        const QString name = index.data(Qt::DisplayRole).toString();
+        QRect badge(option.rect.left() + 10, option.rect.center().y() - 8, 16, 16);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(accent.red(), accent.green(), accent.blue(), 40));
+        painter->drawRoundedRect(badge, 3, 3);
+        painter->setPen(fg);
+        QFont f = option.font;
+        f.setBold(true);
+        f.setPointSize(8);
+        painter->setFont(f);
+        painter->drawText(badge, Qt::AlignCenter, QString::number(num));
+
+        QFont nameFont = option.font;
+        nameFont.setBold(true);
+        nameFont.setPointSize(11);
+        painter->setFont(nameFont);
+        painter->setPen(fg);
+        painter->drawText(option.rect.adjusted(32, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft, name);
+        painter->restore();
+    }
+    QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override
+    {
+        return QSize(160, 32);
+    }
+};
+} // namespace
 
 SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
     : QListWidget(parent), m_engine(engine)
 {
     setFixedWidth(180);
     setSelectionMode(QAbstractItemView::SingleSelection);
+    setItemDelegate(new SceneItemDelegate(this));
     setStyleSheet(QStringLiteral(
         "QListWidget {"
         "  background:#0A0C0F;"
@@ -22,12 +80,9 @@ SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
         "  outline: none;"
         "}"
         "QListWidget::item {"
-        "  padding: 10px 12px;"
+        "  padding: 0;"
         "  border-bottom: 1px solid #15181E;"
-        "  border-left: 3px solid transparent;"
-        "  color: #8892A4;"
-        "  font-weight: 600;"
-        "  font-size: 12px;"
+        "  min-height: 32px;"
         "}"
         "QListWidget::item:hover { background: #12151A; }"
         "QListWidget::item:selected { background: transparent; }"));
@@ -81,33 +136,20 @@ void SceneListWidget::refresh()
         empty->setForeground(QColor(QStringLiteral("#606878")));
         return;
     }
+    int n = 0;
     for (const auto& sc : p.scenes) {
         auto* item = new QListWidgetItem(sc.name, this);
         item->setData(Qt::UserRole, sc.id);
-        QLinearGradient g(0, 0, 0, 1);
-        g.setCoordinateMode(QGradient::ObjectBoundingMode);
+        item->setData(Qt::UserRole + 2, ++n);
         if (sc.id == p.programSceneId) {
-            g.setColorAt(0, QColor(QStringLiteral("#2A0A0A")));
-            g.setColorAt(1, QColor(QStringLiteral("#1A0808")));
-            item->setBackground(QBrush(g));
-            item->setForeground(QColor(QStringLiteral("#FF8A6A")));
             item->setData(Qt::UserRole + 1, QStringLiteral("program"));
             item->setToolTip(QStringLiteral("Program"));
         } else if (sc.id == p.previewSceneId) {
-            g.setColorAt(0, QColor(QStringLiteral("#0A1A0A")));
-            g.setColorAt(1, QColor(QStringLiteral("#081208")));
-            item->setBackground(QBrush(g));
-            item->setForeground(QColor(QStringLiteral("#6EE7A0")));
             item->setData(Qt::UserRole + 1, QStringLiteral("preview"));
             item->setToolTip(QStringLiteral("Preview"));
         } else if (sc.id == p.activeSceneId) {
-            g.setColorAt(0, QColor(QStringLiteral("#0D1A2A")));
-            g.setColorAt(1, QColor(QStringLiteral("#0A1220")));
-            item->setBackground(QBrush(g));
-            item->setForeground(QColor(QStringLiteral("#C8DAFF")));
             item->setData(Qt::UserRole + 1, QStringLiteral("active"));
         } else {
-            item->setForeground(QColor(QStringLiteral("#8892A4")));
             item->setData(Qt::UserRole + 1, QStringLiteral("idle"));
         }
     }

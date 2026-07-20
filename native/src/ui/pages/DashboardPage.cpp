@@ -152,13 +152,15 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     scenesHeader->setFixedHeight(28);
     scenesHeader->setStyleSheet(
         QStringLiteral(
-            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #141619);"
-            "border-bottom:1px solid #1A1D24; border-top:2px solid #4F9EFF;")
-        + theme::panelHeaderStyle(theme::PanelAccent::Blue));
+            "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(79,158,255,0.14), stop:0.65 transparent);"
+            "border-bottom:1px solid #1A1D24; border-left:2px solid #4F9EFF;"));
     auto* scenesHeaderLay = new QHBoxLayout(scenesHeader);
     scenesHeaderLay->setContentsMargins(10, 0, 8, 0);
-    auto* scenesTitle = new QLabel(QStringLiteral("SCENES"), scenesHeader);
+    auto* scenesTitle = new QLabel(QStringLiteral("Scenes"), scenesHeader);
     scenesTitle->setObjectName(QStringLiteral("panelTitleBlue"));
+    scenesTitle->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-weight:800; font-size:10px; letter-spacing:1.5px; background:transparent;"
+        "text-transform:uppercase;"));
     auto* addScene = new QPushButton(QStringLiteral("+"), scenesHeader);
     addScene->setObjectName(QStringLiteral("panelAddButton"));
     addScene->setFixedSize(24, 20);

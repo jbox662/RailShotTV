@@ -42,7 +42,7 @@ QPushButton:disabled {
 
 QPushButton#goButton {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #16A34A);
-  border: 1px solid #22C55E;
+  border: 2px solid #4ADE80;
   border-radius: 4px;
   color: #000000;
   font-weight: 900;
@@ -52,6 +52,7 @@ QPushButton#goButton {
 }
 QPushButton#goButton:hover {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ADE80, stop:1 #22C55E);
+  border: 2px solid #86EFAC;
 }
 QPushButton#goButton:pressed {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #16A34A, stop:1 #15803D);
@@ -94,7 +95,7 @@ QPushButton#transTypeBtn:checked {
 
 QPushButton#streamButton {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF5A2C, stop:1 #CC3A18);
-  border: 1px solid #FF5A2C80;
+  border: 1px solid #FF8C42;
   border-radius: 3px;
   color: #FFFFFF;
   font-weight: 800;
@@ -102,12 +103,26 @@ QPushButton#streamButton {
 }
 QPushButton#streamButton:hover {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FF7A4C, stop:1 #FF5A2C);
+  border: 1px solid #FFB08A;
 }
 QPushButton#streamButton:pressed {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #CC3A18, stop:1 #A32E14);
   border: 1px solid #CC3A18;
   padding-top: 7px;
   padding-bottom: 5px;
+}
+
+QPushButton#toolbarChromeBtn {
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
+  border: 1px solid #4A4D55;
+  border-radius: 3px;
+  color: #D0D2D8;
+  font-weight: 600;
+  padding: 5px 12px;
+}
+QPushButton#toolbarChromeBtn:hover {
+  border-color: #4F9EFF;
+  color: #FFFFFF;
 }
 
 QPushButton#endStreamButton {
@@ -162,6 +177,11 @@ QPushButton#menuChromeBtn {
   font-size: 11px;
   font-weight: 500;
   padding: 3px 10px;
+}
+QPushButton#menuChromeBtn:hover {
+  border-color: #4F9EFF;
+  color: #FFFFFF;
+  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A2D35, stop:1 #1E2128);
 }
 QPushButton#menuChromeBtn:checked {
   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A3A2A, stop:1 #1E281E);

@@ -28,6 +28,19 @@ QRectF normToWidget(const Transform& t, const QSize& sz)
     return QRectF(t.x * sz.width(), t.y * sz.height(), t.w * sz.width(), t.h * sz.height());
 }
 
+QRect letterboxRect(const QSize& sz)
+{
+    if (sz.width() <= 0 || sz.height() <= 0) return QRect();
+    const qreal target = 16.0 / 9.0;
+    const qreal cur = qreal(sz.width()) / qreal(sz.height());
+    if (cur > target) {
+        const int w = int(sz.height() * target);
+        return QRect((sz.width() - w) / 2, 0, w, sz.height());
+    }
+    const int h = int(sz.width() / target);
+    return QRect(0, (sz.height() - h) / 2, sz.width(), h);
+}
+
 Transform widgetDeltaToNorm(const QPointF& delta, const QSize& sz)
 {
     Transform d;
@@ -53,12 +66,21 @@ Handle hitHandle(const QRectF& r, const QPointF& p, qreal pad = 8.0)
 
 class PreviewWidget::CanvasOverlay : public QWidget {
 public:
-    CanvasOverlay(EngineController* engine, PreviewWidget* owner)
-        : QWidget(owner), m_engine(engine), m_owner(owner)
+    CanvasOverlay(EngineController* engine, PreviewWidget* owner, bool program)
+        : QWidget(owner), m_engine(engine), m_owner(owner), m_program(program)
     {
         setAttribute(Qt::WA_TransparentForMouseEvents, false);
         setMouseTracking(true);
         setCursor(Qt::ArrowCursor);
+        if (program && engine) {
+            connect(engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
+                if (m_live != s.streaming) {
+                    m_live = s.streaming;
+                    update();
+                }
+            });
+            m_live = engine->telemetrySnapshot().streaming;
+        }
     }
 
     void setInteractive(bool on) { m_interactive = on; update(); }
@@ -66,18 +88,60 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override
     {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor accent = m_program
+                                  ? (m_live ? QColor(QStringLiteral("#FF5A2C")) : QColor(255, 90, 44, 128))
+                                  : QColor(QStringLiteral("#22C55E"));
+        const QColor bracket = m_live && m_program ? QColor(QStringLiteral("#FF5A2C"))
+                                                   : (m_program ? QColor(QStringLiteral("#4F9EFF"))
+                                                                : QColor(QStringLiteral("#22C55E")));
+
+        // 16:9 stage frame
+        const QRect stage = letterboxRect(size());
+        p.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), m_program ? (m_live ? 80 : 32) : 48), 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(stage.adjusted(1, 1, -1, -1));
+
+        // Corner L-brackets (14px)
+        const int L = 14;
+        p.setPen(QPen(bracket, 2, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        auto drawBracket = [&](int x, int y, int dx, int dy) {
+            p.drawLine(x, y, x + dx * L, y);
+            p.drawLine(x, y, x, y + dy * L);
+        };
+        drawBracket(stage.left() + 4, stage.top() + 4, 1, 1);
+        drawBracket(stage.right() - 4, stage.top() + 4, -1, 1);
+        drawBracket(stage.left() + 4, stage.bottom() - 4, 1, -1);
+        drawBracket(stage.right() - 4, stage.bottom() - 4, -1, -1);
+
+        if (m_program && m_live) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(QStringLiteral("#FF5A2C")));
+            p.drawRoundedRect(QRect(stage.left() + 6, stage.top() + 6, 52, 16), 2, 2);
+            p.setPen(Qt::white);
+            QFont f = p.font();
+            f.setFamily(QStringLiteral("DM Sans"));
+            f.setBold(true);
+            f.setPointSize(8);
+            p.setFont(f);
+            p.drawText(QRect(stage.left() + 6, stage.top() + 6, 52, 16), Qt::AlignCenter,
+                       QStringLiteral("ON AIR"));
+        }
+
         if (!m_interactive || !m_engine) return;
         const auto sel = m_engine->selectedSource();
         if (!sel || !sel->visible) return;
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing);
         const QRectF r = normToWidget(sel->transform, size());
         p.setPen(QPen(QColor(QStringLiteral("#4F9EFF")), 2.0));
         p.setBrush(Qt::NoBrush);
         p.drawRect(r);
         const qreal hs = 7.0;
         p.setBrush(QColor(QStringLiteral("#4F9EFF")));
-        for (const QPointF& c : {r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight()})
+        p.setPen(QPen(Qt::white, 1));
+        for (const QPointF& c : {r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight(),
+                                 QPointF(r.center().x(), r.top()), QPointF(r.center().x(), r.bottom()),
+                                 QPointF(r.left(), r.center().y()), QPointF(r.right(), r.center().y())})
             p.drawRect(QRectF(c.x() - hs / 2, c.y() - hs / 2, hs, hs));
         p.setPen(QColor(QStringLiteral("#F8F8FF")));
         p.drawText(r.adjusted(4, 4, -4, -4), Qt::AlignTop | Qt::AlignLeft, sel->name);
@@ -182,7 +246,9 @@ protected:
 private:
     EngineController* m_engine = nullptr;
     PreviewWidget* m_owner = nullptr;
+    bool m_program = false;
     bool m_interactive = false;
+    bool m_live = false;
     bool m_dragging = false;
     Handle m_handle = Handle::None;
     QPointF m_dragStart;
@@ -238,8 +304,12 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
         h->addWidget(tc);
         if (engine) {
             connect(engine, &EngineController::telemetryUpdated, this,
-                    [live, tc](const TelemetrySnapshot& s) {
+                    [live, tc, title](const TelemetrySnapshot& s) {
                         live->setVisible(s.streaming);
+                        title->setStyleSheet(QStringLiteral(
+                            "color:%1; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;")
+                                                 .arg(s.streaming ? QStringLiteral("#FF5A2C")
+                                                                  : QStringLiteral("#FF5A2C80")));
                         if (!s.streaming) {
                             tc->setText(QStringLiteral("00:00:00"));
                             return;
@@ -250,6 +320,8 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
                                         .arg((secs % 3600) / 60, 2, 10, QChar('0'))
                                         .arg(secs % 60, 2, 10, QChar('0')));
                     });
+            title->setStyleSheet(QStringLiteral(
+                "color:#FF5A2C80; font-weight:700; font-size:11px; letter-spacing:1px; background:transparent;"));
         }
     }
 
@@ -266,7 +338,9 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     col->addWidget(header);
 
     auto* stackHost = new QWidget(this);
-    stackHost->setStyleSheet(QStringLiteral("background:#080A0D;"));
+    stackHost->setStyleSheet(QStringLiteral(
+        "background:#080A0D; border:2px solid %1;")
+                                 .arg(program ? QStringLiteral("#FF5A2C20") : QStringLiteral("#22C55E30")));
     auto* stack = new QStackedLayout(stackHost);
     stack->setStackingMode(QStackedLayout::StackAll);
     stack->setContentsMargins(0, 0, 0, 0);
@@ -279,7 +353,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     m_surface->setEmptyMessage(program ? QStringLiteral("NO OUTPUT") : QStringLiteral("NO PREVIEW"));
     stack->addWidget(m_surface);
 
-    m_overlay = new CanvasOverlay(engine, this);
+    m_overlay = new CanvasOverlay(engine, this, program);
     m_overlay->setInteractive(!program);
     if (program)
         m_overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);

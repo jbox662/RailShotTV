@@ -8,6 +8,7 @@
 #include <QRadialGradient>
 #include <QHBoxLayout>
 #include <QTimer>
+#include <QVariant>
 
 namespace railshot {
 
@@ -209,16 +210,12 @@ void SidebarRail::restyleNav()
         const QColor color = m_colors.value(it.key(), QColor(QStringLiteral("#6B7280")));
         const bool active = (it.key() == m_active);
         const QString fill = active
-                                 ? QStringLiteral("rgba(%1,%2,%3,0.13)").arg(color.red()).arg(color.green()).arg(color.blue())
+                                 ? QStringLiteral("rgba(%1,%2,%3,0.18)").arg(color.red()).arg(color.green()).arg(color.blue())
                                  : QStringLiteral("transparent");
         const QString border = active
-                                   ? QStringLiteral("rgba(%1,%2,%3,0.33)").arg(color.red()).arg(color.green()).arg(color.blue())
+                                   ? QStringLiteral("rgba(%1,%2,%3,0.55)").arg(color.red()).arg(color.green()).arg(color.blue())
                                    : QStringLiteral("transparent");
         const QString text = active ? color.name() : QStringLiteral("#6B7280");
-        const QString glow = active
-                                 ? QStringLiteral("0 0 16px rgba(%1,%2,%3,0.65)")
-                                       .arg(color.red()).arg(color.green()).arg(color.blue())
-                                 : QStringLiteral("none");
         it.value()->setStyleSheet(QStringLiteral(
             "QPushButton {"
             "  background:%1; border:1px solid %2; border-radius:8px; color:%3;"
@@ -228,13 +225,29 @@ void SidebarRail::restyleNav()
             "  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:%3;"
             "}")
                                       .arg(fill, border, text));
-        Q_UNUSED(glow); // Qt stylesheets don't support box-shadow; glow approximated via border tint
+        it.value()->setProperty("navActive", active);
+        it.value()->setProperty("navColor", color);
     }
+    update();
 }
 
 void SidebarRail::paintEvent(QPaintEvent* event)
 {
     QWidget::paintEvent(event);
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
+        if (!it.value()->property("navActive").toBool()) continue;
+        const QColor color = it.value()->property("navColor").value<QColor>();
+        if (!color.isValid()) continue;
+        const QRect r = it.value()->geometry().adjusted(-4, -4, 4, 4);
+        QRadialGradient g(r.center(), r.width() * 0.75);
+        g.setColorAt(0, QColor(color.red(), color.green(), color.blue(), 90));
+        g.setColorAt(1, QColor(color.red(), color.green(), color.blue(), 0));
+        p.setPen(Qt::NoPen);
+        p.setBrush(g);
+        p.drawEllipse(r);
+    }
 }
 
 } // namespace railshot

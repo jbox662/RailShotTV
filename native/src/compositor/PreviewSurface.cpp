@@ -115,11 +115,25 @@ void PreviewSurface::paintEvent(QPaintEvent*)
     if (m_hasFrame) return;
     QPainter p(this);
     p.fillRect(rect(), QColor(8, 10, 13));
+    p.setPen(QColor(64, 69, 80));
+    QFont iconFont = p.font();
+    iconFont.setPointSize(22);
+    p.setFont(iconFont);
+    p.drawText(rect().adjusted(0, -18, 0, 0), Qt::AlignCenter, QStringLiteral("▣"));
+    QFont msgFont = p.font();
+    msgFont.setFamily(QStringLiteral("DM Sans"));
+    msgFont.setPointSize(10);
+    msgFont.setBold(true);
+    p.setFont(msgFont);
     p.setPen(QColor(58, 69, 96));
-    p.drawText(rect(), Qt::AlignCenter, m_empty);
+    p.drawText(rect().adjusted(0, 28, 0, 0), Qt::AlignCenter, m_empty);
     if (!m_label.isEmpty()) {
         p.fillRect(6, 6, 70, 16, m_labelColor);
         p.setPen(Qt::black);
+        QFont badge = p.font();
+        badge.setPointSize(8);
+        badge.setBold(true);
+        p.setFont(badge);
         p.drawText(6, 6, 70, 16, Qt::AlignCenter, m_label);
     }
 }

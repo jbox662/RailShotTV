@@ -138,6 +138,20 @@ void TransitionPanel::updateGoArmed()
 {
     const bool armed = !m_engine->projectSnapshot().previewSceneId.isEmpty();
     m_go->setEnabled(armed);
+    m_go->setStyleSheet(armed
+                            ? QStringLiteral(
+                                  "QPushButton#goButton {"
+                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #22C55E,stop:1 #16A34A);"
+                                  "  border:2px solid #86EFAC; border-radius:4px; color:#000;"
+                                  "  font-weight:900; font-size:15px; letter-spacing:2px; padding:10px;"
+                                  "}"
+                                  "QPushButton#goButton:hover {"
+                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #22C55E);"
+                                  "  border:2px solid #BBF7D0;"
+                                  "}")
+                            : QString());
+    m_go->style()->unpolish(m_go);
+    m_go->style()->polish(m_go);
 }
 
 } // namespace railshot

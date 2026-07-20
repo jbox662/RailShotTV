@@ -20,6 +20,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->setSpacing(6);
 
     auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
+    add->setObjectName(QStringLiteral("toolbarChromeBtn"));
     add->setCursor(Qt::PointingHandCursor);
     connect(add, &QPushButton::clicked, this, &BottomToolbar::addInputRequested);
     row->addWidget(add);
@@ -47,6 +48,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->addWidget(m_recordBtn);
 
     auto* external = new QPushButton(QStringLiteral("External"), this);
+    external->setObjectName(QStringLiteral("toolbarChromeBtn"));
     external->setEnabled(false);
     row->addWidget(external);
 
@@ -54,6 +56,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     m_streamBtn->setObjectName(QStringLiteral("streamButton"));
     m_streamBtn->setCursor(Qt::PointingHandCursor);
     m_streamBtn->setMinimumWidth(110);
+    m_streamBtn->setProperty("glow", true);
     connect(m_streamBtn, &QPushButton::clicked, this, [this] {
         if (m_engine->telemetrySnapshot().streaming) {
             m_engine->stopStreaming();
@@ -68,18 +71,21 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->addWidget(m_streamBtn);
 
     auto* multi = new QPushButton(QStringLiteral("MultiCorder"), this);
+    multi->setObjectName(QStringLiteral("toolbarChromeBtn"));
     multi->setCursor(Qt::PointingHandCursor);
     connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
     row->addWidget(multi);
     m_multiBtn = multi;
 
     auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
+    playlist->setObjectName(QStringLiteral("toolbarChromeBtn"));
     playlist->setCursor(Qt::PointingHandCursor);
     connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
     row->addWidget(playlist);
     m_playlistBtn = playlist;
 
     auto* overlay = new QPushButton(QStringLiteral("Overlay  ▾"), this);
+    overlay->setObjectName(QStringLiteral("toolbarChromeBtn"));
     overlay->setCursor(Qt::PointingHandCursor);
     connect(overlay, &QPushButton::clicked, this, [this, overlay] {
         emit overlayMenuRequested(overlay->mapToGlobal(QPoint(0, overlay->height())));

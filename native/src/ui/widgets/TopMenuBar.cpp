@@ -26,9 +26,9 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     auto* brand = new QLabel(this);
     brand->setObjectName(QStringLiteral("brandWordmark"));
     brand->setText(QStringLiteral(
-        "<span style='font-family:\"Bebas Neue\",\"Arial Narrow\",sans-serif; font-size:16px; letter-spacing:1px;'>"
-        "<span style='color:#F0F0F0;'>RAILSHOT</span>"
-        "<span style='color:#FF5A2C;'>TV</span></span>"));
+        "<span style='font-family:\"Bebas Neue\",\"Arial Narrow\",sans-serif; font-size:16px; letter-spacing:0.04em;'>"
+        "<span style='color:#F0F0F0;font-weight:400;'>RAILSHOT</span>"
+        "<span style='color:#FF5A2C;font-weight:400;'> TV</span></span>"));
     row->addWidget(brand);
     row->addSpacing(12);
 

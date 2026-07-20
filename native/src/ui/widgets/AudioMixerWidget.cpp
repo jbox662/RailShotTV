@@ -33,9 +33,10 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
 
     auto* outputsLab = new QLabel(QStringLiteral("O\nU\nT\nP\nU\nT\nS"), this);
     outputsLab->setAlignment(Qt::AlignCenter);
-    outputsLab->setFixedWidth(14);
+    outputsLab->setFixedWidth(16);
     outputsLab->setStyleSheet(QStringLiteral(
-        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px; background:transparent;"));
+        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px;"
+        "background:rgba(26,58,255,0.08); border-radius:2px;"));
     outer->addWidget(outputsLab);
 
     auto* scroll = new QScrollArea(this);
@@ -53,9 +54,10 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
 
     auto* inputsLab = new QLabel(QStringLiteral("I\nN\nP\nU\nT\nS"), this);
     inputsLab->setAlignment(Qt::AlignCenter);
-    inputsLab->setFixedWidth(14);
+    inputsLab->setFixedWidth(16);
     inputsLab->setStyleSheet(QStringLiteral(
-        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px; background:transparent;"));
+        "color:#3A6AFF; font-size:8px; font-weight:700; letter-spacing:1px;"
+        "background:rgba(26,58,255,0.08); border-radius:2px;"));
     outer->addWidget(inputsLab);
 
     auto* side = new QVBoxLayout();
@@ -102,11 +104,17 @@ void AudioMixerWidget::refreshMeters()
 
             auto* badge = new QLabel(master ? QStringLiteral("MASTER") : ch.name.left(8), strip);
             badge->setAlignment(Qt::AlignCenter);
-            badge->setStyleSheet(QStringLiteral(
-                "font-size:7px; font-weight:800; color:%1; background:transparent;")
-                                     .arg(ch.muted ? QStringLiteral("#EF4444")
-                                                   : (master ? QStringLiteral("#22C55E")
-                                                             : QStringLiteral("#808898"))));
+            if (master) {
+                badge->setStyleSheet(QStringLiteral(
+                    "font-size:7px; font-weight:800; color:#04140A;"
+                    "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #22C55E,stop:1 #16A34A);"
+                    "border-radius:3px; padding:2px 4px;"));
+            } else {
+                badge->setStyleSheet(QStringLiteral(
+                    "font-size:7px; font-weight:800; color:%1; background:transparent;")
+                                         .arg(ch.muted ? QStringLiteral("#EF4444")
+                                                       : QStringLiteral("#808898")));
+            }
             col->addWidget(badge);
 
             auto* meterRow = new QHBoxLayout();
