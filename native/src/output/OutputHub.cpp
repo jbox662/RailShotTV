@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <cstring>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -227,41 +228,68 @@ void OutputHub::stopRecording()
 
 bool OutputHub::startStreaming(const StreamTarget& target, const OutputProfile& profile, QString* error)
 {
+    return startStreaming(QVector<StreamTarget>{target}, profile, error);
+}
+
+bool OutputHub::startStreaming(const QVector<StreamTarget>& targets, const OutputProfile& profile, QString* error)
+{
     {
         QMutexLocker lock(&m_encMutex);
         if (m_streaming.load()) {
             if (error) *error = QStringLiteral("Already streaming");
             return false;
         }
+        if (targets.isEmpty()) {
+            if (error) *error = QStringLiteral("No stream targets");
+            return false;
+        }
         if (!ensureEncoders(profile, error))
             return false;
 
-        QString key;
-        if (!target.streamKeySecretId.isEmpty()) {
-            auto loaded = SecretStore::load(target.streamKeySecretId);
-            if (loaded) key = *loaded;
+        std::vector<std::unique_ptr<RtmpOutput>> opened;
+        for (const auto& target : targets) {
+            QString key;
+            if (!target.streamKeySecretId.isEmpty()) {
+                auto loaded = SecretStore::load(target.streamKeySecretId);
+                if (loaded) key = *loaded;
+            }
+            if (key.isEmpty()) {
+                if (error)
+                    *error = QStringLiteral("Stream key missing for %1").arg(target.name.isEmpty() ? target.platform : target.name);
+                for (auto& r : opened) r->disconnectFrom();
+                if (!m_recording.load())
+                    releaseEncodersIfIdle();
+                return false;
+            }
+
+            auto rtmp = std::make_unique<RtmpOutput>();
+            connect(rtmp.get(), &RtmpOutput::stateChanged, this, &OutputHub::streamStateChanged);
+            connect(rtmp.get(), &RtmpOutput::networkError, this, &OutputHub::errorOccurred);
+            QString err;
+            if (!rtmp->connectTo(target.rtmpUrl, key, profile,
+                                 m_videoEnc->extradata(), m_audioEnc->extradata(),
+                                 m_audioEnc->sampleRate(), m_audioEnc->channels(), &err)) {
+                if (error) *error = err;
+                for (auto& r : opened) r->disconnectFrom();
+                if (!m_recording.load())
+                    releaseEncodersIfIdle();
+                return false;
+            }
+            Logger::info(QStringLiteral("RTMP connected: %1 (%2)").arg(target.platform, target.rtmpUrl));
+            opened.push_back(std::move(rtmp));
         }
-        if (key.isEmpty())
-            Logger::warn(QStringLiteral("Stream key missing for target %1").arg(target.name));
 
-        m_rtmp = std::make_unique<RtmpOutput>();
-        connect(m_rtmp.get(), &RtmpOutput::stateChanged, this, &OutputHub::streamStateChanged);
-        connect(m_rtmp.get(), &RtmpOutput::networkError, this, &OutputHub::errorOccurred);
-
-        if (!m_rtmp->connectTo(target.rtmpUrl, key, profile,
-                               m_videoEnc->extradata(), m_audioEnc->extradata(),
-                               m_audioEnc->sampleRate(), m_audioEnc->channels(), error)) {
-            m_rtmp.reset();
-            if (!m_recording.load())
-                releaseEncodersIfIdle();
-            return false;
-        }
-
+        m_rtmps = std::move(opened);
+        m_activeStreamCount = m_rtmps.size();
         m_streaming = true;
         m_droppedFrames = 0;
-        m_bytesAtStreamStart = m_rtmp->bytesSent();
+        m_bytesAtStreamStart = 0;
+        for (const auto& r : m_rtmps)
+            m_bytesAtStreamStart += r->bytesSent();
         m_streamTimer.start();
-        Logger::info(QStringLiteral("Streaming started to %1 via %2").arg(target.rtmpUrl, m_encoderName));
+        Logger::info(QStringLiteral("Streaming started to %1 destination(s) via %2")
+                         .arg(m_rtmps.size())
+                         .arg(m_encoderName));
         emit streamingStarted();
     }
     ensureWorker();
@@ -273,8 +301,11 @@ void OutputHub::stopStreaming()
     if (!m_streaming.load()) return;
     {
         QMutexLocker lock(&m_encMutex);
-        if (m_rtmp) m_rtmp->disconnectFrom();
-        m_rtmp.reset();
+        for (auto& r : m_rtmps) {
+            if (r) r->disconnectFrom();
+        }
+        m_rtmps.clear();
+        m_activeStreamCount = 0;
         m_streaming = false;
     }
 
@@ -286,6 +317,11 @@ void OutputHub::stopStreaming()
 
     emit streamingStopped();
     Logger::info(QStringLiteral("Streaming stopped"));
+}
+
+int OutputHub::activeStreamCount() const
+{
+    return m_activeStreamCount.load();
 }
 
 void OutputHub::submitVideo(ID3D11Texture2D* texture, qint64 ptsUs)
@@ -377,8 +413,11 @@ void OutputHub::workerLoop()
             if (ok && !pkt.data.isEmpty()) {
                 if (m_recorder && m_recording.load())
                     m_recorder->writeVideo(pkt);
-                if (m_rtmp && m_streaming.load())
-                    m_rtmp->pushVideo(pkt);
+                if (m_streaming.load()) {
+                    for (auto& r : m_rtmps) {
+                        if (r) r->pushVideo(pkt);
+                    }
+                }
                 emit encodedPacket(pkt);
             }
             if (vjob.texture)
@@ -392,8 +431,11 @@ void OutputHub::workerLoop()
                     if (pkt.data.isEmpty()) continue;
                     if (m_recorder && m_recording.load())
                         m_recorder->writeAudio(pkt);
-                    if (m_rtmp && m_streaming.load())
-                        m_rtmp->pushAudio(pkt);
+                    if (m_streaming.load()) {
+                        for (auto& r : m_rtmps) {
+                            if (r) r->pushAudio(pkt);
+                        }
+                    }
                     emit encodedPacket(pkt);
                 }
             }
@@ -413,15 +455,31 @@ qint64 OutputHub::streamUptimeSec() const
 
 qint64 OutputHub::bitrateKbps() const
 {
-    if (!m_streaming.load() || !m_rtmp || m_streamTimer.elapsed() < 1000)
+    if (!m_streaming.load() || m_rtmps.empty() || m_streamTimer.elapsed() < 1000)
         return 0;
-    const qint64 bytes = m_rtmp->bytesSent() - m_bytesAtStreamStart;
+    qint64 sent = 0;
+    for (const auto& r : m_rtmps) {
+        if (r) sent += r->bytesSent();
+    }
+    const qint64 bytes = sent - m_bytesAtStreamStart;
     return (bytes * 8) / m_streamTimer.elapsed();
 }
 
 ConnectionState OutputHub::streamState() const
 {
-    return m_rtmp ? m_rtmp->state() : ConnectionState::Disconnected;
+    if (m_rtmps.empty())
+        return ConnectionState::Disconnected;
+    // Worst-case across destinations (prefer Connected only if all are).
+    ConnectionState worst = ConnectionState::Connected;
+    for (const auto& r : m_rtmps) {
+        if (!r) continue;
+        const auto s = r->state();
+        if (s == ConnectionState::Disconnected || s == ConnectionState::Failed)
+            return s;
+        if (s == ConnectionState::Connecting || s == ConnectionState::Reconnecting)
+            worst = s;
+    }
+    return worst;
 }
 
 QString OutputHub::recordingPath() const

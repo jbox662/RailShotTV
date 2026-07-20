@@ -75,8 +75,17 @@ bool EngineController::initialize(QString* error)
 
     m_capture->setDevice(m_d3d->device());
     m_capture->setOverlayCanvasSize(w, h);
-    if (!m_audio->initialize(error))
+    if (!m_audio->initialize(m_settings->desktopDeviceId(), m_settings->micDeviceId(), error))
         return false;
+
+    m_capture->setSourceAudioCallback([this](const QString& id, const QString& name, const AudioBuffer& buf) {
+        if (!m_audio) return;
+        m_audio->ensureChannel(id, name);
+        m_audio->inject(id, buf);
+    });
+    connect(m_capture.get(), &CaptureManager::sourceStopped, this, [this](const QString& id) {
+        if (m_audio) m_audio->removeChannel(id);
+    });
 
     m_transition = new TransitionEngine(this);
     m_replay->setCapacitySeconds(30);
@@ -408,8 +417,18 @@ bool EngineController::startStreaming(const QString& targetId, QString* error)
         target.platform = QStringLiteral("custom");
         target.rtmpUrl = QStringLiteral("rtmp://localhost/live");
     }
+    return startStreamingTargets({target}, error);
+}
+
+bool EngineController::startStreamingTargets(const QVector<StreamTarget>& targets, QString* error)
+{
+    if (targets.isEmpty()) {
+        if (error) *error = QStringLiteral("No stream targets");
+        return false;
+    }
+    const auto p = m_sceneGraph->snapshot();
     const OutputProfile profile = p.output.width > 0 ? p.output : m_settings->outputProfile();
-    if (!m_outputs->startStreaming(target, profile, error))
+    if (!m_outputs->startStreaming(targets, profile, error))
         return false;
     m_telemetry->setStreaming(true);
     updateEngineState();

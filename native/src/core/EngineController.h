@@ -74,6 +74,7 @@ public:
     std::optional<SourceItem> selectedSource() const;
 
     bool startStreaming(const QString& targetId, QString* error = nullptr);
+    bool startStreamingTargets(const QVector<StreamTarget>& targets, QString* error = nullptr);
     void stopStreaming();
     bool startRecording(QString* error = nullptr);
     void stopRecording();

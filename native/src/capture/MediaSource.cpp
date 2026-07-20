@@ -4,6 +4,8 @@
 #include <QImage>
 #include <QThread>
 #include <cstring>
+#include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <d3d11.h>
@@ -16,7 +18,10 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 #endif
 
@@ -35,6 +40,27 @@ MediaSource::~MediaSource() { stop(); }
 void MediaSource::setPath(const QString& path)
 {
     m_filePath = path;
+}
+
+void MediaSource::setAudioCallback(std::function<void(const AudioBuffer&)> cb)
+{
+    std::lock_guard lock(m_audioCbMutex);
+    m_audioCb = std::move(cb);
+}
+
+void MediaSource::emitAudio(const float* interleaved, int frames, int channels, int sampleRate)
+{
+    if (!interleaved || frames <= 0 || channels <= 0) return;
+    AudioBuffer buf;
+    buf.channels = channels;
+    buf.sampleRate = sampleRate > 0 ? sampleRate : kAudioSampleRate;
+    buf.samples.assign(interleaved, interleaved + size_t(frames) * size_t(channels));
+    std::function<void(const AudioBuffer&)> cb;
+    {
+        std::lock_guard lock(m_audioCbMutex);
+        cb = m_audioCb;
+    }
+    if (cb) cb(buf);
 }
 
 bool MediaSource::uploadFrame(const uint8_t* bgra, int stride, int w, int h)
@@ -104,7 +130,6 @@ bool MediaSource::startFfmpeg(QString* error)
     m_stop = false;
     m_running = true;
     m_thread = std::thread([this] { decodeLoop(); });
-    // Give decoder a moment; if still fails, caller sees empty frames
     QThread::msleep(50);
     if (!m_running.load()) {
         if (error) *error = QStringLiteral("FFmpeg failed to open media");
@@ -133,36 +158,58 @@ void MediaSource::decodeLoop()
             return;
         }
         int vIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        int aIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
         if (vIndex < 0) {
             avformat_close_input(&fmt);
             m_running = false;
             return;
         }
-        AVStream* st = fmt->streams[vIndex];
-        const AVCodec* codec = avcodec_find_decoder(st->codecpar->codec_id);
-        AVCodecContext* dec = avcodec_alloc_context3(codec);
-        avcodec_parameters_to_context(dec, st->codecpar);
-        if (avcodec_open2(dec, codec, nullptr) < 0) {
-            avcodec_free_context(&dec);
+
+        AVStream* vst = fmt->streams[vIndex];
+        const AVCodec* vcodec = avcodec_find_decoder(vst->codecpar->codec_id);
+        AVCodecContext* vdec = avcodec_alloc_context3(vcodec);
+        avcodec_parameters_to_context(vdec, vst->codecpar);
+        if (avcodec_open2(vdec, vcodec, nullptr) < 0) {
+            avcodec_free_context(&vdec);
             avformat_close_input(&fmt);
             m_running = false;
             return;
         }
 
+        AVCodecContext* adec = nullptr;
+        SwrContext* swr = nullptr;
+        if (aIndex >= 0) {
+            AVStream* ast = fmt->streams[aIndex];
+            const AVCodec* acodec = avcodec_find_decoder(ast->codecpar->codec_id);
+            if (acodec) {
+                adec = avcodec_alloc_context3(acodec);
+                avcodec_parameters_to_context(adec, ast->codecpar);
+                if (avcodec_open2(adec, acodec, nullptr) < 0) {
+                    avcodec_free_context(&adec);
+                    adec = nullptr;
+                }
+            }
+        }
+
         SwsContext* sws = nullptr;
         AVFrame* frame = av_frame_alloc();
         AVFrame* bgra = av_frame_alloc();
+        AVFrame* aframe = av_frame_alloc();
         AVPacket* pkt = av_packet_alloc();
         uint8_t* buf = nullptr;
         int bufSize = 0;
+        std::vector<float> interleaved;
 
         auto cleanup = [&] {
             if (buf) av_free(buf);
             av_frame_free(&bgra);
             av_frame_free(&frame);
+            av_frame_free(&aframe);
             av_packet_free(&pkt);
             if (sws) sws_freeContext(sws);
-            avcodec_free_context(&dec);
+            if (swr) swr_free(&swr);
+            avcodec_free_context(&vdec);
+            if (adec) avcodec_free_context(&adec);
             avformat_close_input(&fmt);
         };
 
@@ -171,31 +218,69 @@ void MediaSource::decodeLoop()
             if (r < 0) {
                 if (m_loop) {
                     av_seek_frame(fmt, vIndex, 0, AVSEEK_FLAG_BACKWARD);
-                    avcodec_flush_buffers(dec);
+                    avcodec_flush_buffers(vdec);
+                    if (adec) avcodec_flush_buffers(adec);
                     continue;
                 }
                 break;
             }
-            if (pkt->stream_index != vIndex) {
-                av_packet_unref(pkt);
-                continue;
-            }
-            if (avcodec_send_packet(dec, pkt) == 0) {
-                while (avcodec_receive_frame(dec, frame) == 0) {
-                    if (!sws) {
-                        sws = sws_getContext(frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
-                                             frame->width, frame->height, AV_PIX_FMT_BGRA,
-                                             SWS_BILINEAR, nullptr, nullptr, nullptr);
-                        bufSize = av_image_get_buffer_size(AV_PIX_FMT_BGRA, frame->width, frame->height, 1);
-                        buf = static_cast<uint8_t*>(av_malloc(bufSize));
-                        av_image_fill_arrays(bgra->data, bgra->linesize, buf, AV_PIX_FMT_BGRA,
-                                             frame->width, frame->height, 1);
+
+            if (pkt->stream_index == vIndex) {
+                if (avcodec_send_packet(vdec, pkt) == 0) {
+                    while (avcodec_receive_frame(vdec, frame) == 0) {
+                        if (!sws) {
+                            sws = sws_getContext(frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+                                                 frame->width, frame->height, AV_PIX_FMT_BGRA,
+                                                 SWS_BILINEAR, nullptr, nullptr, nullptr);
+                            bufSize = av_image_get_buffer_size(AV_PIX_FMT_BGRA, frame->width, frame->height, 1);
+                            buf = static_cast<uint8_t*>(av_malloc(bufSize));
+                            av_image_fill_arrays(bgra->data, bgra->linesize, buf, AV_PIX_FMT_BGRA,
+                                                 frame->width, frame->height, 1);
+                        }
+                        sws_scale(sws, frame->data, frame->linesize, 0, frame->height, bgra->data, bgra->linesize);
+                        uploadFrame(bgra->data[0], bgra->linesize[0], frame->width, frame->height);
+                        const double fps = av_q2d(vst->avg_frame_rate) > 1.0 ? av_q2d(vst->avg_frame_rate) : 30.0;
+                        QThread::msleep(static_cast<unsigned long>(1000.0 / fps));
                     }
-                    sws_scale(sws, frame->data, frame->linesize, 0, frame->height, bgra->data, bgra->linesize);
-                    uploadFrame(bgra->data[0], bgra->linesize[0], frame->width, frame->height);
-                    // Pace roughly by stream timebase
-                    const double fps = av_q2d(st->avg_frame_rate) > 1.0 ? av_q2d(st->avg_frame_rate) : 30.0;
-                    QThread::msleep(static_cast<unsigned long>(1000.0 / fps));
+                }
+            } else if (adec && pkt->stream_index == aIndex) {
+                if (avcodec_send_packet(adec, pkt) == 0) {
+                    while (avcodec_receive_frame(adec, aframe) == 0) {
+                        if (!swr) {
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+                            AVChannelLayout outLayout{};
+                            av_channel_layout_default(&outLayout, 2);
+                            if (swr_alloc_set_opts2(&swr,
+                                                    &outLayout, AV_SAMPLE_FMT_FLT, kAudioSampleRate,
+                                                    &aframe->ch_layout, static_cast<AVSampleFormat>(aframe->format),
+                                                    aframe->sample_rate, 0, nullptr) < 0
+                                || swr_init(swr) < 0) {
+                                swr_free(&swr);
+                                continue;
+                            }
+#else
+                            const int64_t inLayout = aframe->channel_layout
+                                ? static_cast<int64_t>(aframe->channel_layout)
+                                : av_get_default_channel_layout(aframe->channels);
+                            swr = swr_alloc_set_opts(nullptr,
+                                                     AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, kAudioSampleRate,
+                                                     inLayout, static_cast<AVSampleFormat>(aframe->format),
+                                                     aframe->sample_rate, 0, nullptr);
+                            if (!swr || swr_init(swr) < 0) {
+                                swr_free(&swr);
+                                continue;
+                            }
+#endif
+                        }
+                        const int outSamples = swr_get_out_samples(swr, aframe->nb_samples);
+                        interleaved.resize(size_t((std::max)(outSamples, 1)) * 2);
+                        uint8_t* outPlanes[1] = { reinterpret_cast<uint8_t*>(interleaved.data()) };
+                        const int converted = swr_convert(swr, outPlanes, outSamples,
+                                                          const_cast<const uint8_t**>(aframe->extended_data),
+                                                          aframe->nb_samples);
+                        if (converted > 0)
+                            emitAudio(interleaved.data(), converted, 2, kAudioSampleRate);
+                    }
                 }
             }
             av_packet_unref(pkt);

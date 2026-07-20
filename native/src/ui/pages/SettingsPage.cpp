@@ -4,6 +4,8 @@
 #include "compositor/D3D11Compositor.h"
 #include "overlays/ReplayBuffer.h"
 #include "ui/HotkeyDispatcher.h"
+#include "audio/WasapiCapture.h"
+#include "audio/AudioGraph.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -21,6 +23,7 @@
 #include <QButtonGroup>
 #include <QFrame>
 #include <QScrollArea>
+#include <QMessageBox>
 #include <memory>
 #include <QStyle>
 
@@ -231,11 +234,24 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         auto* ch = new QComboBox(w);
         ch->addItems({QStringLiteral("Stereo")});
         ch->setEnabled(false);
-        auto* desktop = new QLineEdit(QStringLiteral("System default (WASAPI loopback)"), w);
-        desktop->setReadOnly(true);
-        auto* mic = new QLineEdit(QStringLiteral("System default (WASAPI capture)"), w);
-        mic->setReadOnly(true);
-        auto* note = new QLabel(QStringLiteral("Device picker coming next — engine uses Windows default devices."), w);
+
+        auto fillDevices = [](QComboBox* box, AudioDeviceKind kind, const QString& selected) {
+            box->clear();
+            box->addItem(QStringLiteral("System default"), QString());
+            for (const auto& d : WasapiCapture::enumerate(kind))
+                box->addItem(d.name, d.id);
+            const int idx = box->findData(selected);
+            box->setCurrentIndex(idx >= 0 ? idx : 0);
+        };
+
+        auto* desktop = new QComboBox(w);
+        auto* mic = new QComboBox(w);
+        fillDevices(desktop, AudioDeviceKind::Loopback, engine->settings()->desktopDeviceId());
+        fillDevices(mic, AudioDeviceKind::Capture, engine->settings()->micDeviceId());
+        connect(desktop, &QComboBox::currentIndexChanged, this, [markDirty](int) { markDirty(); });
+        connect(mic, &QComboBox::currentIndexChanged, this, [markDirty](int) { markDirty(); });
+
+        auto* note = new QLabel(QStringLiteral("Changing devices restarts WASAPI capture immediately on Save."), w);
         note->setWordWrap(true);
         note->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
         f->addRow(QStringLiteral("Sample rate"), rate);
@@ -243,6 +259,8 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         f->addRow(QStringLiteral("Desktop device"), desktop);
         f->addRow(QStringLiteral("Mic device"), mic);
         f->addRow(note);
+        m_desktopDevice = desktop;
+        m_micDevice = mic;
         addScrollPage(w);
     }
 
@@ -385,6 +403,19 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
                 o.insert(it.key(), seq.toString(QKeySequence::NativeText));
             }
             m_engine->settings()->setHotkeys(o);
+        }
+        if (m_desktopDevice && m_micDevice) {
+            const QString desktopId = m_desktopDevice->currentData().toString();
+            const QString micId = m_micDevice->currentData().toString();
+            m_engine->settings()->setDesktopDeviceId(desktopId);
+            m_engine->settings()->setMicDeviceId(micId);
+            if (m_engine->audio()) {
+                QString err;
+                if (!m_engine->audio()->reconfigureDevices(desktopId, micId, &err)) {
+                    QMessageBox::warning(this, QStringLiteral("Audio"),
+                                         err.isEmpty() ? QStringLiteral("Failed to switch audio devices") : err);
+                }
+            }
         }
         m_engine->settings()->sync();
         *dirty = false;

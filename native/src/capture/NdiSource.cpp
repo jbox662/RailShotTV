@@ -1,6 +1,7 @@
 #include "capture/NdiSource.h"
 #include "core/Logger.h"
 #include <QLibrary>
+#include <algorithm>
 #include <cstring>
 
 #ifdef _WIN32
@@ -62,6 +63,17 @@ struct NDIlib_video_frame_v2_t {
     int64_t timestamp;
 };
 
+struct NDIlib_audio_frame_v2_t {
+    int sample_rate;
+    int no_channels;
+    int no_samples;
+    int64_t timecode;
+    float* p_data;
+    int channel_stride_in_bytes;
+    const char* p_metadata;
+    int64_t timestamp;
+};
+
 using NDIlib_initialize_fn = bool (*)();
 using NDIlib_destroy_fn = void (*)();
 using NDIlib_find_create_v2_fn = void* (*)(const NDIlib_find_create_t*);
@@ -71,8 +83,9 @@ using NDIlib_find_get_current_sources_fn = const NDIlib_source_t* (*)(void*, uin
 using NDIlib_recv_create_v3_fn = void* (*)(const NDIlib_recv_create_v3_t*);
 using NDIlib_recv_destroy_fn = void (*)(void*);
 using NDIlib_recv_connect_fn = void (*)(void*, const NDIlib_source_t*);
-using NDIlib_recv_capture_v2_fn = NDIlib_frame_type_e (*)(void*, NDIlib_video_frame_v2_t*, void*, void*, uint32_t);
+using NDIlib_recv_capture_v2_fn = NDIlib_frame_type_e (*)(void*, NDIlib_video_frame_v2_t*, NDIlib_audio_frame_v2_t*, void*, uint32_t);
 using NDIlib_recv_free_video_v2_fn = void (*)(void*, const NDIlib_video_frame_v2_t*);
+using NDIlib_recv_free_audio_v2_fn = void (*)(void*, const NDIlib_audio_frame_v2_t*);
 
 struct NdiApi {
     QLibrary lib;
@@ -87,6 +100,7 @@ struct NdiApi {
     NDIlib_recv_connect_fn recv_connect = nullptr;
     NDIlib_recv_capture_v2_fn recv_capture = nullptr;
     NDIlib_recv_free_video_v2_fn recv_free_video = nullptr;
+    NDIlib_recv_free_audio_v2_fn recv_free_audio = nullptr;
     bool ok = false;
 };
 
@@ -116,6 +130,7 @@ NdiApi& ndiApi()
     api.recv_connect = reinterpret_cast<NDIlib_recv_connect_fn>(api.lib.resolve("NDIlib_recv_connect"));
     api.recv_capture = reinterpret_cast<NDIlib_recv_capture_v2_fn>(api.lib.resolve("NDIlib_recv_capture_v2"));
     api.recv_free_video = reinterpret_cast<NDIlib_recv_free_video_v2_fn>(api.lib.resolve("NDIlib_recv_free_video_v2"));
+    api.recv_free_audio = reinterpret_cast<NDIlib_recv_free_audio_v2_fn>(api.lib.resolve("NDIlib_recv_free_audio_v2"));
     if (api.initialize && api.find_create && api.recv_create && api.recv_capture) {
         api.ok = api.initialize();
     }
@@ -130,6 +145,12 @@ NdiSource::NdiSource(QString id, QString name, QString sourceName)
 }
 
 NdiSource::~NdiSource() { stop(); }
+
+void NdiSource::setAudioCallback(std::function<void(const AudioBuffer&)> cb)
+{
+    std::lock_guard lock(m_audioCbMutex);
+    m_audioCb = std::move(cb);
+}
 
 QStringList NdiSource::discoverSources(int waitMs)
 {
@@ -238,11 +259,32 @@ void NdiSource::receiveLoop()
 
     while (!m_stop.load()) {
         NDIlib_video_frame_v2_t video{};
-        const auto type = api.recv_capture(recv, &video, nullptr, nullptr, 100);
+        NDIlib_audio_frame_v2_t audio{};
+        const auto type = api.recv_capture(recv, &video, &audio, nullptr, 100);
         if (type == NDIlib_frame_type_video && video.p_data) {
             if (video.FourCC == NDIlib_FourCC_type_BGRA || video.FourCC == NDIlib_FourCC_type_BGRX)
                 uploadBgra(video.p_data, video.line_stride_in_bytes, video.xres, video.yres);
             api.recv_free_video(recv, &video);
+        } else if (type == NDIlib_frame_type_audio && audio.p_data && audio.no_samples > 0) {
+            AudioBuffer buf;
+            buf.sampleRate = audio.sample_rate > 0 ? audio.sample_rate : kAudioSampleRate;
+            buf.channels = (std::max)(1, audio.no_channels);
+            buf.samples.resize(size_t(audio.no_samples) * size_t(buf.channels));
+            // NDI audio is planar float; interleave for the mixer.
+            for (int c = 0; c < buf.channels; ++c) {
+                const float* plane = reinterpret_cast<const float*>(
+                    reinterpret_cast<const uint8_t*>(audio.p_data) + c * audio.channel_stride_in_bytes);
+                for (int i = 0; i < audio.no_samples; ++i)
+                    buf.samples[size_t(i) * size_t(buf.channels) + size_t(c)] = plane[i];
+            }
+            std::function<void(const AudioBuffer&)> cb;
+            {
+                std::lock_guard lock(m_audioCbMutex);
+                cb = m_audioCb;
+            }
+            if (cb) cb(buf);
+            if (api.recv_free_audio)
+                api.recv_free_audio(recv, &audio);
         }
     }
     api.recv_destroy(recv);

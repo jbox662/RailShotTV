@@ -16,6 +16,14 @@
 #include <functional>
 
 namespace railshot {
+namespace {
+
+QString platformSecretId(const QString& platform)
+{
+    return QStringLiteral("stream/platform/%1").arg(platform);
+}
+
+} // namespace
 
 GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
@@ -44,7 +52,6 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     m_stack = new QStackedWidget(this);
     root->addWidget(m_stack);
 
-    // ── Step 0: config ────────────────────────────────────────────────────
     auto* config = new QWidget(m_stack);
     auto* cfg = new QVBoxLayout(config);
     cfg->setContentsMargins(28, 24, 28, 24);
@@ -66,26 +73,33 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
         {"Custom", "custom", "#FF5A2C"},
     };
     for (const auto& p : plats) {
+        const QString id = QString::fromLatin1(p.id);
+        m_urlsByPlatform.insert(id, defaultUrlFor(id));
+        if (auto stored = SecretStore::load(platformSecretId(id)))
+            m_keysByPlatform.insert(id, *stored);
+
         auto* b = new QPushButton(QString::fromLatin1(p.name), config);
         b->setFixedSize(72, 64);
         b->setCheckable(true);
         b->setCursor(Qt::PointingHandCursor);
-        b->setProperty("platformId", QString::fromLatin1(p.id));
+        b->setProperty("platformId", id);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#0F1218;border:2px solid #2A3350;border-radius:8px;"
             "color:%1;font-weight:800;font-size:10px;}"
             "QPushButton:checked{border-color:%1;background:#1A1F2E;}").arg(QString::fromLatin1(p.color)));
-        connect(b, &QPushButton::clicked, this, [this, b, id = QString::fromLatin1(p.id)] {
-            m_platform = id;
-            for (auto* x : m_platformBtns) x->setChecked(x == b);
-            if (id == QLatin1String("youtube"))
-                m_url->setText(QStringLiteral("rtmp://a.rtmp.youtube.com/live2"));
-            else if (id == QLatin1String("twitch"))
-                m_url->setText(QStringLiteral("rtmp://live.twitch.tv/app"));
-            else if (id == QLatin1String("facebook"))
-                m_url->setText(QStringLiteral("rtmps://live-api-s.facebook.com:443/rtmp"));
-            else
-                m_url->clear();
+        connect(b, &QPushButton::clicked, this, [this, b, id](bool checked) {
+            if (!checked) {
+                // Keep at least one platform selected.
+                bool any = false;
+                for (auto* x : m_platformBtns) {
+                    if (x != b && x->isChecked()) { any = true; break; }
+                }
+                if (!any) {
+                    b->setChecked(true);
+                    return;
+                }
+            }
+            selectPlatform(id, false);
         });
         m_platformBtns.push_back(b);
         platGrid->addWidget(b);
@@ -93,24 +107,29 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     m_platformBtns.first()->setChecked(true);
     cfg->addLayout(platGrid);
 
+    m_hint = new QLabel(QStringLiteral("Multi-select platforms to stream to several destinations. "
+                                       "Each selected platform needs its own stream key."), config);
+    m_hint->setWordWrap(true);
+    m_hint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+    cfg->addWidget(m_hint);
+
     m_title = new QLineEdit(config);
     m_title->setPlaceholderText(QStringLiteral("Stream Title"));
     cfg->addWidget(m_title);
 
-    m_url = new QLineEdit(QStringLiteral("rtmp://a.rtmp.youtube.com/live2"), config);
+    m_url = new QLineEdit(defaultUrlFor(QStringLiteral("youtube")), config);
     m_url->setPlaceholderText(QStringLiteral("RTMP URL"));
     cfg->addWidget(m_url);
 
     m_key = new QLineEdit(config);
     m_key->setEchoMode(QLineEdit::Password);
-    m_key->setPlaceholderText(QStringLiteral("Stream Key"));
+    m_key->setPlaceholderText(QStringLiteral("Stream Key (for focused platform)"));
     m_key->setStyleSheet(QStringLiteral(
         "QLineEdit{font-family:'JetBrains Mono';}"
         "QLineEdit:focus{border-color:#FF5A2C;}"));
     cfg->addWidget(m_key);
 
     auto* chips = new QLabel(QStringLiteral("Ready  ·  Audio  ·  Scene  ·  Encoder  ·  Network  ·  Key"), config);
-
     chips->setAlignment(Qt::AlignCenter);
     chips->setStyleSheet(QStringLiteral("color:#606878; font-size:10px; letter-spacing:0.5px;"));
     cfg->addWidget(chips);
@@ -134,7 +153,6 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     cfg->addLayout(cancelRow);
     m_stack->addWidget(config);
 
-    // ── Step 1: checking ──────────────────────────────────────────────────
     auto* checking = new QWidget(m_stack);
     auto* chk = new QVBoxLayout(checking);
     chk->setContentsMargins(28, 40, 28, 40);
@@ -150,7 +168,6 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     chk->addStretch();
     m_stack->addWidget(checking);
 
-    // ── Step 2: countdown ─────────────────────────────────────────────────
     auto* countdown = new QWidget(m_stack);
     auto* cd = new QVBoxLayout(countdown);
     cd->setContentsMargins(28, 24, 28, 24);
@@ -169,7 +186,6 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     cd->addStretch();
     m_stack->addWidget(countdown);
 
-    // ── Step 3: live ──────────────────────────────────────────────────────
     auto* live = new QWidget(m_stack);
     auto* lv = new QVBoxLayout(live);
     lv->setContentsMargins(28, 40, 28, 40);
@@ -190,8 +206,65 @@ GoLiveDialog::GoLiveDialog(EngineController* engine, QWidget* parent)
     lv->addWidget(done, 0, Qt::AlignHCenter);
     m_stack->addWidget(live);
 
+    selectPlatform(QStringLiteral("youtube"), true);
     showStep(0);
     motion::playModalEnter(this);
+}
+
+QString GoLiveDialog::defaultUrlFor(const QString& platform) const
+{
+    if (platform == QLatin1String("youtube"))
+        return QStringLiteral("rtmp://a.rtmp.youtube.com/live2");
+    if (platform == QLatin1String("twitch"))
+        return QStringLiteral("rtmp://live.twitch.tv/app");
+    if (platform == QLatin1String("facebook"))
+        return QStringLiteral("rtmps://live-api-s.facebook.com:443/rtmp");
+    return {};
+}
+
+QStringList GoLiveDialog::selectedPlatforms() const
+{
+    QStringList out;
+    for (auto* b : m_platformBtns) {
+        if (b->isChecked())
+            out.push_back(b->property("platformId").toString());
+    }
+    return out;
+}
+
+void GoLiveDialog::persistFocusedKey()
+{
+    if (!m_key) return;
+    m_keysByPlatform[m_platform] = m_key->text();
+    if (m_url)
+        m_urlsByPlatform[m_platform] = m_url->text().trimmed();
+}
+
+void GoLiveDialog::selectPlatform(const QString& id, bool exclusive)
+{
+    persistFocusedKey();
+    m_platform = id;
+    if (exclusive) {
+        for (auto* x : m_platformBtns)
+            x->setChecked(x->property("platformId").toString() == id);
+    }
+    m_url->setText(m_urlsByPlatform.value(id, defaultUrlFor(id)));
+    m_key->setText(m_keysByPlatform.value(id));
+    const auto selected = selectedPlatforms();
+    if (m_hint) {
+        m_hint->setText(selected.size() > 1
+                            ? QStringLiteral("Multistreaming to %1 destinations. Switch platforms to edit each key.")
+                                  .arg(selected.size())
+                            : QStringLiteral("Multi-select platforms to stream to several destinations. "
+                                             "Each selected platform needs its own stream key."));
+    }
+}
+
+QString GoLiveDialog::keyForPlatform(const QString& platform) const
+{
+    if (platform == m_platform)
+        return m_key->text().trimmed();
+    return m_keysByPlatform.value(platform).trimmed();
 }
 
 void GoLiveDialog::setPrefill(const QString& title, const QString& platform)
@@ -199,13 +272,7 @@ void GoLiveDialog::setPrefill(const QString& title, const QString& platform)
     if (m_title && !title.isEmpty())
         m_title->setText(title);
     if (platform.isEmpty()) return;
-    m_platform = platform.toLower();
-    for (auto* b : m_platformBtns) {
-        const bool match = b->property("platformId").toString() == m_platform;
-        b->setChecked(match);
-        if (match)
-            emit b->clicked(true);
-    }
+    selectPlatform(platform.toLower(), true);
 }
 
 void GoLiveDialog::showStep(int step)
@@ -221,24 +288,34 @@ void GoLiveDialog::showStep(int step)
 
 void GoLiveDialog::runChecks()
 {
+    persistFocusedKey();
     showStep(1);
     m_checkIndex = 0;
 
     struct Check {
         QString label;
         QString color;
-        std::function<QString()> probe; // empty = pass
+        std::function<QString()> probe;
     };
 
+    const QStringList plats = selectedPlatforms();
+
     QVector<Check> checks;
-    checks.push_back({QStringLiteral("Stream key"), QStringLiteral("#FBBF24"), [this] {
-        if (m_key->text().trimmed().isEmpty())
-            return QStringLiteral("Enter a stream key before going live");
+    checks.push_back({QStringLiteral("Stream keys"), QStringLiteral("#FBBF24"), [this, plats] {
+        for (const auto& p : plats) {
+            if (keyForPlatform(p).isEmpty())
+                return QStringLiteral("Missing stream key for %1").arg(p);
+        }
         return QString();
     }});
-    checks.push_back({QStringLiteral("RTMP URL"), QStringLiteral("#22D3EE"), [this] {
-        if (m_url->text().trimmed().isEmpty())
-            return QStringLiteral("RTMP URL is empty");
+    checks.push_back({QStringLiteral("RTMP URL"), QStringLiteral("#22D3EE"), [this, plats] {
+        for (const auto& p : plats) {
+            const QString url = (p == m_platform)
+                                    ? m_url->text().trimmed()
+                                    : m_urlsByPlatform.value(p, defaultUrlFor(p)).trimmed();
+            if (url.isEmpty())
+                return QStringLiteral("RTMP URL empty for %1").arg(p);
+        }
         return QString();
     }});
     checks.push_back({QStringLiteral("Active scene"), QStringLiteral("#4F9EFF"), [this] {
@@ -273,15 +350,20 @@ void GoLiveDialog::runChecks()
         enc->close();
         return QString();
     }});
-    checks.push_back({QStringLiteral("Network"), QStringLiteral("#22D3EE"), [this] {
-        const QUrl url(m_url->text().trimmed());
-        if (!url.isValid() || url.host().isEmpty())
-            return QStringLiteral("RTMP host missing");
-        QTcpSocket sock;
-        sock.connectToHost(url.host(), url.port(1935));
-        if (!sock.waitForConnected(1500))
-            return QStringLiteral("Cannot reach %1").arg(url.host());
-        sock.disconnectFromHost();
+    checks.push_back({QStringLiteral("Network"), QStringLiteral("#22D3EE"), [this, plats] {
+        for (const auto& p : plats) {
+            const QString raw = (p == m_platform)
+                                    ? m_url->text().trimmed()
+                                    : m_urlsByPlatform.value(p, defaultUrlFor(p)).trimmed();
+            const QUrl url(raw);
+            if (!url.isValid() || url.host().isEmpty())
+                return QStringLiteral("RTMP host missing for %1").arg(p);
+            QTcpSocket sock;
+            sock.connectToHost(url.host(), url.port(1935));
+            if (!sock.waitForConnected(1500))
+                return QStringLiteral("Cannot reach %1").arg(url.host());
+            sock.disconnectFromHost();
+        }
         return QString();
     }});
 
@@ -332,23 +414,39 @@ void GoLiveDialog::startCountdown()
 
 void GoLiveDialog::goLiveNow()
 {
-    StreamTarget target;
-    target.id = newId(QStringLiteral("tgt"));
-    target.platform = m_platform;
-    target.name = m_title->text().trimmed().isEmpty() ? m_platform : m_title->text().trimmed();
-    target.title = m_title->text().trimmed();
-    target.rtmpUrl = m_url->text().trimmed();
-    target.streamKeySecretId = SecretStore::makeStreamKeyId(target.id);
-    if (!m_key->text().isEmpty())
-        SecretStore::store(target.streamKeySecretId, m_key->text());
+    persistFocusedKey();
+    const QStringList plats = selectedPlatforms();
+    QVector<StreamTarget> targets;
+    targets.reserve(plats.size());
 
     m_engine->sceneGraph()->mutate([&](Project& p) {
-        p.streamTargets.append(target);
+        for (const auto& plat : plats) {
+            StreamTarget target;
+            target.id = newId(QStringLiteral("tgt"));
+            target.platform = plat;
+            target.name = m_title->text().trimmed().isEmpty() ? plat : m_title->text().trimmed();
+            target.title = m_title->text().trimmed();
+            target.rtmpUrl = m_urlsByPlatform.value(plat, defaultUrlFor(plat)).trimmed();
+            if (plat == m_platform)
+                target.rtmpUrl = m_url->text().trimmed();
+            target.streamKeySecretId = SecretStore::makeStreamKeyId(target.id);
+            const QString key = keyForPlatform(plat);
+            SecretStore::store(target.streamKeySecretId, key);
+            SecretStore::store(platformSecretId(plat), key);
+            p.streamTargets.append(target);
+            targets.push_back(target);
+        }
         p.output = p.output.width > 0 ? p.output : OutputProfile{};
     });
 
+    // Persist last stream title in UI state
+    auto ui = m_engine->settings()->uiState();
+    ui.insert(QStringLiteral("lastStreamTitle"), m_title->text().trimmed());
+    ui.insert(QStringLiteral("lastStreamPlatform"), plats.join(QLatin1Char(',')));
+    m_engine->settings()->setUiState(ui);
+
     QString err;
-    if (!m_engine->startStreaming(target.id, &err)) {
+    if (!m_engine->startStreamingTargets(targets, &err)) {
         QMessageBox::warning(this, QStringLiteral("Go Live"), err);
         showStep(0);
         return;

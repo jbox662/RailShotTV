@@ -15,6 +15,7 @@
 #include <QVector>
 #include <atomic>
 #include <memory>
+#include <vector>
 
 struct ID3D11Texture2D;
 struct ID3D11Device;
@@ -34,8 +35,10 @@ public:
     bool isRecording() const { return m_recording.load(); }
 
     bool startStreaming(const StreamTarget& target, const OutputProfile& profile, QString* error = nullptr);
+    bool startStreaming(const QVector<StreamTarget>& targets, const OutputProfile& profile, QString* error = nullptr);
     void stopStreaming();
     bool isStreaming() const { return m_streaming.load(); }
+    int activeStreamCount() const;
 
     void submitVideo(ID3D11Texture2D* texture, qint64 ptsUs);
     void submitVideoImage(const QImage& image, qint64 ptsUs);
@@ -94,12 +97,13 @@ private:
     std::unique_ptr<IVideoEncoder> m_videoEnc;
     std::unique_ptr<IAudioEncoder> m_audioEnc;
     std::unique_ptr<MkvRecorder> m_recorder;
-    std::unique_ptr<RtmpOutput> m_rtmp;
+    std::vector<std::unique_ptr<RtmpOutput>> m_rtmps;
 
     std::atomic<bool> m_recording{false};
     std::atomic<bool> m_streaming{false};
     std::atomic<bool> m_workerRunning{false};
     std::atomic<qint64> m_droppedFrames{0};
+    std::atomic<int> m_activeStreamCount{0};
 
     QMutex m_encMutex;
     QMutex m_queueMutex;

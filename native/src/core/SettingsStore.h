@@ -30,6 +30,11 @@ public:
     QJsonObject hotkeys() const;
     void setHotkeys(const QJsonObject& keys);
 
+    QString desktopDeviceId() const;
+    void setDesktopDeviceId(const QString& id);
+    QString micDeviceId() const;
+    void setMicDeviceId(const QString& id);
+
     void sync();
 
 signals:

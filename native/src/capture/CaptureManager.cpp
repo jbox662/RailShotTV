@@ -30,6 +30,29 @@ void CaptureManager::setDevice(ID3D11Device* device)
     m_device = device;
 }
 
+void CaptureManager::setSourceAudioCallback(
+    std::function<void(const QString&, const QString&, const AudioBuffer&)> cb)
+{
+    m_audioCb = std::move(cb);
+}
+
+void CaptureManager::wireSourceAudio(IVideoSource* src, const SourceItem& source)
+{
+    if (!src || !m_audioCb) return;
+    const QString id = source.id;
+    const QString name = source.name;
+    auto forward = [this, id, name](const AudioBuffer& buf) {
+        if (m_audioCb) m_audioCb(id, name, buf);
+    };
+    if (auto* media = dynamic_cast<MediaSource*>(src)) {
+        media->setAudioCallback(forward);
+        return;
+    }
+    if (auto* ndi = dynamic_cast<NdiSource*>(src)) {
+        ndi->setAudioCallback(forward);
+    }
+}
+
 std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& source)
 {
     switch (source.type) {
@@ -83,6 +106,7 @@ bool CaptureManager::attachSource(const SourceItem& source, QString* error)
         if (error) *error = QStringLiteral("Unsupported source type");
         return false;
     }
+    wireSourceAudio(src.get(), source);
     if (!src->start(m_device, error))
         return false;
     const QString id = source.id;

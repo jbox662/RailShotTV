@@ -26,6 +26,8 @@ private:
     QComboBox* m_streamPlatform = nullptr;
     QComboBox* m_videoFps = nullptr;
     QComboBox* m_videoRes = nullptr;
+    QComboBox* m_desktopDevice = nullptr;
+    QComboBox* m_micDevice = nullptr;
     QLineEdit* m_outDir = nullptr;
     std::shared_ptr<QHash<QString, QKeySequenceEdit*>> m_hotkeyEdits;
 };

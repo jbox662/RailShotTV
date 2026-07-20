@@ -113,9 +113,17 @@ void WasapiCapture::captureLoop()
 
     ComPtr<IMMDevice> device;
     const EDataFlow flow = (m_kind == AudioDeviceKind::Loopback) ? eRender : eCapture;
-    if (FAILED(enumerator->GetDefaultAudioEndpoint(flow, eConsole, &device))) {
-        emit captureError(QStringLiteral("GetDefaultAudioEndpoint failed"));
-        return;
+    HRESULT deviceHr = E_FAIL;
+    if (!m_deviceId.isEmpty() && m_deviceId != QLatin1String("default")) {
+        deviceHr = enumerator->GetDevice(reinterpret_cast<LPCWSTR>(m_deviceId.utf16()), &device);
+        if (FAILED(deviceHr))
+            Logger::warn(QStringLiteral("WASAPI GetDevice failed for %1, falling back to default").arg(m_deviceId));
+    }
+    if (FAILED(deviceHr) || !device) {
+        if (FAILED(enumerator->GetDefaultAudioEndpoint(flow, eConsole, &device))) {
+            emit captureError(QStringLiteral("GetDefaultAudioEndpoint failed"));
+            return;
+        }
     }
 
     ComPtr<IAudioClient> client;

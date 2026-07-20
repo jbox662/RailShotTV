@@ -22,6 +22,8 @@ public:
     ~AudioGraph() override;
 
     bool initialize(QString* error = nullptr);
+    bool initialize(const QString& desktopDeviceId, const QString& micDeviceId, QString* error = nullptr);
+    bool reconfigureDevices(const QString& desktopDeviceId, const QString& micDeviceId, QString* error = nullptr);
     void shutdown();
 
     AudioClock& clock() { return m_clock; }
@@ -30,6 +32,11 @@ public:
     AudioChannelState channelState(const QString& id) const;
     QVector<AudioChannelState> channels() const;
 
+    void ensureChannel(const QString& id, const QString& name);
+    void removeChannel(const QString& id);
+    /// Inject a decoded media/NDI (or other) buffer into the mix.
+    void inject(const QString& channelId, const AudioBuffer& buffer);
+
     void setMasterVolume(float v);
     void setMasterMuted(bool m);
     float masterVolume() const { return m_masterVolume; }
@@ -37,6 +44,9 @@ public:
 
     void setMonitorEnabled(bool enabled);
     bool monitorEnabled() const { return m_monitorEnabled; }
+
+    QString desktopDeviceId() const { return m_desktopDeviceId; }
+    QString micDeviceId() const { return m_micDeviceId; }
 
     /// Mixed output callback for encoders (float stereo @ 48k).
     void setOutputCallback(std::function<void(const AudioBuffer&)> cb);
@@ -55,6 +65,8 @@ private:
     std::unique_ptr<WasapiCapture> m_desktop;
     std::unique_ptr<WasapiCapture> m_mic;
     std::unique_ptr<AudioMonitor> m_monitor;
+    QString m_desktopDeviceId;
+    QString m_micDeviceId;
 
     mutable std::mutex m_mutex;
     QHash<QString, AudioChannelState> m_channels;

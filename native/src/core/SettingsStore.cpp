@@ -115,6 +115,28 @@ void SettingsStore::setHotkeys(const QJsonObject& keys)
     emit settingsChanged();
 }
 
+QString SettingsStore::desktopDeviceId() const
+{
+    return m_settings.value(QStringLiteral("audio/desktopDeviceId")).toString();
+}
+
+void SettingsStore::setDesktopDeviceId(const QString& id)
+{
+    m_settings.setValue(QStringLiteral("audio/desktopDeviceId"), id);
+    emit settingsChanged();
+}
+
+QString SettingsStore::micDeviceId() const
+{
+    return m_settings.value(QStringLiteral("audio/micDeviceId")).toString();
+}
+
+void SettingsStore::setMicDeviceId(const QString& id)
+{
+    m_settings.setValue(QStringLiteral("audio/micDeviceId"), id);
+    emit settingsChanged();
+}
+
 void SettingsStore::sync()
 {
     m_settings.sync();

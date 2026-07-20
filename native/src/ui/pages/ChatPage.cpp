@@ -15,6 +15,7 @@
 #include <QLabel>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QUrlQuery>
 #include <QSettings>
 #include <QColor>
 #include <QTabWidget>
@@ -22,6 +23,15 @@
 #include <QFrame>
 #include <QScrollArea>
 #include <QStyle>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QPointer>
+#include <QJsonObject>
+#include <QHostAddress>
+#include <functional>
 
 namespace railshot {
 
@@ -74,12 +84,16 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     statusRow->addWidget(connLbl, 1);
     leftLay->addLayout(statusRow);
 
-    auto* oauthBtn = new QPushButton(QStringLiteral("Open OAuth"), left);
+    auto* oauthBtn = new QPushButton(QStringLiteral("Sign in with browser"), left);
     oauthBtn->setObjectName(QStringLiteral("chromeBtn"));
     auto* connectBtn = new QPushButton(QStringLiteral("Connect"), left);
     connectBtn->setObjectName(QStringLiteral("chromeBtnViolet"));
     leftLay->addWidget(oauthBtn);
     leftLay->addWidget(connectBtn);
+    auto* pasteHint = new QLabel(QStringLiteral("Twitch: browser PKCE. Other platforms: paste token if needed."), left);
+    pasteHint->setWordWrap(true);
+    pasteHint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+    leftLay->addWidget(pasteHint);
 
     auto* filterTitle = new QLabel(QStringLiteral("FILTER"), left);
     filterTitle->setStyleSheet(QStringLiteral("color:#8892A4; font-weight:800; font-size:10px; letter-spacing:1.5px; padding-top:12px;"));
@@ -214,46 +228,172 @@ ChatPage::ChatPage(ChatService* chat, QWidget* parent)
     updatePlatformAccent();
 
     int* count = new int(0);
-    connect(oauthBtn, &QPushButton::clicked, this, [platform, clientId] {
-        QSettings s(QStringLiteral("RailShotTV"), QStringLiteral("RailShotTV"));
-        s.setValue(QStringLiteral("chat/clientId"), clientId->text().trimmed());
-        const QString cid = clientId->text().trimmed().isEmpty()
-                                ? QStringLiteral("YOUR_CLIENT_ID")
-                                : clientId->text().trimmed();
-        const QString url = PlatformAdapters::authorizeUrl(platform->currentData().toString(), cid,
-                                                           QStringLiteral("http://localhost"));
-        if (url.isEmpty()) {
-            QMessageBox::warning(nullptr, QStringLiteral("Chat"), QStringLiteral("Unknown platform"));
-            return;
-        }
-        QDesktopServices::openUrl(QUrl(url));
-    });
+    auto* nam = new QNetworkAccessManager(this);
+    auto* oauthServer = new QTcpServer(this);
+    auto* oauthVerifier = new QString();
+    auto* oauthState = new QString();
+    auto* oauthPlatform = new QString();
+    auto* oauthClientId = new QString();
+    constexpr quint16 kOAuthPort = 18765;
+    const QString redirectUri = QStringLiteral("http://127.0.0.1:%1/callback").arg(kOAuthPort);
 
-    connect(connectBtn, &QPushButton::clicked, this, [=] {
-        bool ok = false;
-        const QString token = QInputDialog::getText(this, QStringLiteral("OAuth Token"),
-                                                    QStringLiteral("Paste access token:"),
-                                                    QLineEdit::Password, {}, &ok);
-        if (!ok || token.isEmpty()) return;
-        connDot->setObjectName(QStringLiteral("connDotConnecting"));
-        connLbl->setText(QStringLiteral("Connecting…"));
-        connLbl->setStyleSheet(QStringLiteral("color:#FBBF24; font-size:11px;"));
-        const QString plat = platform->currentData().toString();
-        const QString secretId = SecretStore::makeTokenId(plat, QStringLiteral("default"));
-        SecretStore::store(secretId, token);
-        QString err;
-        if (!chat->connectPlatform(plat, secretId, channel->text(), &err)) {
-            connDot->setObjectName(QStringLiteral("connDotError"));
-            connLbl->setText(QStringLiteral("Error"));
-            connLbl->setStyleSheet(QStringLiteral("color:#FF5A2C; font-size:11px;"));
-            QMessageBox::warning(this, QStringLiteral("Chat"), err);
-            return;
-        }
+    auto applyConnected = [=] {
         connDot->setObjectName(QStringLiteral("connDotConnected"));
         connLbl->setText(QStringLiteral("Connected"));
         connLbl->setStyleSheet(QStringLiteral("color:#22C55E; font-size:11px;"));
         connDot->style()->unpolish(connDot);
         connDot->style()->polish(connDot);
+    };
+    auto applyError = [=](const QString& err) {
+        connDot->setObjectName(QStringLiteral("connDotError"));
+        connLbl->setText(QStringLiteral("Error"));
+        connLbl->setStyleSheet(QStringLiteral("color:#FF5A2C; font-size:11px;"));
+        connDot->style()->unpolish(connDot);
+        connDot->style()->polish(connDot);
+        QMessageBox::warning(this, QStringLiteral("Chat"), err);
+    };
+    auto connectWithToken = [=](const QString& plat, const QString& token) {
+        if (token.isEmpty()) {
+            applyError(QStringLiteral("Empty OAuth token"));
+            return;
+        }
+        const QString secretId = SecretStore::makeTokenId(plat, QStringLiteral("default"));
+        SecretStore::store(secretId, token);
+        QString err;
+        if (!chat->connectPlatform(plat, secretId, channel->text(), &err)) {
+            applyError(err);
+            return;
+        }
+        applyConnected();
+    };
+    auto exchangeCode = [=](const QString& code) {
+        const QString endpoint = PlatformAdapters::tokenEndpoint(*oauthPlatform);
+        if (endpoint.isEmpty()) {
+            applyError(QStringLiteral("Token exchange not supported for this platform — paste a token instead."));
+            return;
+        }
+        QNetworkRequest req{QUrl(endpoint)};
+        req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
+        const QByteArray body = PlatformAdapters::tokenExchangeBody(
+            *oauthPlatform, *oauthClientId, code, redirectUri, *oauthVerifier);
+        QNetworkReply* reply = nam->post(req, body);
+        QPointer<ChatPage> self(this);
+        connect(reply, &QNetworkReply::finished, this, [=] {
+            reply->deleteLater();
+            if (!self) return;
+            const QByteArray raw = reply->readAll();
+            if (reply->error() != QNetworkReply::NoError) {
+                applyError(QStringLiteral("Token exchange failed: %1").arg(QString::fromUtf8(raw)));
+                return;
+            }
+            const QJsonObject obj = PlatformAdapters::parseTokenResponse(*oauthPlatform, raw);
+            const QString token = obj.value(QStringLiteral("access_token")).toString();
+            if (token.isEmpty()) {
+                applyError(QStringLiteral("No access_token in response"));
+                return;
+            }
+            connectWithToken(*oauthPlatform, token);
+        });
+    };
+
+    connect(oauthServer, &QTcpServer::newConnection, this, [=] {
+        while (QTcpSocket* sock = oauthServer->nextPendingConnection()) {
+            connect(sock, &QTcpSocket::readyRead, this, [=] {
+                const QByteArray req = sock->readAll();
+                const QString line = QString::fromUtf8(req.split('\n').value(0));
+                QString path = line.section(QLatin1Char(' '), 1, 1);
+                if (path.startsWith(QLatin1Char('/'))) {
+                    const QUrl url(QStringLiteral("http://127.0.0.1") + path);
+                    QUrlQuery q(url);
+                    const QString state = q.queryItemValue(QStringLiteral("state"));
+                    const QString code = q.queryItemValue(QStringLiteral("code"));
+                    const QString err = q.queryItemValue(QStringLiteral("error"));
+                    const QByteArray html =
+                        "<html><body style='font-family:sans-serif;background:#12151C;color:#E0E2E8;"
+                        "padding:40px;text-align:center'><h2>RailShotTV</h2>"
+                        "<p>You can close this window and return to the app.</p></body></html>";
+                    sock->write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+                                "Connection: close\r\nContent-Length: "
+                                + QByteArray::number(html.size()) + "\r\n\r\n" + html);
+                    sock->disconnectFromHost();
+                    oauthServer->close();
+                    if (!err.isEmpty()) {
+                        applyError(QStringLiteral("OAuth error: %1").arg(err));
+                        return;
+                    }
+                    if (!state.isEmpty() && state != *oauthState) {
+                        applyError(QStringLiteral("OAuth state mismatch"));
+                        return;
+                    }
+                    if (code.isEmpty()) {
+                        applyError(QStringLiteral("OAuth callback missing code"));
+                        return;
+                    }
+                    connLbl->setText(QStringLiteral("Exchanging token…"));
+                    exchangeCode(code);
+                }
+            });
+            connect(sock, &QTcpSocket::disconnected, sock, &QObject::deleteLater);
+        }
+    });
+
+    connect(oauthBtn, &QPushButton::clicked, this, [=] {
+        QSettings s(QStringLiteral("RailShotTV"), QStringLiteral("RailShotTV"));
+        const QString cid = clientId->text().trimmed();
+        s.setValue(QStringLiteral("chat/clientId"), cid);
+        if (cid.isEmpty()) {
+            QMessageBox::warning(this, QStringLiteral("Chat"),
+                                 QStringLiteral("Enter your OAuth client id first."));
+            return;
+        }
+        *oauthClientId = cid;
+        *oauthPlatform = platform->currentData().toString();
+        *oauthVerifier = PlatformAdapters::generateCodeVerifier();
+        *oauthState = PlatformAdapters::generateState();
+        const QString challenge = PlatformAdapters::codeChallengeS256(*oauthVerifier);
+        if (oauthServer->isListening())
+            oauthServer->close();
+        if (!oauthServer->listen(QHostAddress::LocalHost, kOAuthPort)) {
+            QMessageBox::warning(this, QStringLiteral("Chat"),
+                                 QStringLiteral("Could not bind localhost:%1 for OAuth callback.")
+                                     .arg(kOAuthPort));
+            return;
+        }
+        const QString url = PlatformAdapters::authorizeUrl(*oauthPlatform, cid, redirectUri,
+                                                           challenge, *oauthState);
+        if (url.isEmpty()) {
+            oauthServer->close();
+            QMessageBox::warning(this, QStringLiteral("Chat"), QStringLiteral("Unknown platform"));
+            return;
+        }
+        connDot->setObjectName(QStringLiteral("connDotConnecting"));
+        connLbl->setText(QStringLiteral("Waiting for browser…"));
+        connLbl->setStyleSheet(QStringLiteral("color:#FBBF24; font-size:11px;"));
+        connDot->style()->unpolish(connDot);
+        connDot->style()->polish(connDot);
+        QDesktopServices::openUrl(QUrl(url));
+    });
+
+    connect(connectBtn, &QPushButton::clicked, this, [=] {
+        const QString plat = platform->currentData().toString();
+        const QString secretId = SecretStore::makeTokenId(plat, QStringLiteral("default"));
+        auto existing = SecretStore::load(secretId);
+        if (existing && !existing->isEmpty()) {
+            connDot->setObjectName(QStringLiteral("connDotConnecting"));
+            connLbl->setText(QStringLiteral("Connecting…"));
+            connLbl->setStyleSheet(QStringLiteral("color:#FBBF24; font-size:11px;"));
+            connectWithToken(plat, *existing);
+            return;
+        }
+        bool ok = false;
+        const QString token = QInputDialog::getText(this, QStringLiteral("OAuth Token"),
+                                                    QStringLiteral("Paste access token (or use Sign in with browser):"),
+                                                    QLineEdit::Password, {}, &ok);
+        if (!ok || token.isEmpty()) return;
+        connDot->setObjectName(QStringLiteral("connDotConnecting"));
+        connLbl->setText(QStringLiteral("Connecting…"));
+        connLbl->setStyleSheet(QStringLiteral("color:#FBBF24; font-size:11px;"));
+        connectWithToken(plat, token);
     });
 
     connect(chat, &ChatService::messageReceived, this, [=](const ChatMessage& m) {

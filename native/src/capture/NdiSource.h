@@ -1,8 +1,10 @@
 #pragma once
 
 #include "capture/IVideoSource.h"
+#include "audio/AudioTypes.h"
 #include <QString>
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -26,6 +28,8 @@ public:
     bool acquireLatest(VideoFrame& out) override;
     QSize size() const override { return {m_width, m_height}; }
 
+    void setAudioCallback(std::function<void(const AudioBuffer&)> cb);
+
     static QStringList discoverSources(int waitMs = 1000);
 
 private:
@@ -39,6 +43,8 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_stop{false};
     mutable std::mutex m_mutex;
+    std::mutex m_audioCbMutex;
+    std::function<void(const AudioBuffer&)> m_audioCb;
     std::thread m_thread;
     int m_width = 0, m_height = 0;
 };

@@ -1,11 +1,13 @@
-#pragma once
+﻿#pragma once
 
 #include "capture/IVideoSource.h"
 #include "capture/FrameBus.h"
+#include "audio/AudioTypes.h"
 #include "core/Types.h"
 #include <QObject>
 #include <QHash>
 #include <QVector>
+#include <functional>
 #include <memory>
 
 struct ID3D11Device;
@@ -20,6 +22,9 @@ public:
 
     void setDevice(ID3D11Device* device);
     FrameBus& frameBus() { return m_bus; }
+
+    /// Called when Media/NDI sources produce audio (sourceId, display name, buffer).
+    void setSourceAudioCallback(std::function<void(const QString&, const QString&, const AudioBuffer&)> cb);
 
     bool attachSource(const SourceItem& source, QString* error = nullptr);
     void updateSource(const SourceItem& source);
@@ -46,11 +51,13 @@ signals:
 
 private:
     std::unique_ptr<IVideoSource> createSource(const SourceItem& source);
+    void wireSourceAudio(IVideoSource* src, const SourceItem& source);
 
     ID3D11Device* m_device = nullptr;
     FrameBus m_bus;
     QHash<QString, std::shared_ptr<IVideoSource>> m_sources;
     bool m_paused = false;
+    std::function<void(const QString&, const QString&, const AudioBuffer&)> m_audioCb;
 };
 
 } // namespace railshot

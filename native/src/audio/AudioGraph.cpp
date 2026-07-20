@@ -28,9 +28,17 @@ AudioGraph::~AudioGraph()
 
 bool AudioGraph::initialize(QString* error)
 {
+    return initialize({}, {}, error);
+}
+
+bool AudioGraph::initialize(const QString& desktopDeviceId, const QString& micDeviceId, QString* error)
+{
+    shutdown();
+    m_desktopDeviceId = desktopDeviceId;
+    m_micDeviceId = micDeviceId;
     m_clock.start();
-    m_desktop = std::make_unique<WasapiCapture>(AudioDeviceKind::Loopback);
-    m_mic = std::make_unique<WasapiCapture>(AudioDeviceKind::Capture);
+    m_desktop = std::make_unique<WasapiCapture>(AudioDeviceKind::Loopback, m_desktopDeviceId);
+    m_mic = std::make_unique<WasapiCapture>(AudioDeviceKind::Capture, m_micDeviceId);
     m_monitor = std::make_unique<AudioMonitor>();
 
     m_desktop->setCallback([this](const AudioBuffer& b) { onCapture(QStringLiteral("desktop"), b); });
@@ -39,8 +47,19 @@ bool AudioGraph::initialize(QString* error)
     if (!m_desktop->start(error)) return false;
     if (!m_mic->start(error)) return false;
     m_monitor->start(error);
-    Logger::info(QStringLiteral("Audio graph initialized"));
+    Logger::info(QStringLiteral("Audio graph initialized (desktop=%1 mic=%2)")
+                     .arg(m_desktopDeviceId.isEmpty() ? QStringLiteral("default") : m_desktopDeviceId,
+                          m_micDeviceId.isEmpty() ? QStringLiteral("default") : m_micDeviceId));
     return true;
+}
+
+bool AudioGraph::reconfigureDevices(const QString& desktopDeviceId, const QString& micDeviceId, QString* error)
+{
+    if (desktopDeviceId == m_desktopDeviceId && micDeviceId == m_micDeviceId
+        && m_desktop && m_mic && m_desktop->isRunning() && m_mic->isRunning()) {
+        return true;
+    }
+    return initialize(desktopDeviceId, micDeviceId, error);
 }
 
 void AudioGraph::shutdown()
@@ -48,6 +67,9 @@ void AudioGraph::shutdown()
     if (m_desktop) m_desktop->stop();
     if (m_mic) m_mic->stop();
     if (m_monitor) m_monitor->stop();
+    m_desktop.reset();
+    m_mic.reset();
+    m_monitor.reset();
     m_clock.stop();
 }
 
@@ -79,6 +101,35 @@ QVector<AudioChannelState> AudioGraph::channels() const
         out.append(s);
     }
     return out;
+}
+
+void AudioGraph::ensureChannel(const QString& id, const QString& name)
+{
+    std::lock_guard lock(m_mutex);
+    auto it = m_channels.find(id);
+    if (it == m_channels.end()) {
+        AudioChannelState ch;
+        ch.id = id;
+        ch.name = name;
+        m_channels.insert(id, ch);
+    } else if (!name.isEmpty() && it->name != name) {
+        it->name = name;
+    }
+}
+
+void AudioGraph::removeChannel(const QString& id)
+{
+    if (id == QLatin1String("desktop") || id == QLatin1String("mic"))
+        return;
+    std::lock_guard lock(m_mutex);
+    m_channels.remove(id);
+    m_pending.remove(id);
+    m_meters.remove(id);
+}
+
+void AudioGraph::inject(const QString& channelId, const AudioBuffer& buffer)
+{
+    onCapture(channelId, buffer);
 }
 
 void AudioGraph::setMasterVolume(float v)
@@ -149,7 +200,6 @@ void AudioGraph::mixAndEmit()
     std::function<void(const AudioBuffer&)> cb;
     {
         std::lock_guard lock(m_mutex);
-        // Determine frame count from first pending buffer
         int frames = kAudioFramesPerBuffer;
         for (const auto& b : m_pending)
             frames = std::max(frames, b.frameCount());
