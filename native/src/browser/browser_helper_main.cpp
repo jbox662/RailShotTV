@@ -161,15 +161,15 @@ QString wrapPage(const QString& bodyHtml, const QString& note)
 #if defined(_WIN32) && defined(RAILSHOT_HAS_WEBVIEW2) && RAILSHOT_HAS_WEBVIEW2
 /// WebView2 is GPU-composited (WS_EX_NOREDIRECTIONBITMAP) — GDI BitBlt always
 /// returns black. CapturePreview is the supported screenshot API.
+/// Returns a null QImage on failure (caller must keep the previous frame).
 QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
 {
-    QImage fallback(w, h, QImage::Format_ARGB32);
-    fallback.fill(QColor(16, 20, 32));
-    if (!webview) return fallback;
+    if (!webview || w <= 0 || h <= 0)
+        return {};
 
     IStream* stream = nullptr;
     if (FAILED(CreateStreamOnHGlobal(nullptr, TRUE, &stream)) || !stream)
-        return fallback;
+        return {};
 
     std::atomic<bool> done{false};
     HRESULT captureHr = E_FAIL;
@@ -186,21 +186,22 @@ QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
 
     if (FAILED(startHr)) {
         stream->Release();
-        return fallback;
+        return {};
     }
 
+    // Pump ONLY native messages — do not call QCoreApplication::processEvents()
+    // here or the publish QTimer can re-enter and start overlapping captures.
     const DWORD startTick = GetTickCount();
-    while (!done.load() && (GetTickCount() - startTick) < 2000) {
+    while (!done.load() && (GetTickCount() - startTick) < 1500) {
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 8);
         Sleep(1);
     }
 
-    QImage img = fallback;
+    QImage img;
     if (done.load() && SUCCEEDED(captureHr)) {
         STATSTG stat{};
         if (SUCCEEDED(stream->Stat(&stat, STATFLAG_NONAME)) && stat.cbSize.QuadPart > 0) {
@@ -215,7 +216,7 @@ QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
                     if (decoded.format() != QImage::Format_ARGB32)
                         decoded = decoded.convertToFormat(QImage::Format_ARGB32);
                     if (decoded.width() != w || decoded.height() != h)
-                        decoded = decoded.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                        decoded = decoded.scaled(w, h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
                     img = decoded;
                 }
             }
@@ -231,6 +232,7 @@ struct WebViewHost {
     ComPtr<ICoreWebView2> webview;
     bool ready = false;
     bool contentReady = false;
+    bool capturing = false;
     QString lastError;
     QImage lastFrame;
 
@@ -357,17 +359,20 @@ struct WebViewHost {
         return true;
     }
 
-    QImage grab(int w, int h)
+    /// Capture one frame into lastFrame. Returns true if lastFrame was updated.
+    bool captureOnce(int w, int h)
     {
-        if (!webview)
-            return lastFrame.isNull() ? QImage(w, h, QImage::Format_ARGB32) : lastFrame;
-        // CapturePreview fails before first ContentLoading — keep loading placeholder.
+        if (!webview || capturing)
+            return false;
         if (!contentReady)
-            return lastFrame;
+            return false;
+        capturing = true;
         QImage img = captureWebViewPreview(webview.Get(), w, h);
-        if (!img.isNull())
-            lastFrame = img;
-        return lastFrame;
+        capturing = false;
+        if (img.isNull())
+            return false;
+        lastFrame = std::move(img);
+        return true;
     }
 
     void shutdown()
@@ -383,6 +388,7 @@ struct WebViewHost {
         }
         ready = false;
         contentReady = false;
+        capturing = false;
     }
 };
 #endif
@@ -486,6 +492,10 @@ int main(int argc, char** argv)
         QString wvErr;
         if (host.start(shared.width, shared.height, url, &wvErr)) {
             quint64 frame = 0;
+            // Stable loading frame until first successful CapturePreview.
+            publishFrame(shared, host.lastFrame, ++frame, 1, {});
+
+            const int intervalMs = qMax(50, 1000 / fps); // CapturePreview is heavy; floor at 20 fps
             QTimer publishTimer;
             QObject::connect(&publishTimer, &QTimer::timeout, &app, [&] {
                 MSG msg;
@@ -493,9 +503,11 @@ int main(int argc, char** argv)
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
-                publishFrame(shared, host.grab(shared.width, shared.height), ++frame, 0, {});
+                // Only push when a new capture succeeds — never overwrite with a failed/blank frame.
+                if (host.captureOnce(shared.width, shared.height))
+                    publishFrame(shared, host.lastFrame, ++frame, 0, {});
             });
-            publishTimer.start(1000 / fps);
+            publishTimer.start(intervalMs);
             const int rc = app.exec();
             host.shutdown();
             closeShared(shared);

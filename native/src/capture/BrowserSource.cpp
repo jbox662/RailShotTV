@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <cstring>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -142,45 +143,75 @@ bool BrowserSource::uploadLatest(QString* error)
 #ifdef _WIN32
     if (!m_device || !m_view) return false;
 
+    // Copy header + pixels under the IPC mutex so we never CreateTexture from a
+    // buffer the helper is mid-overwrite (that tore frames and flickered).
+    quint64 idx = 0;
+    int w = 0;
+    int h = 0;
+    int stride = 0;
+    std::vector<uint8_t> pixels;
     if (m_mutexHandle)
-        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 5);
+        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
     auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
-    const quint64 idx = hdr->frameIndex;
-    const int w = static_cast<int>(hdr->width);
-    const int h = static_cast<int>(hdr->height);
-    const int stride = static_cast<int>(hdr->stride);
-    const uint8_t* pixels = reinterpret_cast<const uint8_t*>(hdr + 1);
+    if (hdr->magic == browser_ipc::kMagic && hdr->width > 0 && hdr->height > 0) {
+        idx = hdr->frameIndex;
+        w = static_cast<int>(hdr->width);
+        h = static_cast<int>(hdr->height);
+        stride = static_cast<int>(hdr->stride > 0 ? hdr->stride : hdr->width * 4);
+        if (idx != m_lastFrameIndex) {
+            const size_t bytes = size_t(h) * size_t(stride);
+            pixels.resize(bytes);
+            std::memcpy(pixels.data(), reinterpret_cast<const uint8_t*>(hdr + 1), bytes);
+        }
+    }
     if (m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
 
-    if (hdr->magic != browser_ipc::kMagic || w <= 0 || h <= 0 || idx == m_lastFrameIndex)
+    if (pixels.empty())
         return m_texture != nullptr;
 
     m_lastFrameIndex = idx;
     m_width = w;
     m_height = h;
 
-    D3D11_TEXTURE2D_DESC desc{};
-    desc.Width = static_cast<UINT>(w);
-    desc.Height = static_cast<UINT>(h);
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-    D3D11_SUBRESOURCE_DATA init{};
-    init.pSysMem = pixels;
-    init.SysMemPitch = static_cast<UINT>(stride > 0 ? stride : w * 4);
-
-    ComPtr<ID3D11Texture2D> tex;
-    if (FAILED(m_device->CreateTexture2D(&desc, &init, &tex))) {
-        if (error) *error = QStringLiteral("Browser texture upload failed");
+    ComPtr<ID3D11DeviceContext> ctx;
+    m_device->GetImmediateContext(&ctx);
+    if (!ctx) {
+        if (error) *error = QStringLiteral("Browser missing D3D context");
         return false;
     }
-    if (m_texture) m_texture->Release();
-    m_texture = tex.Detach();
+
+    // Reuse texture + UpdateSubresource — recreating every frame flickered hard.
+    bool needCreate = !m_texture;
+    if (m_texture) {
+        D3D11_TEXTURE2D_DESC cur{};
+        m_texture->GetDesc(&cur);
+        if (int(cur.Width) != w || int(cur.Height) != h)
+            needCreate = true;
+    }
+    if (needCreate) {
+        if (m_texture) {
+            m_texture->Release();
+            m_texture = nullptr;
+        }
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = static_cast<UINT>(w);
+        desc.Height = static_cast<UINT>(h);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        ComPtr<ID3D11Texture2D> tex;
+        if (FAILED(m_device->CreateTexture2D(&desc, nullptr, &tex))) {
+            if (error) *error = QStringLiteral("Browser texture create failed");
+            return false;
+        }
+        m_texture = tex.Detach();
+    }
+
+    ctx->UpdateSubresource(m_texture, 0, nullptr, pixels.data(), static_cast<UINT>(stride), 0);
     return true;
 #else
     Q_UNUSED(error);
