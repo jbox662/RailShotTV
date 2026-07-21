@@ -232,25 +232,21 @@ void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask, int ba
     p.setBrush(QColor(245, 247, 250));
     p.drawRoundedRect(strip, 3, 3);
 
-    // Inset padding — spread balls across the FULL bar (not a tight centered clump).
-    constexpr qreal padX = 12.0;
     constexpr qreal padY = 4.0;
-    constexpr qreal minGap = 6.0;
-    const QRectF inner = QRectF(strip).adjusted(padX, padY, -padX, -padY);
+    constexpr qreal gap = 8.0; // fixed gap — do not stretch across the full bar
+    const QRectF inner = QRectF(strip).adjusted(8.0, padY, -8.0, -padY);
     if (inner.width() < 8 || inner.height() < 8)
         return;
 
-    // Diameter limited by height and by width with a minimum gap between balls.
-    const qreal maxFromHeight = inner.height();
-    const qreal maxFromWidth = (inner.width() - minGap * (n - 1)) / qreal(n);
-    const qreal ballD = qMax(10.0, qMin(maxFromHeight, maxFromWidth));
+    // Prefer height-driven size; shrink only if the row would overflow the strip.
+    qreal ballD = qBound(14.0, inner.height(), 36.0);
+    const qreal need = ballD * n + gap * (n - 1);
+    if (need > inner.width())
+        ballD = qMax(12.0, (inner.width() - gap * (n - 1)) / qreal(n));
     const qreal r = ballD * 0.5;
-
-    // Leftover width becomes equal gaps (including side margins) so balls are uniform.
-    const qreal leftover = qMax(0.0, inner.width() - ballD * n);
-    const qreal gap = leftover / qreal(n + 1);
+    const qreal span = ballD * n + gap * (n - 1);
+    qreal x = inner.center().x() - span * 0.5 + r;
     const qreal cy = inner.center().y();
-    qreal x = inner.left() + gap + r;
     for (int i = 1; i <= n; ++i) {
         const bool pocketed = (pocketedMask & (1 << (i - 1))) != 0;
         drawPoolBall(p, QPointF(x, cy), r, i, pocketed);
