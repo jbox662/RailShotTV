@@ -36,6 +36,7 @@ Last updated: Wave 10 (OBS-style chrome: menu bar + Controls core, dock/preview 
 | OBSBasic_Profiles / _SceneCollections | Profiles/collections | partial | `ProfilesDialog` / `SceneCollectionsDialog` |
 | OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard + Filters clipboard |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
+| Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
 | ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 

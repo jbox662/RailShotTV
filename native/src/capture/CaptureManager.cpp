@@ -98,7 +98,9 @@ std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& sou
     case SourceType::Media: {
         const QString path = source.settings.value(QStringLiteral("path")).toString();
         const bool loop = source.settings.value(QStringLiteral("loop")).toBool(true);
-        return std::make_unique<MediaSource>(source.id, source.name, path, loop);
+        const bool local = source.settings.value(QStringLiteral("isLocalFile")).toBool(true);
+        const QString ffopts = source.settings.value(QStringLiteral("ffmpegOptions")).toString();
+        return std::make_unique<MediaSource>(source.id, source.name, path, loop, local, ffopts);
     }
     case SourceType::Ndi: {
         const QString ndi = source.settings.value(QStringLiteral("ndiName")).toString(source.name);
@@ -206,7 +208,8 @@ void CaptureManager::updateSource(const SourceItem& source)
             reattach = keyChanged("path");
             break;
         case SourceType::Media:
-            reattach = keyChanged("path") || keyChanged("loop");
+            reattach = keyChanged("path") || keyChanged("loop") || keyChanged("isLocalFile")
+                       || keyChanged("ffmpegOptions");
             break;
         case SourceType::Ndi:
             reattach = keyChanged("ndiName");
@@ -248,6 +251,9 @@ void CaptureManager::updateSource(const SourceItem& source)
     }
     if (auto* media = dynamic_cast<MediaSource*>(src)) {
         media->setPath(source.settings.value(QStringLiteral("path")).toString());
+        media->setLoop(source.settings.value(QStringLiteral("loop")).toBool(true));
+        media->setLocalFile(source.settings.value(QStringLiteral("isLocalFile")).toBool(true));
+        media->setFfmpegOptions(source.settings.value(QStringLiteral("ffmpegOptions")).toString());
     }
 }
 

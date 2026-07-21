@@ -19,6 +19,7 @@
 #include <QListWidget>
 #include <QFontComboBox>
 #include <QFrame>
+#include <QSignalBlocker>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -426,8 +427,8 @@ private:
 class PathPanel : public SourcePropertiesPanel {
 public:
     PathPanel(EngineController* engine, QWidget* parent, const QString& key, const QString& filter,
-              bool mediaExtras)
-        : SourcePropertiesPanel(engine, parent), m_key(key), m_media(mediaExtras)
+              bool /*mediaExtras*/)
+        : SourcePropertiesPanel(engine, parent), m_key(key)
     {
         auto* form = new QFormLayout(this);
         m_path = new QLineEdit(this);
@@ -441,66 +442,149 @@ public:
         });
         form->addRow(QStringLiteral("Path"), m_path);
         form->addRow(browse);
-        if (m_media) {
-            m_loop = new QCheckBox(QStringLiteral("Loop"), this);
-            m_loop->setChecked(true);
-            m_restart = new QCheckBox(QStringLiteral("Restart when activated"), this);
-            m_audio = new QCheckBox(QStringLiteral("Audio track"), this);
-            m_audio->setChecked(true);
-            form->addRow(m_loop);
-            form->addRow(m_restart);
-            form->addRow(m_audio);
-            wireChanged(this, m_loop);
-            wireChanged(this, m_restart);
-            wireChanged(this, m_audio);
-        } else {
-            m_unload = new QCheckBox(QStringLiteral("Unload when not showing"), this);
-            form->addRow(m_unload);
-            wireChanged(this, m_unload);
-        }
+        m_unload = new QCheckBox(QStringLiteral("Unload when not showing"), this);
+        form->addRow(m_unload);
+        wireChanged(this, m_unload);
         wireChanged(this, m_path);
     }
     void loadFrom(const SourceItem& src) override
     {
         m_path->setText(src.settings.value(m_key).toString());
-        if (m_media) {
-            m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(true));
-            m_restart->setChecked(src.settings.value(QStringLiteral("restartOnActivate")).toBool(false));
-            m_audio->setChecked(src.settings.value(QStringLiteral("audioTrack")).toBool(true));
-        } else if (m_unload) {
+        if (m_unload)
             m_unload->setChecked(src.settings.value(QStringLiteral("unloadWhenHidden")).toBool(false));
-        }
     }
     void applyTo(QJsonObject& s) const override
     {
         s.insert(m_key, m_path->text().trimmed());
-        if (m_media) {
-            s.insert(QStringLiteral("loop"), m_loop->isChecked());
-            s.insert(QStringLiteral("restartOnActivate"), m_restart->isChecked());
-            s.insert(QStringLiteral("audioTrack"), m_audio->isChecked());
-        } else if (m_unload) {
+        if (m_unload)
             s.insert(QStringLiteral("unloadWhenHidden"), m_unload->isChecked());
-        }
     }
     void resetDefaults(QJsonObject& s) const override
     {
-        if (m_media) {
-            s.insert(QStringLiteral("loop"), true);
-            s.insert(QStringLiteral("restartOnActivate"), false);
-            s.insert(QStringLiteral("audioTrack"), true);
-        } else {
-            s.insert(QStringLiteral("unloadWhenHidden"), false);
-        }
+        s.insert(QStringLiteral("unloadWhenHidden"), false);
     }
 
 private:
     QString m_key;
-    bool m_media = false;
     QLineEdit* m_path = nullptr;
+    QCheckBox* m_unload = nullptr;
+};
+
+/// OBS Media Source: Local File checkbox, or network Input URL (rtsp/http/hls/…).
+class MediaPanel : public SourcePropertiesPanel {
+public:
+    MediaPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_local = new QCheckBox(QStringLiteral("Local File"), this);
+        m_local->setChecked(true);
+        m_path = new QLineEdit(this);
+        m_path->setPlaceholderText(QStringLiteral("C:\\video.mp4"));
+        m_browse = new QPushButton(QStringLiteral("Browse…"), this);
+        connect(m_browse, &QPushButton::clicked, this, [this] {
+            const auto p = QFileDialog::getOpenFileName(
+                this, QStringLiteral("Select media"), {},
+                QStringLiteral("Media (*.mp4 *.mov *.mkv *.webm *.avi *.png *.jpg *.jpeg);;All (*.*)"));
+            if (!p.isEmpty()) {
+                m_path->setText(p);
+                emit settingsEdited();
+            }
+        });
+        m_inputLabel = new QLabel(QStringLiteral("Local File"), this);
+        form->addRow(m_local);
+        form->addRow(m_inputLabel, m_path);
+        form->addRow(m_browse);
+
+        m_ffopts = new QLineEdit(this);
+        m_ffopts->setPlaceholderText(QStringLiteral("rtsp_transport=tcp rtsp_flags=prefer_tcp"));
+        m_ffopts->setToolTip(
+            QStringLiteral("FFmpeg options as option=value pairs, space-separated.\n"
+                           "Example: rtsp_transport=tcp stimeout=5000000"));
+        form->addRow(QStringLiteral("FFmpeg Options"), m_ffopts);
+
+        m_loop = new QCheckBox(QStringLiteral("Loop"), this);
+        m_loop->setChecked(true);
+        m_restart = new QCheckBox(QStringLiteral("Restart when activated"), this);
+        m_audio = new QCheckBox(QStringLiteral("Audio track"), this);
+        m_audio->setChecked(true);
+        form->addRow(m_loop);
+        form->addRow(m_restart);
+        form->addRow(m_audio);
+
+        auto* hint = new QLabel(
+            QStringLiteral("Uncheck Local File and paste rtsp://, http(s)://, or HLS (.m3u8) for IP cameras."),
+            this);
+        hint->setWordWrap(true);
+        hint->setStyleSheet(QStringLiteral("color:#8892A4; font-size:11px;"));
+        form->addRow(hint);
+
+        connect(m_local, &QCheckBox::toggled, this, [this](bool on) { syncLocalMode(on); emit settingsEdited(); });
+        wireChanged(this, m_path);
+        wireChanged(this, m_ffopts);
+        wireChanged(this, m_loop);
+        wireChanged(this, m_restart);
+        wireChanged(this, m_audio);
+        syncLocalMode(true);
+    }
+
+    void loadFrom(const SourceItem& src) override
+    {
+        const bool local = src.settings.value(QStringLiteral("isLocalFile")).toBool(true);
+        QSignalBlocker b(m_local);
+        m_local->setChecked(local);
+        syncLocalMode(local);
+        m_path->setText(src.settings.value(QStringLiteral("path")).toString());
+        m_ffopts->setText(src.settings.value(QStringLiteral("ffmpegOptions")).toString());
+        m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(local));
+        m_restart->setChecked(src.settings.value(QStringLiteral("restartOnActivate")).toBool(false));
+        m_audio->setChecked(src.settings.value(QStringLiteral("audioTrack")).toBool(true));
+    }
+
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("isLocalFile"), m_local->isChecked());
+        s.insert(QStringLiteral("path"), m_path->text().trimmed());
+        s.insert(QStringLiteral("ffmpegOptions"), m_ffopts->text().trimmed());
+        s.insert(QStringLiteral("loop"), m_loop->isChecked());
+        s.insert(QStringLiteral("restartOnActivate"), m_restart->isChecked());
+        s.insert(QStringLiteral("audioTrack"), m_audio->isChecked());
+    }
+
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("isLocalFile"), true);
+        s.insert(QStringLiteral("path"), QString());
+        s.insert(QStringLiteral("ffmpegOptions"), QString());
+        s.insert(QStringLiteral("loop"), true);
+        s.insert(QStringLiteral("restartOnActivate"), false);
+        s.insert(QStringLiteral("audioTrack"), true);
+    }
+
+private:
+    void syncLocalMode(bool local)
+    {
+        m_inputLabel->setText(local ? QStringLiteral("Local File") : QStringLiteral("Input"));
+        m_path->setPlaceholderText(local
+                                       ? QStringLiteral("C:\\video.mp4")
+                                       : QStringLiteral("rtsp://user:pass@192.168.1.50/stream1"));
+        m_browse->setEnabled(local);
+        m_browse->setVisible(local);
+        if (!local && m_loop->isChecked()) {
+            // Live URLs usually should not loop/seek.
+            QSignalBlocker b(m_loop);
+            m_loop->setChecked(false);
+        }
+    }
+
+    QCheckBox* m_local = nullptr;
+    QLabel* m_inputLabel = nullptr;
+    QLineEdit* m_path = nullptr;
+    QPushButton* m_browse = nullptr;
+    QLineEdit* m_ffopts = nullptr;
     QCheckBox* m_loop = nullptr;
     QCheckBox* m_restart = nullptr;
     QCheckBox* m_audio = nullptr;
-    QCheckBox* m_unload = nullptr;
 };
 
 class ColorPanel : public SourcePropertiesPanel {
@@ -774,8 +858,7 @@ SourcePropertiesPanel* createSourcePropertiesPanel(SourceType type, EngineContro
         return new PathPanel(engine, parent, QStringLiteral("path"),
                              QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"), false);
     case SourceType::Media:
-        return new PathPanel(engine, parent, QStringLiteral("path"),
-                             QStringLiteral("Media (*.mp4 *.mov *.mkv *.webm *.avi *.png *.jpg)"), true);
+        return new MediaPanel(engine, parent);
     case SourceType::Color:
         return new ColorPanel(engine, parent);
     case SourceType::Ndi:

@@ -72,7 +72,9 @@ QJsonObject defaultSettingsFor(SourceType type)
         s.insert(QStringLiteral("color"), QStringLiteral("#4F9EFF"));
         break;
     case SourceType::Media:
+        s.insert(QStringLiteral("isLocalFile"), true);
         s.insert(QStringLiteral("loop"), true);
+        s.insert(QStringLiteral("ffmpegOptions"), QString());
         break;
     default:
         break;

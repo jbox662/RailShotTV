@@ -13,10 +13,11 @@ struct ID3D11DeviceContext;
 
 namespace railshot {
 
-/// File media source (video/image). Uses FFmpeg when available; falls back to still image load.
+/// Media source (local file or network URL via FFmpeg). Still images use Qt when local.
 class MediaSource : public IVideoSource {
 public:
-    MediaSource(QString id, QString name, QString filePath, bool loop = true);
+    MediaSource(QString id, QString name, QString input, bool loop = true,
+                bool isLocalFile = true, QString ffmpegOptions = {});
     ~MediaSource() override;
 
     QString id() const override { return m_id; }
@@ -28,7 +29,12 @@ public:
     QSize size() const override { return {m_width, m_height}; }
 
     void setPath(const QString& path);
+    void setLoop(bool loop);
+    void setLocalFile(bool local);
+    void setFfmpegOptions(const QString& opts);
     void setAudioCallback(std::function<void(const AudioBuffer&)> cb);
+
+    static bool looksLikeNetworkUrl(const QString& input);
 
 private:
     bool startStill(QString* error);
@@ -36,9 +42,12 @@ private:
     void decodeLoop();
     bool uploadFrame(const uint8_t* bgra, int stride, int w, int h);
     void emitAudio(const float* interleaved, int frames, int channels, int sampleRate);
+    bool useNetworkPath() const;
 
     QString m_id, m_name, m_filePath;
     bool m_loop = true;
+    bool m_isLocalFile = true;
+    QString m_ffmpegOptions;
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
     ID3D11Texture2D* m_texture = nullptr;

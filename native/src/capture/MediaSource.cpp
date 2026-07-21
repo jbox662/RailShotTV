@@ -3,6 +3,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QThread>
+#include <QUrl>
 #include <cstring>
 #include <vector>
 #include <algorithm>
@@ -27,11 +28,53 @@ extern "C" {
 
 namespace railshot {
 
-MediaSource::MediaSource(QString id, QString name, QString filePath, bool loop)
+namespace {
+
+#if defined(RAILSHOT_HAS_FFMPEG) && RAILSHOT_HAS_FFMPEG
+void applyFfmpegOptionString(AVDictionary** opts, const QString& options)
+{
+    const QStringList parts = options.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    for (const QString& part : parts) {
+        const int eq = part.indexOf(QLatin1Char('='));
+        if (eq <= 0) continue;
+        const QByteArray key = part.left(eq).trimmed().toUtf8();
+        const QByteArray val = part.mid(eq + 1).trimmed().toUtf8();
+        if (!key.isEmpty())
+            av_dict_set(opts, key.constData(), val.constData(), 0);
+    }
+}
+#endif
+
+} // namespace
+
+bool MediaSource::looksLikeNetworkUrl(const QString& input)
+{
+    const QString t = input.trimmed();
+    if (t.isEmpty()) return false;
+    const QUrl url = QUrl::fromUserInput(t);
+    if (!url.isValid()) return false;
+    const QString scheme = url.scheme().toLower();
+    return scheme == QLatin1String("rtsp")
+        || scheme == QLatin1String("rtsps")
+        || scheme == QLatin1String("rtmp")
+        || scheme == QLatin1String("rtmps")
+        || scheme == QLatin1String("http")
+        || scheme == QLatin1String("https")
+        || scheme == QLatin1String("udp")
+        || scheme == QLatin1String("tcp")
+        || scheme == QLatin1String("srt")
+        || scheme == QLatin1String("mms")
+        || scheme == QLatin1String("mmsh");
+}
+
+MediaSource::MediaSource(QString id, QString name, QString input, bool loop,
+                         bool isLocalFile, QString ffmpegOptions)
     : m_id(std::move(id))
     , m_name(std::move(name))
-    , m_filePath(std::move(filePath))
+    , m_filePath(std::move(input))
     , m_loop(loop)
+    , m_isLocalFile(isLocalFile)
+    , m_ffmpegOptions(std::move(ffmpegOptions))
 {
 }
 
@@ -40,6 +83,28 @@ MediaSource::~MediaSource() { stop(); }
 void MediaSource::setPath(const QString& path)
 {
     m_filePath = path;
+}
+
+void MediaSource::setLoop(bool loop)
+{
+    m_loop = loop;
+}
+
+void MediaSource::setLocalFile(bool local)
+{
+    m_isLocalFile = local;
+}
+
+void MediaSource::setFfmpegOptions(const QString& opts)
+{
+    m_ffmpegOptions = opts;
+}
+
+bool MediaSource::useNetworkPath() const
+{
+    if (!m_isLocalFile)
+        return true;
+    return looksLikeNetworkUrl(m_filePath);
 }
 
 void MediaSource::setAudioCallback(std::function<void(const AudioBuffer&)> cb)
@@ -130,14 +195,14 @@ bool MediaSource::startFfmpeg(QString* error)
     m_stop = false;
     m_running = true;
     m_thread = std::thread([this] { decodeLoop(); });
-    QThread::msleep(50);
+    QThread::msleep(80);
     if (!m_running.load()) {
-        if (error) *error = QStringLiteral("FFmpeg failed to open media");
+        if (error) *error = QStringLiteral("FFmpeg failed to open media: %1").arg(m_filePath);
         return false;
     }
     return true;
 #else
-    Q_UNUSED(error);
+    if (error) *error = QStringLiteral("FFmpeg not available for network/media playback");
     return false;
 #endif
 }
@@ -145,15 +210,49 @@ bool MediaSource::startFfmpeg(QString* error)
 void MediaSource::decodeLoop()
 {
 #if defined(RAILSHOT_HAS_FFMPEG) && RAILSHOT_HAS_FFMPEG
-    const QByteArray path = m_filePath.toUtf8();
+    const bool network = useNetworkPath();
+    if (network)
+        avformat_network_init();
+
+    const QByteArray path = m_filePath.trimmed().toUtf8();
+    // Live network: reconnect until stopped. Local: honor loop.
+    const bool reconnect = network || m_loop;
+
     do {
         AVFormatContext* fmt = nullptr;
-        if (avformat_open_input(&fmt, path.constData(), nullptr, nullptr) < 0) {
+        AVDictionary* openOpts = nullptr;
+        if (network) {
+            // Sensible defaults for IP cameras / HLS (overridable via ffmpeg options).
+            av_dict_set(&openOpts, "rtsp_transport", "tcp", 0);
+            av_dict_set(&openOpts, "stimeout", "5000000", 0);
+            av_dict_set(&openOpts, "rw_timeout", "5000000", 0);
+            av_dict_set(&openOpts, "fflags", "nobuffer", 0);
+            av_dict_set(&openOpts, "flags", "low_delay", 0);
+            av_dict_set(&openOpts, "max_delay", "500000", 0);
+            av_dict_set(&openOpts, "reconnect", "1", 0);
+            av_dict_set(&openOpts, "reconnect_streamed", "1", 0);
+            av_dict_set(&openOpts, "reconnect_delay_max", "5", 0);
+        }
+        applyFfmpegOptionString(&openOpts, m_ffmpegOptions);
+
+        if (avformat_open_input(&fmt, path.constData(), nullptr, &openOpts) < 0) {
+            av_dict_free(&openOpts);
+            if (network && !m_stop.load()) {
+                Logger::warn(QStringLiteral("Media network open failed, retrying: %1").arg(m_filePath));
+                QThread::msleep(1000);
+                continue;
+            }
             m_running = false;
             return;
         }
+        av_dict_free(&openOpts);
+
         if (avformat_find_stream_info(fmt, nullptr) < 0) {
             avformat_close_input(&fmt);
+            if (network && !m_stop.load()) {
+                QThread::msleep(1000);
+                continue;
+            }
             m_running = false;
             return;
         }
@@ -169,6 +268,8 @@ void MediaSource::decodeLoop()
         const AVCodec* vcodec = avcodec_find_decoder(vst->codecpar->codec_id);
         AVCodecContext* vdec = avcodec_alloc_context3(vcodec);
         avcodec_parameters_to_context(vdec, vst->codecpar);
+        if (network)
+            vdec->flags |= AV_CODEC_FLAG_LOW_DELAY;
         if (avcodec_open2(vdec, vcodec, nullptr) < 0) {
             avcodec_free_context(&vdec);
             avformat_close_input(&fmt);
@@ -213,9 +314,15 @@ void MediaSource::decodeLoop()
             avformat_close_input(&fmt);
         };
 
+        bool reopen = false;
         while (!m_stop.load()) {
             const int r = av_read_frame(fmt, pkt);
             if (r < 0) {
+                if (network) {
+                    // Live stream dropped — reopen.
+                    reopen = true;
+                    break;
+                }
                 if (m_loop) {
                     av_seek_frame(fmt, vIndex, 0, AVSEEK_FLAG_BACKWARD);
                     avcodec_flush_buffers(vdec);
@@ -239,8 +346,13 @@ void MediaSource::decodeLoop()
                         }
                         sws_scale(sws, frame->data, frame->linesize, 0, frame->height, bgra->data, bgra->linesize);
                         uploadFrame(bgra->data[0], bgra->linesize[0], frame->width, frame->height);
-                        const double fps = av_q2d(vst->avg_frame_rate) > 1.0 ? av_q2d(vst->avg_frame_rate) : 30.0;
-                        QThread::msleep(static_cast<unsigned long>(1000.0 / fps));
+                        // Pace local files; for network, decode as fast as packets arrive (small yield).
+                        if (!network) {
+                            const double fps = av_q2d(vst->avg_frame_rate) > 1.0 ? av_q2d(vst->avg_frame_rate) : 30.0;
+                            QThread::msleep(static_cast<unsigned long>(1000.0 / fps));
+                        } else {
+                            QThread::msleep(1);
+                        }
                     }
                 }
             } else if (adec && pkt->stream_index == aIndex) {
@@ -286,7 +398,16 @@ void MediaSource::decodeLoop()
             av_packet_unref(pkt);
         }
         cleanup();
-    } while (m_loop && !m_stop.load());
+        if (reopen && !m_stop.load()) {
+            QThread::msleep(500);
+            continue;
+        }
+        if (!reconnect || m_stop.load())
+            break;
+        if (!network && !m_loop)
+            break;
+    } while (!m_stop.load() && reconnect);
+
     m_running = false;
 #endif
 }
@@ -294,11 +415,28 @@ void MediaSource::decodeLoop()
 bool MediaSource::start(ID3D11Device* device, QString* error)
 {
     m_device = device;
-    if (m_filePath.isEmpty() || !QFileInfo::exists(m_filePath)) {
-        if (error) *error = QStringLiteral("Media path missing: %1").arg(m_filePath);
+    const QString input = m_filePath.trimmed();
+    if (input.isEmpty()) {
+        if (error) *error = QStringLiteral("Media path / URL is empty");
         return false;
     }
-    const QString ext = QFileInfo(m_filePath).suffix().toLower();
+
+    const bool network = useNetworkPath();
+    if (!network && !QFileInfo::exists(input)) {
+        if (error) *error = QStringLiteral("Media path missing: %1").arg(input);
+        return false;
+    }
+
+    if (network) {
+#if defined(RAILSHOT_HAS_FFMPEG) && RAILSHOT_HAS_FFMPEG
+        return startFfmpeg(error);
+#else
+        if (error) *error = QStringLiteral("Network media requires FFmpeg");
+        return false;
+#endif
+    }
+
+    const QString ext = QFileInfo(input).suffix().toLower();
     const bool still = (ext == QLatin1String("png") || ext == QLatin1String("jpg")
                         || ext == QLatin1String("jpeg") || ext == QLatin1String("bmp")
                         || ext == QLatin1String("webp") || ext == QLatin1String("gif"));
