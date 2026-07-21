@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 10 (OBS-style chrome: menu bar + Controls core, dock/preview overlap fixes).
+Last updated: Wave 11 (Crop/Pad, Scroll, Sharpen filters; audio Gain/Gate/Compressor).
 
 ## Design rules
 
@@ -46,10 +46,10 @@ Last updated: Wave 10 (OBS-style chrome: menu bar + Controls core, dock/preview 
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma, Blur; enable; ↑↓ reorder; copy/paste) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -67,3 +67,4 @@ Last updated: Wave 10 (OBS-style chrome: menu bar + Controls core, dock/preview 
 - [x] Wave 8 — Sources context menu, duplicate, color tags, Filters stack (Color Correction + reorder + copy/paste)
 - [x] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, Wipe direction + Merge≠Fade
 - [x] Wave 10 — OBS chrome cleanup (File/Edit/View/Docks menus; Controls core; Scenes/Preview overlap fixes)
+- [x] Wave 11 — Filters Crop/Pad + Scroll + Sharpen; Adv Audio Gain / Noise Gate / Compressor

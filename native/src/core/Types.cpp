@@ -296,6 +296,17 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("syncOffsetMs"), syncOffsetMs},
         {QStringLiteral("monitoring"), int(monitoring)},
         {QStringLiteral("trackMask"), int(trackMask)},
+        {QStringLiteral("gateEnabled"), gateEnabled},
+        {QStringLiteral("gateOpenDb"), double(gateOpenDb)},
+        {QStringLiteral("gateAttackMs"), double(gateAttackMs)},
+        {QStringLiteral("gateHoldMs"), double(gateHoldMs)},
+        {QStringLiteral("gateReleaseMs"), double(gateReleaseMs)},
+        {QStringLiteral("compEnabled"), compEnabled},
+        {QStringLiteral("compThresholdDb"), double(compThresholdDb)},
+        {QStringLiteral("compRatio"), double(compRatio)},
+        {QStringLiteral("compAttackMs"), double(compAttackMs)},
+        {QStringLiteral("compReleaseMs"), double(compReleaseMs)},
+        {QStringLiteral("compMakeupDb"), double(compMakeupDb)},
     };
 }
 
@@ -314,6 +325,17 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.syncOffsetMs = o.value(QStringLiteral("syncOffsetMs")).toInt(0);
     s.monitoring = AudioMonitoringType(o.value(QStringLiteral("monitoring")).toInt(int(AudioMonitoringType::MonitorAndOutput)));
     s.trackMask = quint8(o.value(QStringLiteral("trackMask")).toInt(0x01));
+    s.gateEnabled = o.value(QStringLiteral("gateEnabled")).toBool(false);
+    s.gateOpenDb = float(o.value(QStringLiteral("gateOpenDb")).toDouble(-32.0));
+    s.gateAttackMs = float(o.value(QStringLiteral("gateAttackMs")).toDouble(25.0));
+    s.gateHoldMs = float(o.value(QStringLiteral("gateHoldMs")).toDouble(200.0));
+    s.gateReleaseMs = float(o.value(QStringLiteral("gateReleaseMs")).toDouble(150.0));
+    s.compEnabled = o.value(QStringLiteral("compEnabled")).toBool(false);
+    s.compThresholdDb = float(o.value(QStringLiteral("compThresholdDb")).toDouble(-18.0));
+    s.compRatio = float(o.value(QStringLiteral("compRatio")).toDouble(4.0));
+    s.compAttackMs = float(o.value(QStringLiteral("compAttackMs")).toDouble(6.0));
+    s.compReleaseMs = float(o.value(QStringLiteral("compReleaseMs")).toDouble(60.0));
+    s.compMakeupDb = float(o.value(QStringLiteral("compMakeupDb")).toDouble(0.0));
     return s;
 }
 

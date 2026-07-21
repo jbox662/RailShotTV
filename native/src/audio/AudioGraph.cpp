@@ -366,6 +366,65 @@ AudioBuffer AudioGraph::applySyncDelay(const QString& channelId, const AudioBuff
     return out;
 }
 
+void AudioGraph::applyGateCompressor(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf)
+{
+    if (buf.samples.empty() || buf.frameCount() <= 0)
+        return;
+    const int n = buf.frameCount();
+    const int bch = std::max(1, buf.channels);
+    const float sr = float(buf.sampleRate > 0 ? buf.sampleRate : kAudioSampleRate);
+
+    if (ch.gateEnabled) {
+        float& env = m_gateEnv[channelId];
+        float& hold = m_gateHold[channelId];
+        const float openLin = std::pow(10.f, ch.gateOpenDb / 20.f);
+        const float att = std::exp(-1.f / std::max(1.f, ch.gateAttackMs * 0.001f * sr));
+        const float rel = std::exp(-1.f / std::max(1.f, ch.gateReleaseMs * 0.001f * sr));
+        const float holdSamples = std::max(1.f, ch.gateHoldMs * 0.001f * sr);
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            const float level = std::max(std::abs(l), std::abs(r));
+            if (level >= openLin)
+                hold = holdSamples;
+            const bool open = hold > 0.f;
+            if (open) hold -= 1.f;
+            const float target = open ? 1.f : 0.f;
+            const float coef = (target > env) ? att : rel;
+            env = target + coef * (env - target);
+            buf.samples[size_t(i) * bch] = l * env;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * env;
+        }
+    }
+
+    if (ch.compEnabled) {
+        float& env = m_compEnv[channelId];
+        const float thrLin = std::pow(10.f, ch.compThresholdDb / 20.f);
+        const float ratio = std::max(1.f, ch.compRatio);
+        const float att = std::exp(-1.f / std::max(1.f, ch.compAttackMs * 0.001f * sr));
+        const float rel = std::exp(-1.f / std::max(1.f, ch.compReleaseMs * 0.001f * sr));
+        const float makeup = std::pow(10.f, ch.compMakeupDb / 20.f);
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            const float level = std::max(std::abs(l), std::abs(r));
+            const float coef = (level > env) ? att : rel;
+            env = level + coef * (env - level);
+            float gain = 1.f;
+            if (env > thrLin && thrLin > 1e-6f) {
+                const float over = env / thrLin;
+                const float compressed = std::pow(over, 1.f / ratio);
+                gain = (compressed / over);
+            }
+            gain *= makeup;
+            buf.samples[size_t(i) * bch] = l * gain;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
+}
+
 void AudioGraph::onCapture(const QString& channelId, const AudioBuffer& buffer)
 {
     const AudioBuffer normalized = resampleTo48k(buffer);
@@ -409,6 +468,7 @@ void AudioGraph::mixAndEmit()
             if (anySolo && !ch.solo) continue;
 
             AudioBuffer buf = applySyncDelay(it.key(), it.value(), ch.syncOffsetMs);
+            applyGateCompressor(it.key(), ch, buf);
 
             const float linear = ch.volume * std::pow(10.f, ch.gainDb / 20.f);
             const float panL = std::cos((ch.pan + 1.f) * 0.25f * 3.14159265f);

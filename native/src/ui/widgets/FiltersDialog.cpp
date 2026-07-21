@@ -27,6 +27,9 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("chroma_key")) return QStringLiteral("Chroma Key");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
+    if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
+    if (type == QLatin1String("scroll")) return QStringLiteral("Scroll");
+    if (type == QLatin1String("sharpen")) return QStringLiteral("Sharpen");
     return type;
 }
 
@@ -40,13 +43,65 @@ QJsonArray remappedFilters(const QJsonArray& in)
     }
     return out;
 }
+
+void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
+{
+    bool chroma = false;
+    int sim = 40;
+    int blur = 0;
+    int bri = 0, con = 0, sat = 0;
+    int cropL = 0, cropR = 0, cropT = 0, cropB = 0;
+    bool pad = false;
+    int scrollX = 0, scrollY = 0;
+    int sharpen = 0;
+    for (const auto& v : filters) {
+        const auto o = v.toObject();
+        if (!o.value(QStringLiteral("enabled")).toBool(true)) continue;
+        const QString type = o.value(QStringLiteral("type")).toString();
+        if (type == QLatin1String("chroma_key")) {
+            chroma = true;
+            sim = o.value(QStringLiteral("similarity")).toInt(40);
+        } else if (type == QLatin1String("blur")) {
+            blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
+        } else if (type == QLatin1String("color_correction")) {
+            bri = o.value(QStringLiteral("brightness")).toInt(0);
+            con = o.value(QStringLiteral("contrast")).toInt(0);
+            sat = o.value(QStringLiteral("saturation")).toInt(0);
+        } else if (type == QLatin1String("crop_pad")) {
+            cropL = o.value(QStringLiteral("left")).toInt(0);
+            cropR = o.value(QStringLiteral("right")).toInt(0);
+            cropT = o.value(QStringLiteral("top")).toInt(0);
+            cropB = o.value(QStringLiteral("bottom")).toInt(0);
+            pad = o.value(QStringLiteral("pad")).toBool(false);
+        } else if (type == QLatin1String("scroll")) {
+            scrollX = o.value(QStringLiteral("speedX")).toInt(0);
+            scrollY = o.value(QStringLiteral("speedY")).toInt(0);
+        } else if (type == QLatin1String("sharpen")) {
+            sharpen = qMax(sharpen, o.value(QStringLiteral("amount")).toInt(0));
+        }
+    }
+    settings.insert(QStringLiteral("chromaKey"), chroma);
+    settings.insert(QStringLiteral("chromaSimilarity"), sim);
+    settings.insert(QStringLiteral("blur"), blur);
+    settings.insert(QStringLiteral("brightness"), bri);
+    settings.insert(QStringLiteral("contrast"), con);
+    settings.insert(QStringLiteral("saturation"), sat);
+    settings.insert(QStringLiteral("filterCropL"), cropL);
+    settings.insert(QStringLiteral("filterCropR"), cropR);
+    settings.insert(QStringLiteral("filterCropT"), cropT);
+    settings.insert(QStringLiteral("filterCropB"), cropB);
+    settings.insert(QStringLiteral("filterPad"), pad);
+    settings.insert(QStringLiteral("scrollSpeedX"), scrollX);
+    settings.insert(QStringLiteral("scrollSpeedY"), scrollY);
+    settings.insert(QStringLiteral("sharpen"), sharpen);
+}
 } // namespace
 
 FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, QWidget* parent)
     : QDialog(parent), m_engine(engine), m_sourceId(sourceId)
 {
     setWindowTitle(QStringLiteral("Filters"));
-    setMinimumSize(560, 400);
+    setMinimumSize(560, 420);
     setStyleSheet(QStringLiteral(
         "QDialog{background:#0F1114;}"
         "QLabel{color:#C8CCD4; font-family:'DM Sans';}"
@@ -75,8 +130,6 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     remBtn->setFixedWidth(32);
     m_upBtn->setFixedWidth(32);
     m_downBtn->setFixedWidth(32);
-    m_upBtn->setToolTip(QStringLiteral("Move filter up"));
-    m_downBtn->setToolTip(QStringLiteral("Move filter down"));
     tools->addWidget(addBtn);
     tools->addWidget(remBtn);
     tools->addSpacing(6);
@@ -102,7 +155,6 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         m_chromaSim->setRange(5, 95);
         form->addRow(m_chromaEnabled);
         form->addRow(QStringLiteral("Similarity"), m_chromaSim);
-        form->addRow(new QLabel(QStringLiteral("Green screen key — live in compositor."), m_chromaPage));
     }
     m_stack->addWidget(m_chromaPage);
 
@@ -131,11 +183,55 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         form->addRow(QStringLiteral("Brightness"), m_brightness);
         form->addRow(QStringLiteral("Contrast"), m_contrast);
         form->addRow(QStringLiteral("Saturation"), m_saturation);
-        form->addRow(new QLabel(QStringLiteral("OBS Color Correction — live in compositor."), m_colorPage));
     }
     m_stack->addWidget(m_colorPage);
-    right->addWidget(m_stack, 1);
 
+    m_cropPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_cropPage);
+        m_cropEnabled = new QCheckBox(QStringLiteral("Enabled"), m_cropPage);
+        m_cropL = new QSlider(Qt::Horizontal, m_cropPage);
+        m_cropR = new QSlider(Qt::Horizontal, m_cropPage);
+        m_cropT = new QSlider(Qt::Horizontal, m_cropPage);
+        m_cropB = new QSlider(Qt::Horizontal, m_cropPage);
+        for (auto* s : {m_cropL, m_cropR, m_cropT, m_cropB})
+            s->setRange(0, 50);
+        m_cropPad = new QCheckBox(QStringLiteral("Relative / Pad (letterbox)"), m_cropPage);
+        form->addRow(m_cropEnabled);
+        form->addRow(QStringLiteral("Left"), m_cropL);
+        form->addRow(QStringLiteral("Right"), m_cropR);
+        form->addRow(QStringLiteral("Top"), m_cropT);
+        form->addRow(QStringLiteral("Bottom"), m_cropB);
+        form->addRow(m_cropPad);
+    }
+    m_stack->addWidget(m_cropPage);
+
+    m_scrollPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_scrollPage);
+        m_scrollEnabled = new QCheckBox(QStringLiteral("Enabled"), m_scrollPage);
+        m_scrollX = new QSlider(Qt::Horizontal, m_scrollPage);
+        m_scrollY = new QSlider(Qt::Horizontal, m_scrollPage);
+        m_scrollX->setRange(-100, 100);
+        m_scrollY->setRange(-100, 100);
+        form->addRow(m_scrollEnabled);
+        form->addRow(QStringLiteral("Speed X"), m_scrollX);
+        form->addRow(QStringLiteral("Speed Y"), m_scrollY);
+    }
+    m_stack->addWidget(m_scrollPage);
+
+    m_sharpenPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_sharpenPage);
+        m_sharpenEnabled = new QCheckBox(QStringLiteral("Enabled"), m_sharpenPage);
+        m_sharpenAmount = new QSlider(Qt::Horizontal, m_sharpenPage);
+        m_sharpenAmount->setRange(0, 100);
+        form->addRow(m_sharpenEnabled);
+        form->addRow(QStringLiteral("Amount"), m_sharpenAmount);
+    }
+    m_stack->addWidget(m_sharpenPage);
+
+    right->addWidget(m_stack, 1);
     auto* closeRow = new QHBoxLayout();
     closeRow->addStretch();
     auto* closeBtn = new QPushButton(QStringLiteral("Close"), this);
@@ -149,14 +245,13 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     connect(m_upBtn, &QPushButton::clicked, this, &FiltersDialog::onMoveUp);
     connect(m_downBtn, &QPushButton::clicked, this, &FiltersDialog::onMoveDown);
     connect(m_list, &QListWidget::currentRowChanged, this, &FiltersDialog::onSelectionChanged);
-    connect(m_chromaEnabled, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
-    connect(m_chromaSim, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
-    connect(m_blurEnabled, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
-    connect(m_blurAmount, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
-    connect(m_colorEnabled, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
-    connect(m_brightness, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
-    connect(m_contrast, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
-    connect(m_saturation, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
+
+    for (QCheckBox* c : {m_chromaEnabled, m_blurEnabled, m_colorEnabled, m_cropEnabled, m_cropPad,
+                         m_scrollEnabled, m_sharpenEnabled})
+        connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
+    for (QSlider* s : {m_chromaSim, m_blurAmount, m_brightness, m_contrast, m_saturation,
+                       m_cropL, m_cropR, m_cropT, m_cropB, m_scrollX, m_scrollY, m_sharpenAmount})
+        connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
 
     reload();
 }
@@ -168,7 +263,6 @@ void FiltersDialog::copyFilters(const QJsonArray& filters)
 }
 
 bool FiltersDialog::hasFilterClipboard() { return s_hasClipboard && !s_clipboard.isEmpty(); }
-
 QJsonArray FiltersDialog::filterClipboard() { return s_clipboard; }
 
 void FiltersDialog::pasteOnto(EngineController* engine, const QString& sourceId)
@@ -178,33 +272,7 @@ void FiltersDialog::pasteOnto(EngineController* engine, const QString& sourceId)
     engine->sceneGraph()->mutate([&](Project& p) {
         if (auto* s = p.findSourceAnywhere(sourceId)) {
             s->settings.insert(QStringLiteral("filters"), pasted);
-            bool chroma = false;
-            int sim = 40;
-            int blur = 0;
-            int bri = 0;
-            int con = 0;
-            int sat = 0;
-            for (const auto& v : pasted) {
-                const auto o = v.toObject();
-                if (!o.value(QStringLiteral("enabled")).toBool(true)) continue;
-                const QString type = o.value(QStringLiteral("type")).toString();
-                if (type == QLatin1String("chroma_key")) {
-                    chroma = true;
-                    sim = o.value(QStringLiteral("similarity")).toInt(40);
-                } else if (type == QLatin1String("blur")) {
-                    blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
-                } else if (type == QLatin1String("color_correction")) {
-                    bri = o.value(QStringLiteral("brightness")).toInt(0);
-                    con = o.value(QStringLiteral("contrast")).toInt(0);
-                    sat = o.value(QStringLiteral("saturation")).toInt(0);
-                }
-            }
-            s->settings.insert(QStringLiteral("chromaKey"), chroma);
-            s->settings.insert(QStringLiteral("chromaSimilarity"), sim);
-            s->settings.insert(QStringLiteral("blur"), blur);
-            s->settings.insert(QStringLiteral("brightness"), bri);
-            s->settings.insert(QStringLiteral("contrast"), con);
-            s->settings.insert(QStringLiteral("saturation"), sat);
+            flattenFiltersToSettings(s->settings, pasted);
         }
     });
 }
@@ -274,7 +342,6 @@ void FiltersDialog::reload()
     }
     m_loading = false;
 
-    // Toggle enable from list checkbox
     disconnect(m_list, &QListWidget::itemChanged, nullptr, nullptr);
     connect(m_list, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
         if (m_loading || !item) return;
@@ -312,6 +379,10 @@ void FiltersDialog::onAddFilter()
     auto* color = menu.addAction(QStringLiteral("Color Correction"));
     auto* chroma = menu.addAction(QStringLiteral("Chroma Key"));
     auto* blur = menu.addAction(QStringLiteral("Blur"));
+    menu.addSeparator();
+    auto* crop = menu.addAction(QStringLiteral("Crop/Pad"));
+    auto* scroll = menu.addAction(QStringLiteral("Scroll"));
+    auto* sharpen = menu.addAction(QStringLiteral("Sharpen"));
     auto* chosen = menu.exec(QCursor::pos());
     if (!chosen) return;
 
@@ -326,9 +397,23 @@ void FiltersDialog::onAddFilter()
     } else if (chosen == chroma) {
         f.insert(QStringLiteral("type"), QStringLiteral("chroma_key"));
         f.insert(QStringLiteral("similarity"), 40);
-    } else {
+    } else if (chosen == blur) {
         f.insert(QStringLiteral("type"), QStringLiteral("blur"));
         f.insert(QStringLiteral("amount"), 25);
+    } else if (chosen == crop) {
+        f.insert(QStringLiteral("type"), QStringLiteral("crop_pad"));
+        f.insert(QStringLiteral("left"), 0);
+        f.insert(QStringLiteral("right"), 0);
+        f.insert(QStringLiteral("top"), 0);
+        f.insert(QStringLiteral("bottom"), 0);
+        f.insert(QStringLiteral("pad"), false);
+    } else if (chosen == scroll) {
+        f.insert(QStringLiteral("type"), QStringLiteral("scroll"));
+        f.insert(QStringLiteral("speedX"), 10);
+        f.insert(QStringLiteral("speedY"), 0);
+    } else {
+        f.insert(QStringLiteral("type"), QStringLiteral("sharpen"));
+        f.insert(QStringLiteral("amount"), 35);
     }
 
     m_engine->sceneGraph()->mutate([this, f](Project& p) {
@@ -436,6 +521,23 @@ void FiltersDialog::onSelectionChanged()
         m_contrast->setValue(f.value(QStringLiteral("contrast")).toInt(0));
         m_saturation->setValue(f.value(QStringLiteral("saturation")).toInt(0));
         m_stack->setCurrentWidget(m_colorPage);
+    } else if (type == QLatin1String("crop_pad")) {
+        m_cropEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_cropL->setValue(f.value(QStringLiteral("left")).toInt(0));
+        m_cropR->setValue(f.value(QStringLiteral("right")).toInt(0));
+        m_cropT->setValue(f.value(QStringLiteral("top")).toInt(0));
+        m_cropB->setValue(f.value(QStringLiteral("bottom")).toInt(0));
+        m_cropPad->setChecked(f.value(QStringLiteral("pad")).toBool(false));
+        m_stack->setCurrentWidget(m_cropPage);
+    } else if (type == QLatin1String("scroll")) {
+        m_scrollEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_scrollX->setValue(f.value(QStringLiteral("speedX")).toInt(0));
+        m_scrollY->setValue(f.value(QStringLiteral("speedY")).toInt(0));
+        m_stack->setCurrentWidget(m_scrollPage);
+    } else if (type == QLatin1String("sharpen")) {
+        m_sharpenEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_sharpenAmount->setValue(f.value(QStringLiteral("amount")).toInt(0));
+        m_stack->setCurrentWidget(m_sharpenPage);
     } else {
         m_stack->setCurrentWidget(m_emptyPage);
     }
@@ -467,6 +569,20 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("brightness"), m_brightness->value());
                     o.insert(QStringLiteral("contrast"), m_contrast->value());
                     o.insert(QStringLiteral("saturation"), m_saturation->value());
+                } else if (type == QLatin1String("crop_pad")) {
+                    o.insert(QStringLiteral("enabled"), m_cropEnabled->isChecked());
+                    o.insert(QStringLiteral("left"), m_cropL->value());
+                    o.insert(QStringLiteral("right"), m_cropR->value());
+                    o.insert(QStringLiteral("top"), m_cropT->value());
+                    o.insert(QStringLiteral("bottom"), m_cropB->value());
+                    o.insert(QStringLiteral("pad"), m_cropPad->isChecked());
+                } else if (type == QLatin1String("scroll")) {
+                    o.insert(QStringLiteral("enabled"), m_scrollEnabled->isChecked());
+                    o.insert(QStringLiteral("speedX"), m_scrollX->value());
+                    o.insert(QStringLiteral("speedY"), m_scrollY->value());
+                } else if (type == QLatin1String("sharpen")) {
+                    o.insert(QStringLiteral("enabled"), m_sharpenEnabled->isChecked());
+                    o.insert(QStringLiteral("amount"), m_sharpenAmount->value());
                 }
                 arr.replace(i, o);
                 break;
@@ -484,35 +600,8 @@ void FiltersDialog::saveCurrent()
 void FiltersDialog::syncLegacyKeys()
 {
     m_engine->sceneGraph()->mutate([this](Project& p) {
-        if (auto* s = p.findSourceAnywhere(m_sourceId)) {
-            bool chroma = false;
-            int sim = 40;
-            int blur = 0;
-            int bri = 0;
-            int con = 0;
-            int sat = 0;
-            for (const auto& v : s->settings.value(QStringLiteral("filters")).toArray()) {
-                const auto o = v.toObject();
-                if (!o.value(QStringLiteral("enabled")).toBool(true)) continue;
-                const QString type = o.value(QStringLiteral("type")).toString();
-                if (type == QLatin1String("chroma_key")) {
-                    chroma = true;
-                    sim = o.value(QStringLiteral("similarity")).toInt(40);
-                } else if (type == QLatin1String("blur")) {
-                    blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
-                } else if (type == QLatin1String("color_correction")) {
-                    bri = o.value(QStringLiteral("brightness")).toInt(0);
-                    con = o.value(QStringLiteral("contrast")).toInt(0);
-                    sat = o.value(QStringLiteral("saturation")).toInt(0);
-                }
-            }
-            s->settings.insert(QStringLiteral("chromaKey"), chroma);
-            s->settings.insert(QStringLiteral("chromaSimilarity"), sim);
-            s->settings.insert(QStringLiteral("blur"), blur);
-            s->settings.insert(QStringLiteral("brightness"), bri);
-            s->settings.insert(QStringLiteral("contrast"), con);
-            s->settings.insert(QStringLiteral("saturation"), sat);
-        }
+        if (auto* s = p.findSourceAnywhere(m_sourceId))
+            flattenFiltersToSettings(s->settings, s->settings.value(QStringLiteral("filters")).toArray());
     });
 }
 

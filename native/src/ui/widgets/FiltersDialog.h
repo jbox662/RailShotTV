@@ -14,7 +14,7 @@ class QPushButton;
 namespace railshot {
 class EngineController;
 
-/// OBS-style Filters dialog: stack + Color Correction / chroma / blur + copy/paste.
+/// OBS-style Filters dialog: video effect stack + copy/paste.
 class FiltersDialog : public QDialog {
     Q_OBJECT
 public:
@@ -43,6 +43,9 @@ private:
     QWidget* m_chromaPage = nullptr;
     QWidget* m_blurPage = nullptr;
     QWidget* m_colorPage = nullptr;
+    QWidget* m_cropPage = nullptr;
+    QWidget* m_scrollPage = nullptr;
+    QWidget* m_sharpenPage = nullptr;
     QWidget* m_emptyPage = nullptr;
     QCheckBox* m_chromaEnabled = nullptr;
     QSlider* m_chromaSim = nullptr;
@@ -52,6 +55,17 @@ private:
     QSlider* m_brightness = nullptr;
     QSlider* m_contrast = nullptr;
     QSlider* m_saturation = nullptr;
+    QCheckBox* m_cropEnabled = nullptr;
+    QSlider* m_cropL = nullptr;
+    QSlider* m_cropR = nullptr;
+    QSlider* m_cropT = nullptr;
+    QSlider* m_cropB = nullptr;
+    QCheckBox* m_cropPad = nullptr;
+    QCheckBox* m_scrollEnabled = nullptr;
+    QSlider* m_scrollX = nullptr;
+    QSlider* m_scrollY = nullptr;
+    QCheckBox* m_sharpenEnabled = nullptr;
+    QSlider* m_sharpenAmount = nullptr;
     QLabel* m_hint = nullptr;
     QPushButton* m_upBtn = nullptr;
     QPushButton* m_downBtn = nullptr;

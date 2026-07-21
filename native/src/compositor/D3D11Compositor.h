@@ -4,6 +4,7 @@
 #include "capture/FrameBus.h"
 #include <QObject>
 #include <QImage>
+#include <QElapsedTimer>
 #include <memory>
 
 struct ID3D11Texture2D;
@@ -88,6 +89,7 @@ private:
     ID3D11BlendState* m_blend = nullptr;
     ID3D11BlendState* m_blendOpaque = nullptr;
     int m_wipeDirection = 0;
+    QElapsedTimer m_fxClock;
 };
 
 } // namespace railshot

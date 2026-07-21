@@ -148,6 +148,21 @@ struct AudioChannelState {
     int syncOffsetMs = 0;     // -2000..+2000
     AudioMonitoringType monitoring = AudioMonitoringType::MonitorAndOutput;
     quint8 trackMask = 0x01;  // bits 0..5 = tracks 1..6 (stream uses track 1)
+
+    // OBS-style audio filters (processed in AudioGraph)
+    bool gateEnabled = false;
+    float gateOpenDb = -32.f;
+    float gateAttackMs = 25.f;
+    float gateHoldMs = 200.f;
+    float gateReleaseMs = 150.f;
+
+    bool compEnabled = false;
+    float compThresholdDb = -18.f;
+    float compRatio = 4.f;
+    float compAttackMs = 6.f;
+    float compReleaseMs = 60.f;
+    float compMakeupDb = 0.f;
+
     float peakL = 0.0f;
     float peakR = 0.0f;
     float rmsL = 0.0f;

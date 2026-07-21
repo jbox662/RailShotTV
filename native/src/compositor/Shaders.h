@@ -16,7 +16,8 @@ cbuffer CB : register(b0) {
     float2 cropMax;   // UV crop max
     float2 _padCrop;
     float4 colorMul;  // rgb mul + pad
-    float4 colorAdd;  // brightness bias in rgb
+    float4 colorAdd;  // brightness bias in rgb + blur in a
+    float4 fxParams;  // scrollU, scrollV, sharpen, unused
 };
 VSOut main(VSIn i) {
     VSOut o;
@@ -44,21 +45,34 @@ cbuffer CB : register(b0) {
     float2 _padCrop;
     float4 colorMul;
     float4 colorAdd;
+    float4 fxParams;
 };
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    float2 suv = frac(uv + fxParams.xy);
     float blur = colorAdd.a;
-    float4 c = tex.Sample(samp, uv);
+    float4 c = tex.Sample(samp, suv);
     if (blur > 0.0005) {
         float4 acc = c;
-        acc += tex.Sample(samp, uv + float2( blur, 0));
-        acc += tex.Sample(samp, uv + float2(-blur, 0));
-        acc += tex.Sample(samp, uv + float2(0,  blur));
-        acc += tex.Sample(samp, uv + float2(0, -blur));
-        acc += tex.Sample(samp, uv + float2( blur,  blur) * 0.707);
-        acc += tex.Sample(samp, uv + float2(-blur,  blur) * 0.707);
-        acc += tex.Sample(samp, uv + float2( blur, -blur) * 0.707);
-        acc += tex.Sample(samp, uv + float2(-blur, -blur) * 0.707);
+        acc += tex.Sample(samp, suv + float2( blur, 0));
+        acc += tex.Sample(samp, suv + float2(-blur, 0));
+        acc += tex.Sample(samp, suv + float2(0,  blur));
+        acc += tex.Sample(samp, suv + float2(0, -blur));
+        acc += tex.Sample(samp, suv + float2( blur,  blur) * 0.707);
+        acc += tex.Sample(samp, suv + float2(-blur,  blur) * 0.707);
+        acc += tex.Sample(samp, suv + float2( blur, -blur) * 0.707);
+        acc += tex.Sample(samp, suv + float2(-blur, -blur) * 0.707);
         c = acc * (1.0 / 9.0);
+    }
+    float sharpen = fxParams.z;
+    if (sharpen > 0.001) {
+        float r = 0.0025;
+        float4 neigh = tex.Sample(samp, suv + float2( r, 0));
+        neigh += tex.Sample(samp, suv + float2(-r, 0));
+        neigh += tex.Sample(samp, suv + float2(0,  r));
+        neigh += tex.Sample(samp, suv + float2(0, -r));
+        neigh *= 0.25;
+        float4 sharpBase = tex.Sample(samp, suv);
+        c = lerp(c, sharpBase + (sharpBase - neigh) * (sharpen * 2.5), saturate(sharpen * 2.0));
     }
     c.rgb = c.rgb * colorMul.rgb + colorAdd.rgb;
     // chroma key when _padCrop.x > 0.5 (green screen default)

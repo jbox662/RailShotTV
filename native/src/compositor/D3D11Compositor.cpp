@@ -2,6 +2,7 @@
 #include "compositor/D3D11Device.h"
 #include "compositor/Shaders.h"
 #include "core/Logger.h"
+#include <QElapsedTimer>
 #include <algorithm>
 #include <cmath>
 
@@ -28,9 +29,10 @@ struct alignas(16) CBData {
     float rotation;      // 20
     float cropMin[2];    // 24
     float cropMax[2];    // 32
-    float _padCrop[2];   // 40 — HLSL packs next float4 at 48
+    float _padCrop[2];   // 40 — chroma flag + similarity
     float colorMul[4];   // 48
-    float colorAdd[4];   // 64
+    float colorAdd[4];   // 64 — rgb + blur in .a
+    float fxParams[4];   // 80 — scrollU, scrollV, sharpen, unused
 };
 
 struct alignas(16) TransCBData {
@@ -203,6 +205,7 @@ bool D3D11Compositor::initialize(int width, int height, QString* error)
     m_height = height;
     if (!createTargets(error)) return false;
     if (!createPipeline(error)) return false;
+    m_fxClock.start();
     Logger::info(QStringLiteral("Compositor initialized %1x%2").arg(width).arg(height));
     return true;
 }
@@ -269,32 +272,57 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
         auto* cb = reinterpret_cast<CBData*>(mapped.pData);
-        cb->rect[0] = static_cast<float>(src.transform.x);
-        cb->rect[1] = static_cast<float>(src.transform.y);
-        cb->rect[2] = static_cast<float>(src.transform.w);
-        cb->rect[3] = static_cast<float>(src.transform.h);
+        float rx = static_cast<float>(src.transform.x);
+        float ry = static_cast<float>(src.transform.y);
+        float rw = static_cast<float>(src.transform.w);
+        float rh = static_cast<float>(src.transform.h);
+
+        const float fL = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("filterCropL")).toDouble(0.0), 0.0, 50.0) / 100.0);
+        const float fR = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("filterCropR")).toDouble(0.0), 0.0, 50.0) / 100.0);
+        const float fT = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("filterCropT")).toDouble(0.0), 0.0, 50.0) / 100.0);
+        const float fB = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("filterCropB")).toDouble(0.0), 0.0, 50.0) / 100.0);
+        const bool pad = src.settings.value(QStringLiteral("filterPad")).toBool(false);
+
+        float cl = static_cast<float>(std::clamp(src.transform.cropLeft, 0.0, 1.0));
+        float cr = static_cast<float>(std::clamp(src.transform.cropRight, 0.0, 1.0));
+        float ct = static_cast<float>(std::clamp(src.transform.cropTop, 0.0, 1.0));
+        float cbot = static_cast<float>(std::clamp(src.transform.cropBottom, 0.0, 1.0));
+
+        if (pad) {
+            rx += rw * fL;
+            ry += rh * fT;
+            rw *= std::max(0.01f, 1.0f - fL - fR);
+            rh *= std::max(0.01f, 1.0f - fT - fB);
+        } else {
+            const float u0 = cl, u1 = 1.0f - cr, v0 = ct, v1 = 1.0f - cbot;
+            const float uw = std::max(0.01f, u1 - u0);
+            const float vh = std::max(0.01f, v1 - v0);
+            cl = u0 + uw * fL;
+            cr = 1.0f - (u0 + uw * (1.0f - fR));
+            ct = v0 + vh * fT;
+            cbot = 1.0f - (v0 + vh * (1.0f - fB));
+        }
+
+        cb->rect[0] = rx;
+        cb->rect[1] = ry;
+        cb->rect[2] = rw;
+        cb->rect[3] = rh;
         cb->opacity = static_cast<float>(src.transform.opacity);
         cb->rotation = static_cast<float>(src.transform.rotation * 3.14159265358979323846 / 180.0);
-        const float cl = static_cast<float>(std::clamp(src.transform.cropLeft, 0.0, 1.0));
-        const float cr = static_cast<float>(std::clamp(src.transform.cropRight, 0.0, 1.0));
-        const float ct = static_cast<float>(std::clamp(src.transform.cropTop, 0.0, 1.0));
-        const float cb_ = static_cast<float>(std::clamp(src.transform.cropBottom, 0.0, 1.0));
         cb->cropMin[0] = cl;
         cb->cropMin[1] = ct;
         cb->cropMax[0] = 1.0f - cr;
-        cb->cropMax[1] = 1.0f - cb_;
+        cb->cropMax[1] = 1.0f - cbot;
         const double briUi = src.settings.value(QStringLiteral("brightness")).toDouble(0.0);
         const double conUi = src.settings.value(QStringLiteral("contrast")).toDouble(0.0);
         const double satUi = src.settings.value(QStringLiteral("saturation")).toDouble(0.0);
-        // UI stores −100…100; shader wants brightness ±1, contrast/sat multipliers around 1.
         const float brightness = static_cast<float>(std::clamp(briUi / 100.0, -1.0, 1.0));
         const float contrast = static_cast<float>(std::clamp(1.0 + conUi / 100.0, 0.0, 3.0));
         const float saturation = static_cast<float>(std::clamp(1.0 + satUi / 100.0, 0.0, 3.0));
-        // Luma-preserving-ish: scale around mid-gray after contrast
         const float mid = 0.5f * (1.0f - contrast);
         cb->colorMul[0] = contrast * saturation;
         cb->colorMul[1] = contrast * saturation;
-        cb->colorMul[2] = contrast * (2.0f - saturation); // slight channel split when sat≠1
+        cb->colorMul[2] = contrast * (2.0f - saturation);
         if (saturation >= 0.99f && saturation <= 1.01f) {
             cb->colorMul[0] = contrast;
             cb->colorMul[1] = contrast;
@@ -304,12 +332,19 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->colorAdd[0] = brightness + mid;
         cb->colorAdd[1] = brightness + mid;
         cb->colorAdd[2] = brightness + mid;
-        // colorAdd.a = blur radius in UV space (0..~0.02)
         const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
         cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
-        // Chroma key (optional)
         cb->_padCrop[0] = src.settings.value(QStringLiteral("chromaKey")).toBool(false) ? 1.0f : 0.0f;
         cb->_padCrop[1] = static_cast<float>(src.settings.value(QStringLiteral("chromaSimilarity")).toDouble(40.0) / 100.0);
+
+        const double tSec = m_fxClock.isValid() ? m_fxClock.elapsed() / 1000.0 : 0.0;
+        const double sx = src.settings.value(QStringLiteral("scrollSpeedX")).toDouble(0.0);
+        const double sy = src.settings.value(QStringLiteral("scrollSpeedY")).toDouble(0.0);
+        // speed −100..100 → cycles/sec scale
+        cb->fxParams[0] = static_cast<float>(sx / 100.0 * tSec);
+        cb->fxParams[1] = static_cast<float>(sy / 100.0 * tSec);
+        cb->fxParams[2] = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("sharpen")).toDouble(0.0), 0.0, 100.0) / 100.0);
+        cb->fxParams[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
@@ -438,6 +473,7 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
         cb->_padCrop[1] = 0.0f;
         cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
         cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
+        cb->fxParams[0] = cb->fxParams[1] = cb->fxParams[2] = cb->fxParams[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     if (SUCCEEDED(ctx->Map(m_transCb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {

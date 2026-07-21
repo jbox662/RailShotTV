@@ -42,9 +42,16 @@ private:
         QWidget* volStack = nullptr;
         QDoubleSpinBox* volDb = nullptr;
         QSpinBox* volPct = nullptr;
+        QDoubleSpinBox* gainDb = nullptr;
         QCheckBox* mono = nullptr;
         QSlider* balance = nullptr;
         QSpinBox* sync = nullptr;
+        QCheckBox* gateOn = nullptr;
+        QDoubleSpinBox* gateOpenDb = nullptr;
+        QCheckBox* compOn = nullptr;
+        QDoubleSpinBox* compThresh = nullptr;
+        QDoubleSpinBox* compRatio = nullptr;
+        QDoubleSpinBox* compMakeup = nullptr;
         QComboBox* monitoring = nullptr;
         QCheckBox* tracks[6] = {};
     };

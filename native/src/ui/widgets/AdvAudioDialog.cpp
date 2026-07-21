@@ -37,8 +37,8 @@ AdvAudioDialog::AdvAudioDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
 {
     setWindowTitle(QStringLiteral("Advanced Audio Properties"));
-    setMinimumSize(980, 320);
-    resize(1100, 360);
+    setMinimumSize(1280, 360);
+    resize(1400, 400);
     setSizeGripEnabled(true);
     setStyleSheet(QStringLiteral(
         "QDialog{background:#0F1114;}"
@@ -137,18 +137,21 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(0, QStringLiteral("Name"));
     mk(1, QStringLiteral("Status"));
     mk(2, QStringLiteral("Volume"), m_usePercent);
-    mk(3, QStringLiteral("Mono"));
-    mk(4, QStringLiteral("Balance"));
-    mk(5, QStringLiteral("Sync Offset"));
-    mk(6, QStringLiteral("Audio Monitoring"));
-    mk(7, QStringLiteral("Tracks"));
+    mk(3, QStringLiteral("Gain"));
+    mk(4, QStringLiteral("Mono"));
+    mk(5, QStringLiteral("Balance"));
+    mk(6, QStringLiteral("Sync Offset"));
+    mk(7, QStringLiteral("Gate"));
+    mk(8, QStringLiteral("Compressor"));
+    mk(9, QStringLiteral("Audio Monitoring"));
+    mk(10, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
 {
     // Clear old rows (keep header at row 0)
-    while (m_grid->count() > 8) {
-        QLayoutItem* item = m_grid->takeAt(8);
+    while (m_grid->count() > 11) {
+        QLayoutItem* item = m_grid->takeAt(11);
         if (item->widget())
             item->widget()->deleteLater();
         delete item;
@@ -216,9 +219,17 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     volLay->addWidget(w.volPct);
     grid->addWidget(volHost, row, 2);
 
+    w.gainDb = new QDoubleSpinBox(m_rowsHost);
+    w.gainDb->setRange(-30.0, 30.0);
+    w.gainDb->setDecimals(1);
+    w.gainDb->setSuffix(QStringLiteral(" dB"));
+    w.gainDb->setValue(ch.gainDb);
+    w.gainDb->setToolTip(QStringLiteral("Trim / Gain filter"));
+    grid->addWidget(w.gainDb, row, 3);
+
     w.mono = new QCheckBox(m_rowsHost);
     w.mono->setChecked(ch.forceMono);
-    grid->addWidget(w.mono, row, 3, Qt::AlignCenter);
+    grid->addWidget(w.mono, row, 4, Qt::AlignCenter);
 
     auto* balHost = new QWidget(m_rowsHost);
     auto* balLay = new QHBoxLayout(balHost);
@@ -229,17 +240,65 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.balance = new QSlider(Qt::Horizontal, balHost);
     w.balance->setRange(-100, 100);
     w.balance->setValue(int(std::lround(ch.pan * 100.0)));
-    w.balance->setFixedWidth(140);
+    w.balance->setFixedWidth(120);
     balLay->addWidget(lLab);
     balLay->addWidget(w.balance, 1);
     balLay->addWidget(rLab);
-    grid->addWidget(balHost, row, 4);
+    grid->addWidget(balHost, row, 5);
 
     w.sync = new QSpinBox(m_rowsHost);
     w.sync->setRange(-2000, 2000);
     w.sync->setSuffix(QStringLiteral(" ms"));
     w.sync->setValue(ch.syncOffsetMs);
-    grid->addWidget(w.sync, row, 5);
+    grid->addWidget(w.sync, row, 6);
+
+    auto* gateHost = new QWidget(m_rowsHost);
+    auto* gateLay = new QHBoxLayout(gateHost);
+    gateLay->setContentsMargins(0, 0, 0, 0);
+    gateLay->setSpacing(4);
+    w.gateOn = new QCheckBox(gateHost);
+    w.gateOn->setChecked(ch.gateEnabled);
+    w.gateOpenDb = new QDoubleSpinBox(gateHost);
+    w.gateOpenDb->setRange(-80.0, 0.0);
+    w.gateOpenDb->setDecimals(0);
+    w.gateOpenDb->setSuffix(QStringLiteral(" dB"));
+    w.gateOpenDb->setValue(ch.gateOpenDb);
+    w.gateOpenDb->setFixedWidth(78);
+    w.gateOpenDb->setToolTip(QStringLiteral("Noise gate open threshold"));
+    gateLay->addWidget(w.gateOn);
+    gateLay->addWidget(w.gateOpenDb);
+    grid->addWidget(gateHost, row, 7);
+
+    auto* compHost = new QWidget(m_rowsHost);
+    auto* compLay = new QHBoxLayout(compHost);
+    compLay->setContentsMargins(0, 0, 0, 0);
+    compLay->setSpacing(4);
+    w.compOn = new QCheckBox(compHost);
+    w.compOn->setChecked(ch.compEnabled);
+    w.compThresh = new QDoubleSpinBox(compHost);
+    w.compThresh->setRange(-60.0, 0.0);
+    w.compThresh->setDecimals(0);
+    w.compThresh->setSuffix(QStringLiteral(" dB"));
+    w.compThresh->setValue(ch.compThresholdDb);
+    w.compThresh->setFixedWidth(72);
+    w.compRatio = new QDoubleSpinBox(compHost);
+    w.compRatio->setRange(1.0, 20.0);
+    w.compRatio->setDecimals(1);
+    w.compRatio->setPrefix(QStringLiteral("1:"));
+    w.compRatio->setValue(ch.compRatio);
+    w.compRatio->setFixedWidth(64);
+    w.compMakeup = new QDoubleSpinBox(compHost);
+    w.compMakeup->setRange(0.0, 24.0);
+    w.compMakeup->setDecimals(0);
+    w.compMakeup->setSuffix(QStringLiteral(" dB"));
+    w.compMakeup->setValue(ch.compMakeupDb);
+    w.compMakeup->setFixedWidth(64);
+    w.compMakeup->setToolTip(QStringLiteral("Makeup gain"));
+    compLay->addWidget(w.compOn);
+    compLay->addWidget(w.compThresh);
+    compLay->addWidget(w.compRatio);
+    compLay->addWidget(w.compMakeup);
+    grid->addWidget(compHost, row, 8);
 
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
@@ -247,7 +306,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 6);
+    grid->addWidget(w.monitoring, row, 9);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -258,16 +317,23 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 7);
+    grid->addWidget(trackHost, row, 10);
 
     m_rows.insert(channelId, w);
 
     auto wire = [this, channelId] { applyChannel(channelId); };
     connect(w.volDb, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.volPct, qOverload<int>(&QSpinBox::valueChanged), this, wire);
+    connect(w.gainDb, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.mono, &QCheckBox::toggled, this, wire);
     connect(w.balance, &QSlider::valueChanged, this, wire);
     connect(w.sync, qOverload<int>(&QSpinBox::valueChanged), this, wire);
+    connect(w.gateOn, &QCheckBox::toggled, this, wire);
+    connect(w.gateOpenDb, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.compOn, &QCheckBox::toggled, this, wire);
+    connect(w.compThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.compRatio, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.compMakeup, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.monitoring, qOverload<int>(&QComboBox::currentIndexChanged), this, wire);
     for (int t = 0; t < 6; ++t)
         connect(w.tracks[t], &QCheckBox::toggled, this, wire);
@@ -300,9 +366,16 @@ void AdvAudioDialog::applyChannel(const QString& id)
     else if (w.volDb)
         state.volume = dbToLinear(float(w.volDb->value()));
     state.volume = std::clamp(state.volume, 0.f, 20.f);
+    if (w.gainDb) state.gainDb = float(w.gainDb->value());
     if (w.mono) state.forceMono = w.mono->isChecked();
     if (w.balance) state.pan = w.balance->value() / 100.f;
     if (w.sync) state.syncOffsetMs = w.sync->value();
+    if (w.gateOn) state.gateEnabled = w.gateOn->isChecked();
+    if (w.gateOpenDb) state.gateOpenDb = float(w.gateOpenDb->value());
+    if (w.compOn) state.compEnabled = w.compOn->isChecked();
+    if (w.compThresh) state.compThresholdDb = float(w.compThresh->value());
+    if (w.compRatio) state.compRatio = float(w.compRatio->value());
+    if (w.compMakeup) state.compMakeupDb = float(w.compMakeup->value());
     if (w.monitoring)
         state.monitoring = AudioMonitoringType(w.monitoring->currentData().toInt());
     quint8 mask = 0;
