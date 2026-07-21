@@ -19,7 +19,7 @@ struct FrameHeader {
     quint32 bytesPerPixel = 4;
     quint64 frameIndex = 0;
     qint64 ptsUs = 0;
-    quint32 status = 0; // 0=ok, 1=loading, 2=error
+    quint32 status = 0; // 0=ok, 1=loading, 2=error, 3=reloading (keep last texture)
     /// Main → helper: 0=none, 1=soft reload (OBS Refresh / ReloadIgnoreCache).
     quint32 command = 0;
     /// Helper → main: echoes last handled command id/counter.

@@ -242,8 +242,10 @@ struct WebViewHost {
     bool ready = false;
     bool contentReady = false;
     bool capturing = false;
-    /// OBS Refresh: hold last painted frame until navigation completes (no blank flash).
+    /// OBS Refresh: hold last painted frame until navigation + paint grace (no blank flash).
     bool suppressCapture = false;
+    /// 0 = waiting for NavigationCompleted; else GetTickCount64 deadline before accepting paints.
+    ULONGLONG suppressUntilTick = 0;
     QString lastError;
     QImage lastFrame;
 
@@ -344,8 +346,10 @@ struct WebViewHost {
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                         [this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
                                             contentReady = true;
-                                            // OBS: new paints resume; last texture held until then.
-                                            suppressCapture = false;
+                                            // Keep publishing frozen until the page has a moment to paint.
+                                            // Clearing suppress here caused CapturePreview blank/partial frames.
+                                            if (suppressCapture)
+                                                suppressUntilTick = GetTickCount64() + 450;
                                             return S_OK;
                                         })
                                         .Get(),
@@ -389,6 +393,7 @@ struct WebViewHost {
         if (!webview)
             return;
         suppressCapture = true;
+        suppressUntilTick = 0; // wait for NavigationCompleted before grace timer
         webview->Reload();
     }
 
@@ -399,15 +404,26 @@ struct WebViewHost {
             return false;
         if (!contentReady)
             return false;
-        // During soft reload, do not replace lastFrame with blank/loading CapturePreview.
-        if (suppressCapture)
-            return false;
+
+        const ULONGLONG now = GetTickCount64();
+        if (suppressCapture) {
+            // Still waiting on NavigationCompleted, or inside post-nav paint grace.
+            if (suppressUntilTick == 0 || now < suppressUntilTick)
+                return false;
+        }
+
         capturing = true;
         QImage img = captureWebViewPreview(webview.Get(), w, h);
         capturing = false;
+
+        // Reload may have started while CapturePreview was in flight — discard.
+        if (suppressCapture && (suppressUntilTick == 0 || GetTickCount64() < suppressUntilTick))
+            return false;
         if (img.isNull())
             return false;
         lastFrame = std::move(img);
+        suppressCapture = false;
+        suppressUntilTick = 0;
         return true;
     }
 
@@ -426,6 +442,7 @@ struct WebViewHost {
         contentReady = false;
         capturing = false;
         suppressCapture = false;
+        suppressUntilTick = 0;
     }
 };
 #endif
@@ -548,11 +565,13 @@ int main(int argc, char** argv)
                         host.softReload();
                         hdr->command = kCmdNone;
                         hdr->commandAck += 1;
+                        // Mark SHM reloading without touching pixels (consumer freezes texture).
+                        hdr->status = 3;
                     }
                     if (shared.mutex) ReleaseMutex(static_cast<HANDLE>(shared.mutex));
                 }
                 // Only push when a new capture succeeds — never overwrite with a failed/blank frame.
-                // During Reload, captureOnce returns false → lastFrame (and GPU texture) stay put.
+                // During Reload + grace, captureOnce returns false → last GPU texture stays put.
                 if (host.captureOnce(shared.width, shared.height))
                     publishFrame(shared, host.lastFrame, ++frame, 0, {});
             });

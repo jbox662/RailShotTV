@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QDateTime>
 #include <cstring>
 #include <vector>
 
@@ -151,6 +152,8 @@ bool BrowserSource::uploadLatest(QString* error)
     int w = 0;
     int h = 0;
     int stride = 0;
+    quint32 status = 0;
+    quint32 commandAck = 0;
     std::vector<uint8_t> pixels;
     if (m_mutexHandle)
         WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
@@ -160,6 +163,8 @@ bool BrowserSource::uploadLatest(QString* error)
         w = static_cast<int>(hdr->width);
         h = static_cast<int>(hdr->height);
         stride = static_cast<int>(hdr->stride > 0 ? hdr->stride : hdr->width * 4);
+        status = hdr->status;
+        commandAck = hdr->commandAck;
         if (idx != m_lastFrameIndex) {
             const size_t bytes = size_t(h) * size_t(stride);
             pixels.resize(bytes);
@@ -168,6 +173,29 @@ bool BrowserSource::uploadLatest(QString* error)
     }
     if (m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
+
+    // Soft-reload freeze: keep last GPU texture until helper acks + post-nav grace,
+    // consuming (skipping) any intermediate blank/partial SHM frames.
+    if (m_textureFrozen) {
+        if (commandAck >= m_freezeMinAck) {
+            if (m_freezeUntilMs == 0)
+                m_freezeUntilMs = QDateTime::currentMSecsSinceEpoch() + 500;
+            const bool stillHolding = QDateTime::currentMSecsSinceEpoch() < m_freezeUntilMs
+                                      || status == 1 || status == 3
+                                      || pixels.empty();
+            if (stillHolding) {
+                if (!pixels.empty())
+                    m_lastFrameIndex = idx; // drop frame without uploading
+                return m_texture != nullptr;
+            }
+            m_textureFrozen = false;
+            m_freezeUntilMs = 0;
+        } else {
+            if (!pixels.empty())
+                m_lastFrameIndex = idx;
+            return m_texture != nullptr;
+        }
+    }
 
     if (pixels.empty())
         return m_texture != nullptr;
@@ -312,6 +340,11 @@ void BrowserSource::writeReloadCommand()
     if (hdr->magic == browser_ipc::kMagic || hdr->magic == 0) {
         hdr->magic = browser_ipc::kMagic;
         hdr->command = browser_ipc::kCmdReload;
+        // Freeze GPU texture until helper acks and post-nav grace elapses.
+        m_textureFrozen = true;
+        m_freezeMinAck = hdr->commandAck + 1;
+        m_freezeUntilMs = 0;
+        hdr->status = 3;
     }
     if (m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
