@@ -1,11 +1,14 @@
 #pragma once
 #include <QDialog>
 #include <QColor>
+#include <QImage>
+#include <QJsonObject>
 
 class QLabel;
 class QComboBox;
 class QPushButton;
 class QButtonGroup;
+class QFrame;
 
 namespace railshot {
 class EngineController;
@@ -16,13 +19,19 @@ class ScoreboardSettingsDialog : public QDialog {
 public:
     explicit ScoreboardSettingsDialog(EngineController* engine, QWidget* parent = nullptr);
 
+protected:
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     void refreshPreview();
-    void applyColorButton(QPushButton* btn, const QColor& c);
+    void applyColorButton(QPushButton* btn, const QColor& c, const QString& label);
     QColor pickColor(const QColor& current, const QString& title);
+    QJsonObject previewState() const;
 
     EngineController* m_engine = nullptr;
     QLabel* m_preview = nullptr;
+    QFrame* m_previewCard = nullptr;
     QButtonGroup* m_presetGroup = nullptr;
     QButtonGroup* m_sportGroup = nullptr;
     QComboBox* m_layoutBox = nullptr;
@@ -37,6 +46,7 @@ private:
     QColor m_bgColor;
     bool m_useCustomText = false;
     bool m_useCustomBg = false;
+    QImage m_previewImg;
 };
 
 } // namespace railshot
