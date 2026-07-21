@@ -51,39 +51,29 @@ enum class Handle {
 
 constexpr double kMinSize = 0.02;
 constexpr double kSnapDist = 0.012; // ~1.2% of canvas
-constexpr qreal kHandlePad = 8.0;
+constexpr qreal kHandlePad = 14.0;  // OBS-like grab targets (was 8 — too tight with stretch)
 constexpr qreal kRotateOffset = 28.0;
 
-QRect letterboxRect(const QSize& sz)
-{
-    if (sz.width() <= 0 || sz.height() <= 0) return QRect();
-    const qreal target = 16.0 / 9.0;
-    const qreal cur = qreal(sz.width()) / qreal(sz.height());
-    if (cur > target) {
-        const int w = int(sz.height() * target);
-        return QRect((sz.width() - w) / 2, 0, w, sz.height());
-    }
-    const int h = int(sz.width() / target);
-    return QRect(0, (sz.height() - h) / 2, sz.width(), h);
-}
-
-/** Widget pixel → normalized canvas (0..1). Outside letterbox returns nullopt-ish via ok=false. */
+/**
+ * Widget pixel → normalized canvas (0..1).
+ * Matches PreviewSurface DXGI_SCALING_STRETCH: the full surface HWND is the canvas.
+ * (Previous letterboxRect mapping disagreed with stretch and made corner resize miss.)
+ */
 bool widgetToNorm(const QPointF& widgetPt, const QSize& widgetSz, QPointF* outNorm)
 {
-    const QRect lb = letterboxRect(widgetSz);
-    if (lb.width() <= 0 || lb.height() <= 0 || !outNorm) return false;
-    if (!lb.contains(widgetPt.toPoint()) && !lb.adjusted(-2, -2, 2, 2).contains(widgetPt.toPoint()))
+    if (!outNorm || widgetSz.width() <= 0 || widgetSz.height() <= 0)
         return false;
-    outNorm->setX((widgetPt.x() - lb.x()) / qreal(lb.width()));
-    outNorm->setY((widgetPt.y() - lb.y()) / qreal(lb.height()));
-    return true;
+    outNorm->setX(widgetPt.x() / qreal(widgetSz.width()));
+    outNorm->setY(widgetPt.y() / qreal(widgetSz.height()));
+    return outNorm->x() >= -0.02 && outNorm->x() <= 1.02
+           && outNorm->y() >= -0.02 && outNorm->y() <= 1.02;
 }
 
 QPointF normDeltaFromWidgetDelta(const QPointF& widgetDelta, const QSize& widgetSz)
 {
-    const QRect lb = letterboxRect(widgetSz);
-    if (lb.width() <= 0 || lb.height() <= 0) return {};
-    return QPointF(widgetDelta.x() / qreal(lb.width()), widgetDelta.y() / qreal(lb.height()));
+    if (widgetSz.width() <= 0 || widgetSz.height() <= 0) return {};
+    return QPointF(widgetDelta.x() / qreal(widgetSz.width()),
+                   widgetDelta.y() / qreal(widgetSz.height()));
 }
 
 QRectF transformToNormRect(const Transform& t)
@@ -201,17 +191,16 @@ Handle hitHandleNorm(const QRectF& r, const QPointF& p, qreal padNormX, qreal pa
 
 Handle hitHandleOnCanvas(const Transform& t, const QPointF& normPt, const QSize& widgetSz)
 {
-    const QRect lb = letterboxRect(widgetSz);
-    if (lb.width() <= 0 || lb.height() <= 0) return Handle::None;
+    if (widgetSz.width() <= 0 || widgetSz.height() <= 0) return Handle::None;
 
     const QRectF r = transformToNormRect(t);
-    const qreal padX = kHandlePad / qreal(lb.width());
-    const qreal padY = kHandlePad / qreal(lb.height());
+    const qreal padX = kHandlePad / qreal(widgetSz.width());
+    const qreal padY = kHandlePad / qreal(widgetSz.height());
 
     const QPointF tc((r.left() + r.right()) * 0.5, r.top());
-    const qreal rotOffY = kRotateOffset / qreal(lb.height());
+    const qreal rotOffY = kRotateOffset / qreal(widgetSz.height());
     const QPointF rotPt(tc.x(), tc.y() - rotOffY);
-    if (std::abs(normPt.x() - rotPt.x()) <= padX * 1.4 && std::abs(normPt.y() - rotPt.y()) <= padY * 1.4)
+    if (std::abs(normPt.x() - rotPt.x()) <= padX * 1.6 && std::abs(normPt.y() - rotPt.y()) <= padY * 1.6)
         return Handle::Rotate;
 
     return hitHandleNorm(r, normPt, padX, padY);
@@ -336,12 +325,20 @@ public:
         }
     }
 
-    void setInteractive(bool on) { m_interactive = on; }
+    void setInteractive(bool on)
+    {
+        m_interactive = on;
+        refreshChrome();
+    }
+
+    bool isInteractive() const { return m_interactive; }
 
     void refreshChrome()
     {
-        if (!m_surface || m_program) {
-            if (m_surface) m_surface->setEditChrome({});
+        if (!m_surface) return;
+        // Program is view-only unless it is the sole edit canvas (Studio Mode off).
+        if (m_program && !m_interactive) {
+            m_surface->setEditChrome({});
             return;
         }
         PreviewEditChrome chrome;
@@ -1165,13 +1162,11 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
         clearBtn->setVisible(!program && !p.previewSceneId.isEmpty());
     }
 
-    if (!program) {
-        connect(this, &PreviewWidget::configureSourceRequested, this, [this](const QString& id) {
-            if (!m_engine || id.isEmpty()) return;
-            SourcePropertiesDialog dlg(m_engine, id, this);
-            dlg.exec();
-        });
-    }
+    connect(this, &PreviewWidget::configureSourceRequested, this, [this](const QString& id) {
+        if (!m_engine || id.isEmpty()) return;
+        SourcePropertiesDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
 }
 
 void PreviewWidget::tick()
@@ -1181,15 +1176,18 @@ void PreviewWidget::tick()
         m_surface->setDevice(m_engine->graphicsDevice());
     if (m_overlay)
         m_overlay->refreshChrome();
-    auto* tex = m_program ? m_engine->compositor()->programTexture()
-                          : m_engine->compositor()->previewTexture();
+    // Program monitor shows program output when view-only; when it is the sole
+    // edit canvas (Studio Mode off) show the edit/preview scene so resize works.
+    auto* tex = (m_program && !isInteractive())
+                    ? m_engine->compositor()->programTexture()
+                    : m_engine->compositor()->previewTexture();
     if (tex)
         m_surface->presentTexture(tex);
 }
 
 void PreviewWidget::keyPressEvent(QKeyEvent* event)
 {
-    if (!m_program && m_overlay && m_overlay->eventFilter(m_surface, event))
+    if (isInteractive() && m_overlay && m_overlay->eventFilter(m_surface, event))
         return;
     QWidget::keyPressEvent(event);
 }
@@ -1197,7 +1195,7 @@ void PreviewWidget::keyPressEvent(QKeyEvent* event)
 void PreviewWidget::focusInEvent(QFocusEvent* event)
 {
     QWidget::focusInEvent(event);
-    if (!m_program && m_surface)
+    if (isInteractive() && m_surface)
         m_surface->setFocus(Qt::OtherFocusReason);
 }
 
@@ -1244,9 +1242,26 @@ void PreviewWidget::applyDisplayLayout()
     if (!m_scroll || !m_stackHost || !m_surface)
         return;
     if (m_displayMode == PreviewDisplayMode::FitWindow) {
-        m_scroll->setWidgetResizable(true);
-        m_stackHost->setMinimumSize(0, 0);
-        m_stackHost->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+        // Aspect-correct fit: surface keeps canvas AR; stage/scroll supplies letterbox bars.
+        m_scroll->setWidgetResizable(false);
+        const QSize vp = m_scroll->viewport() ? m_scroll->viewport()->size() : size();
+        const int cw = canvasWidth();
+        const int ch = canvasHeight();
+        int fitW = std::max(160, vp.width());
+        int fitH = std::max(90, vp.height());
+        if (cw > 0 && ch > 0 && vp.width() > 0 && vp.height() > 0) {
+            const double canvasAr = double(cw) / double(ch);
+            const double viewAr = double(vp.width()) / double(vp.height());
+            if (viewAr > canvasAr) {
+                fitH = vp.height();
+                fitW = std::max(160, int(std::lround(fitH * canvasAr)));
+            } else {
+                fitW = vp.width();
+                fitH = std::max(90, int(std::lround(fitW / canvasAr)));
+            }
+        }
+        m_stackHost->setFixedSize(fitW, fitH);
+        m_surface->setFixedSize(fitW, fitH);
         m_surface->setMinimumSize(160, 90);
         m_surface->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     } else {
@@ -1257,6 +1272,19 @@ void PreviewWidget::applyDisplayLayout()
         m_surface->setFixedSize(w, h);
     }
     updateScaleLabel();
+}
+
+void PreviewWidget::setInteractive(bool on)
+{
+    if (m_overlay)
+        m_overlay->setInteractive(on);
+    if (on && m_surface)
+        m_surface->setFocusPolicy(Qt::StrongFocus);
+}
+
+bool PreviewWidget::isInteractive() const
+{
+    return m_overlay && m_overlay->isInteractive();
 }
 
 void PreviewWidget::setDisplayMode(PreviewDisplayMode mode)
@@ -1337,21 +1365,21 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
 
 void PreviewWidget::dragEnterEvent(QDragEnterEvent* event)
 {
-    if (m_program || !event || !event->mimeData()) return;
+    if (!isInteractive() || !event || !event->mimeData()) return;
     if (event->mimeData()->hasUrls())
         event->acceptProposedAction();
 }
 
 void PreviewWidget::dragMoveEvent(QDragMoveEvent* event)
 {
-    if (m_program || !event || !event->mimeData()) return;
+    if (!isInteractive() || !event || !event->mimeData()) return;
     if (event->mimeData()->hasUrls())
         event->acceptProposedAction();
 }
 
 void PreviewWidget::dropEvent(QDropEvent* event)
 {
-    if (m_program || !event || !event->mimeData() || !m_engine) return;
+    if (!isInteractive() || !event || !event->mimeData() || !m_engine) return;
     if (!event->mimeData()->hasUrls()) return;
     const int n = importDroppedUrls(m_engine, event->mimeData()->urls());
     if (n > 0)

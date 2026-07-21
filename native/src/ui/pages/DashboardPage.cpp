@@ -451,6 +451,9 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     connect(m_preview, &PreviewWidget::sourceSelected, this, [this](const QString& id) {
         m_engine->setSelectedSourceId(id);
     });
+    connect(m_program, &PreviewWidget::sourceSelected, this, [this](const QString& id) {
+        m_engine->setSelectedSourceId(id);
+    });
 
     connect(m_contextBar, &SourceContextToolbar::propertiesRequested, this, [this](const QString& id) {
         if (id.isEmpty()) return;
@@ -472,18 +475,17 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         InteractDialog dlg(m_engine, id, this);
         dlg.exec();
     });
-    connect(m_preview, &PreviewWidget::interactRequested, this, [this](const QString& id) {
+    auto openInteract = [this](const QString& id) {
         if (id.isEmpty()) return;
         InteractDialog dlg(m_engine, id, this);
         dlg.exec();
-    });
-    connect(m_preview, &PreviewWidget::configureSourceRequested, this, [this](const QString& id) {
-        if (id.isEmpty()) return;
-        SourcePropertiesDialog dlg(m_engine, id, this);
-        dlg.exec();
-    });
+    };
+    connect(m_preview, &PreviewWidget::interactRequested, this, openInteract);
+    connect(m_program, &PreviewWidget::interactRequested, this, openInteract);
 
     connect(m_toolbar, &BottomToolbar::studioModeToggled, this, &DashboardPage::setStudioMode);
+    // Default Studio Mode is ON — Preview editable, Program view-only.
+    setStudioMode(true);
 
     connect(m_tiles, &InputTilesWidget::configureSourceRequested, this, [this](const QString& id) {
         if (id.isEmpty()) return;
@@ -813,7 +815,14 @@ void DashboardPage::setStudioMode(bool enabled)
     if (m_transitions)
         m_transitions->setVisible(enabled);
     if (m_contextBar)
-        m_contextBar->setVisible(enabled);
+        m_contextBar->setVisible(true); // always available for source edits
+
+    // OBS: Studio Mode → Preview editable, Program view-only.
+    // Without Studio Mode → single Program monitor is the edit canvas.
+    if (m_preview)
+        m_preview->setInteractive(enabled);
+    if (m_program)
+        m_program->setInteractive(!enabled);
 }
 
 void DashboardPage::openDrawer()

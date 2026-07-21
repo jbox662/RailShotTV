@@ -17,7 +17,7 @@ namespace railshot {
 class EngineController;
 
 enum class PreviewDisplayMode {
-    FitWindow = 0,  // stretch canvas to widget (default)
+    FitWindow = 0,  // aspect-correct fit inside stage (default)
     FixedScale = 1, // pixel zoom with scroll
 };
 
@@ -38,6 +38,10 @@ public:
 
     bool editLocked() const { return m_editLocked; }
     void setEditLocked(bool locked);
+
+    /// Enable move/resize/rotate on this monitor (Preview always; Program when Studio Mode is off).
+    void setInteractive(bool on);
+    bool isInteractive() const;
 
     bool isProgram() const { return m_program; }
     PreviewSurface* surface() const { return m_surface; }
