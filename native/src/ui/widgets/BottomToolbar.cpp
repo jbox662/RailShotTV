@@ -8,6 +8,8 @@
 #include <QPaintEvent>
 #include <QRadialGradient>
 #include <QSignalBlocker>
+#include <QFont>
+#include <QFontMetrics>
 
 namespace railshot {
 
@@ -251,8 +253,23 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     row->addStretch();
 
-    m_statusPill = new QLabel(QStringLiteral("1080p60  ·  — FPS  ·  GPU —  ·  CPU —"), this);
+    m_statusPill = new QLabel(this);
     m_statusPill->setObjectName(QStringLiteral("statusPill"));
+    m_statusPill->setTextFormat(Qt::RichText);
+    m_statusPill->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    // Lock width so 1→2 digit values don't shift the pill's left edge.
+    {
+        const QFont mono(QStringLiteral("JetBrains Mono"), 8);
+        const QFontMetrics fm(mono);
+        const int w = fm.horizontalAdvance(
+                          QStringLiteral("1080p59.94  ·  999 FPS  ·  ENC 999  ·  GPU 100%  ·  CPU 100%"))
+                      + 24;
+        m_statusPill->setFixedWidth(w);
+    }
+    m_statusPill->setText(
+        QStringLiteral("<span style='color:#22C55E;font-weight:900;'>1080p60</span>"
+                       "  ·  <span style='color:#E0E2E8;'>— FPS</span>"
+                       "  ·  ENC —  ·  GPU —%  ·  CPU —%"));
     row->addWidget(m_statusPill);
 
     connect(m_engine, &EngineController::telemetryUpdated, this, [this](const TelemetrySnapshot& s) {
@@ -277,26 +294,28 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         m_recordBtn->style()->unpolish(m_recordBtn);
         m_recordBtn->style()->polish(m_recordBtn);
 
+        // NBSP pad keeps monospace columns stable under RichText.
+        const QChar nb = QChar(0x00A0);
+        auto pad3 = [nb](int v) {
+            return QStringLiteral("%1").arg(qBound(0, 999, v), 3, 10, nb);
+        };
+        auto profile = m_engine->projectSnapshot().output;
+        if (profile.width <= 0)
+            profile = m_engine->settings()->outputProfile();
+        const int height = profile.height > 0 ? profile.height : 1080;
+        const double fps = profile.fps > 0 ? profile.fps : 59.94;
+        const QString fpsStr = QString::number(fps, 'f', fps == int(fps) ? 0 : 2).leftJustified(5, nb);
+
         m_statusPill->setText(
             QStringLiteral("<span style='color:#22C55E;font-weight:900;'>%1p%2</span>"
                            "  ·  <span style='color:#E0E2E8;'>%3 FPS</span>"
                            "  ·  ENC %4  ·  GPU %5%  ·  CPU %6%")
-                .arg([&] {
-                    auto profile = m_engine->projectSnapshot().output;
-                    if (profile.width <= 0) profile = m_engine->settings()->outputProfile();
-                    return profile.height > 0 ? profile.height : 1080;
-                }())
-                .arg([&] {
-                    auto profile = m_engine->projectSnapshot().output;
-                    if (profile.width <= 0) profile = m_engine->settings()->outputProfile();
-                    const double fps = profile.fps > 0 ? profile.fps : 59.94;
-                    return QString::number(fps, 'f', fps == int(fps) ? 0 : 2);
-                }())
-                .arg(int(s.fpsRender))
-                .arg(int(s.fpsEncode))
-                .arg(int(s.gpuPercent))
-                .arg(int(s.cpuPercent)));
-        m_statusPill->setTextFormat(Qt::RichText);
+                .arg(height, 4, 10, nb)
+                .arg(fpsStr)
+                .arg(pad3(int(s.fpsRender)))
+                .arg(pad3(int(s.fpsEncode)))
+                .arg(pad3(int(s.gpuPercent)))
+                .arg(pad3(int(s.cpuPercent))));
         m_streamBtn->update();
     });
 
