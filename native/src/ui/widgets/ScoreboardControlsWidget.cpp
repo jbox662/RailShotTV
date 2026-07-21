@@ -20,6 +20,8 @@
 #include <QSizePolicy>
 #include <QButtonGroup>
 #include <QVector>
+#include <QAbstractSpinBox>
+#include <QEvent>
 #include <utility>
 
 namespace railshot {
@@ -710,6 +712,31 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* clock = new QTimer(this);
     connect(clock, &QTimer::timeout, model, &ScoreboardModel::tickClock);
     clock->start(1000);
+
+    // Block mouse-wheel value changes on spin/combo (hover-scroll was changing race/game/etc.)
+    auto blockWheelOn = [this](QWidget* w) {
+        if (!w)
+            return;
+        w->setFocusPolicy(Qt::StrongFocus); // click to edit; wheel alone must not tweak values
+        w->installEventFilter(this);
+        for (auto* child : w->findChildren<QWidget*>())
+            child->installEventFilter(this);
+    };
+    for (auto* spin : findChildren<QAbstractSpinBox*>())
+        blockWheelOn(spin);
+    for (auto* combo : findChildren<QComboBox*>())
+        blockWheelOn(combo);
+}
+
+bool ScoreboardControlsWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::Wheel) {
+        for (QObject* o = watched; o; o = o->parent()) {
+            if (qobject_cast<QAbstractSpinBox*>(o) || qobject_cast<QComboBox*>(o))
+                return true; // swallow — do not change value
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 } // namespace railshot
