@@ -34,8 +34,6 @@ QString poolGameLabel(const QString& sport)
         return QStringLiteral("9-Ball");
     if (sport == QLatin1String("10ball"))
         return QStringLiteral("10-Ball");
-    if (sport == QLatin1String("7ball"))
-        return QStringLiteral("7-Ball");
     if (sport == QLatin1String("straight"))
         return QStringLiteral("Straight Pool");
     if (sport == QLatin1String("onepocket"))
@@ -49,8 +47,6 @@ QString poolGameSport(const QString& label)
         return QStringLiteral("9ball");
     if (label == QLatin1String("10-Ball"))
         return QStringLiteral("10ball");
-    if (label == QLatin1String("7-Ball"))
-        return QStringLiteral("7ball");
     if (label == QLatin1String("Straight Pool"))
         return QStringLiteral("straight");
     if (label == QLatin1String("One-Pocket"))
@@ -207,7 +203,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     gameLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
     auto* gameCombo = new QComboBox(poolBox);
     gameCombo->addItems({QStringLiteral("8-Ball"), QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
-                         QStringLiteral("7-Ball"), QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
+                         QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
     gameCombo->setCurrentText(poolGameLabel(model->state().sport));
     gameCombo->setMinimumWidth(110);
     gameCombo->setStyleSheet(QStringLiteral(

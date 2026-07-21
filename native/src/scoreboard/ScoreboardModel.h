@@ -12,7 +12,7 @@ inline bool isPoolSport(const QString& sport)
 {
     return sport == QLatin1String("8ball") || sport == QLatin1String("pool")
            || sport == QLatin1String("9ball") || sport == QLatin1String("10ball")
-           || sport == QLatin1String("7ball") || sport == QLatin1String("snooker")
+           || sport == QLatin1String("snooker")
            || sport == QLatin1String("straight") || sport == QLatin1String("onepocket");
 }
 
@@ -23,8 +23,6 @@ inline int poolObjectBallCount(const QString& sport)
         return 9;
     if (sport == QLatin1String("10ball"))
         return 10;
-    if (sport == QLatin1String("7ball"))
-        return 7;
     // 8-ball, straight pool, one-pocket, banks, legacy "pool", snooker approx
     return 15;
 }

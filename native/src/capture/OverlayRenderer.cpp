@@ -969,7 +969,7 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
 
     const QString sport = state.value(QStringLiteral("sport")).toString(QStringLiteral("generic"));
     if (sport == QLatin1String("8ball") || sport == QLatin1String("pool") || sport == QLatin1String("9ball")
-        || sport == QLatin1String("10ball") || sport == QLatin1String("7ball")
+        || sport == QLatin1String("10ball")
         || sport == QLatin1String("snooker") || sport == QLatin1String("straight")
         || sport == QLatin1String("onepocket")) {
         renderBilliards(p, state, width, height);

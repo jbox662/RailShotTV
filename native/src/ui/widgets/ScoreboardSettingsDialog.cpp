@@ -95,7 +95,7 @@ QString mapSportModelToUi(const QString& model)
     if (model == QLatin1String("10ball")) return QStringLiteral("10-Ball");
     if (model == QLatin1String("8ball") || model == QLatin1String("pool")
         || model == QLatin1String("snooker") || model == QLatin1String("straight")
-        || model == QLatin1String("onepocket") || model == QLatin1String("7ball"))
+        || model == QLatin1String("onepocket"))
         return QStringLiteral("8-Ball");
     if (model == QLatin1String("baseball")) return QStringLiteral("Baseball");
     if (model == QLatin1String("basketball")) return QStringLiteral("Basketball");
