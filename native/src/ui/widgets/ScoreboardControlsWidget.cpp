@@ -237,13 +237,17 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     turnRow->addStretch(1);
     poolLay->addLayout(turnRow);
 
-    // Ball rack — click to pocket / restore (shows balls left on table)
-    auto* rackLab = new QLabel(QStringLiteral("Balls on table"), poolBox);
+    // Ball rack — only shown when the active board draws a rack strip
+    auto* rackBox = new QWidget(poolBox);
+    auto* rackBoxLay = new QVBoxLayout(rackBox);
+    rackBoxLay->setContentsMargins(0, 0, 0, 0);
+    rackBoxLay->setSpacing(3);
+    auto* rackLab = new QLabel(QStringLiteral("Balls on table"), rackBox);
     rackLab->setObjectName(QStringLiteral("sec"));
-    poolLay->addWidget(rackLab);
-    auto* rackHint = new QLabel(QStringLiteral("Click a ball to pocket / put back"), poolBox);
+    rackBoxLay->addWidget(rackLab);
+    auto* rackHint = new QLabel(QStringLiteral("Click a ball to pocket / put back"), rackBox);
     rackHint->setStyleSheet(QStringLiteral("color:#6A7384; font-size:8px; background:transparent; border:none;"));
-    poolLay->addWidget(rackHint);
+    rackBoxLay->addWidget(rackHint);
 
     static const QColor kBallCol[] = {
         {},
@@ -261,7 +265,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     ballBtns.reserve(15);
     const int mask0 = model->state().pocketedMask;
     for (int n = 1; n <= 15; ++n) {
-        auto* btn = new QPushButton(QString::number(n), poolBox);
+        auto* btn = new QPushButton(QString::number(n), rackBox);
         btn->setCheckable(true);
         btn->setChecked((mask0 & (1 << (n - 1))) == 0); // checked = still on table
         btn->setFixedSize(22, 22);
@@ -281,12 +285,12 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         ballBtns.push_back(btn);
         rackGrid->addWidget(btn, (n - 1) / 8, (n - 1) % 8);
     }
-    poolLay->addLayout(rackGrid);
+    rackBoxLay->addLayout(rackGrid);
 
     auto* rackActions = new QHBoxLayout();
     rackActions->setSpacing(4);
-    auto* rackReset = new QPushButton(QStringLiteral("All on"), poolBox);
-    auto* rackClear = new QPushButton(QStringLiteral("All off"), poolBox);
+    auto* rackReset = new QPushButton(QStringLiteral("All on"), rackBox);
+    auto* rackClear = new QPushButton(QStringLiteral("All off"), rackBox);
     for (auto* b : {rackReset, rackClear}) {
         b->setCursor(Qt::PointingHandCursor);
         b->setFixedHeight(20);
@@ -300,7 +304,8 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     rackActions->addWidget(rackReset);
     rackActions->addWidget(rackClear);
     rackActions->addStretch(1);
-    poolLay->addLayout(rackActions);
+    rackBoxLay->addLayout(rackActions);
+    poolLay->addWidget(rackBox);
     lay->addWidget(poolBox);
 
     // ── Baseball extras ──
@@ -617,16 +622,19 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         }
 
         const bool pool = isPoolSport(st.sport);
+        const bool showRack = scoreboardShowsBallRack(st);
         const bool baseball = st.sport == QLatin1String("baseball");
         const bool basketball = st.sport == QLatin1String("basketball");
         const bool tennis = st.sport == QLatin1String("tennis");
         poolBox->setVisible(pool);
+        rackBox->setVisible(showRack);
         bbBox->setVisible(baseball);
         hoopBox->setVisible(basketball);
         tennisBox->setVisible(tennis);
 
         QString tag = QStringLiteral("GENERIC");
-        if (pool) tag = poolGameLabel(st.sport).toUpper();
+        if (pool)
+            tag = QStringLiteral("POOL · %1").arg(poolGameLabel(st.sport).toUpper());
         else if (baseball) tag = QStringLiteral("BASEBALL");
         else if (basketball) tag = QStringLiteral("BASKETBALL");
         else if (st.sport == QLatin1String("soccer")) tag = QStringLiteral("SOCCER");
@@ -639,24 +647,26 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
                 QSignalBlocker block(gameCombo);
                 gameCombo->setCurrentText(wantGame);
             }
-            const int ballCount = poolObjectBallCount(st.sport);
             QSignalBlocker ba(turnA);
             QSignalBlocker bb(turnB);
             turnA->setChecked(st.activeSide == 1);
             turnB->setChecked(st.activeSide == 2);
-            for (auto* btn : ballBtns) {
-                const int n = btn->property("ballNumber").toInt();
-                const bool inGame = n >= 1 && n <= ballCount;
-                btn->setVisible(inGame);
-                if (!inGame)
-                    continue;
-                const bool onTable = (st.pocketedMask & (1 << (n - 1))) == 0;
-                if (btn->isChecked() != onTable) {
-                    QSignalBlocker block(btn);
-                    btn->setChecked(onTable);
+            if (showRack) {
+                const int ballCount = poolObjectBallCount(st.sport);
+                for (auto* btn : ballBtns) {
+                    const int n = btn->property("ballNumber").toInt();
+                    const bool inGame = n >= 1 && n <= ballCount;
+                    btn->setVisible(inGame);
+                    if (!inGame)
+                        continue;
+                    const bool onTable = (st.pocketedMask & (1 << (n - 1))) == 0;
+                    if (btn->isChecked() != onTable) {
+                        QSignalBlocker block(btn);
+                        btn->setChecked(onTable);
+                    }
                 }
+                rackLab->setText(QStringLiteral("Balls on table (%1)").arg(ballCount));
             }
-            rackLab->setText(QStringLiteral("Balls on table (%1)").arg(ballCount));
         }
         if (baseball) {
             QSignalBlocker b1b(ballsSp);

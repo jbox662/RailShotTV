@@ -7,7 +7,7 @@
 
 namespace railshot {
 
-/// True for any cue-sport scoreboard that uses race / rack controls.
+/// True for cue-sport boards (Pool sport; 8/9/10-ball are games, not sports).
 inline bool isPoolSport(const QString& sport)
 {
     return sport == QLatin1String("8ball") || sport == QLatin1String("pool")
@@ -25,6 +25,19 @@ inline int poolObjectBallCount(const QString& sport)
         return 10;
     // 8-ball, straight pool, one-pocket, banks, legacy "pool", snooker approx
     return 15;
+}
+
+/// True when the active board theme/layout draws a pocketed-ball rack strip.
+/// Dock ball controls should only appear when this is true.
+inline bool scoreboardShowsBallRack(const QString& sport, const QString& theme, const QString& layout)
+{
+    if (!isPoolSport(sport))
+        return false;
+    if (layout == QLatin1String("compact") || layout == QLatin1String("center"))
+        return false;
+    // Mosconi (broadcast/gold) and Felt (railshot/neon) draw racks; Clean/Slant do not.
+    return theme == QLatin1String("broadcast") || theme == QLatin1String("gold")
+           || theme == QLatin1String("railshot") || theme == QLatin1String("neon");
 }
 
 struct ScoreboardState {
@@ -65,6 +78,11 @@ struct ScoreboardState {
     QJsonObject toJson() const;
     static ScoreboardState fromJson(const QJsonObject& o);
 };
+
+inline bool scoreboardShowsBallRack(const ScoreboardState& st)
+{
+    return scoreboardShowsBallRack(st.sport, st.theme, st.layout);
+}
 
 class ScoreboardModel : public QObject {
     Q_OBJECT

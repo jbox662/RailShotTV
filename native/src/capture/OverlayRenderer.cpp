@@ -221,7 +221,9 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
     if (!wingB.isValid()) wingB = QColor(42, 31, 77);
 
     // Fixed proportions — never derive bar height from a stretched texture
-    const bool showRack = layout != QLatin1String("compact");
+    const QString theme = state.value(QStringLiteral("theme")).toString(QStringLiteral("broadcast"));
+    const QString sport = state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball"));
+    const bool showRack = scoreboardShowsBallRack(sport, theme, layout);
     constexpr int mainH = 58;
     constexpr int rackH = 36;
     constexpr int scoreBox = 46;
@@ -562,7 +564,8 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
     if (state.value(QStringLiteral("bgColor")).toString().isEmpty())
         bg = neon ? QColor(8, 4, 20, 240) : QColor(10, 18, 14, 240);
 
-    const bool showRack = layout != QLatin1String("compact");
+    const bool showRack = scoreboardShowsBallRack(
+        state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball")), theme, layout);
     constexpr int mainH = 72;
     constexpr int rackHFixed = 34;
     constexpr int scoreBox = 48;

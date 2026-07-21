@@ -6,7 +6,7 @@ class QEvent;
 namespace railshot {
 class EngineController;
 
-/// Live scoreboard dock: teams, scores, match clock — Sport/theme via Settings.
+/// Live scoreboard dock: teams, scores, match clock — Sport via Settings; Game/rack when Pool.
 class ScoreboardControlsWidget : public QWidget {
     Q_OBJECT
 public:
