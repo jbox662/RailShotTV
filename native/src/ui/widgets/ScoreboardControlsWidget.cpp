@@ -260,7 +260,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         return lab;
     };
 
-    // Race to + Game on one row — compact, no full-width waste
+    // Race + Game on one compact row (controls sized to content, not full dock width)
     auto* poolFields = new QHBoxLayout();
     poolFields->setContentsMargins(0, 0, 0, 0);
     poolFields->setSpacing(6);
@@ -281,14 +281,16 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     gameCombo->addItems({QStringLiteral("8-Ball"), QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
                          QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
     gameCombo->setCurrentText(poolGameLabel(model->state().sport));
-    gameCombo->setMinimumWidth(96);
-    gameCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    gameCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    gameCombo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    gameCombo->setFixedWidth(128); // fits "Straight Pool" + chevron; no dock stretch
     poolFields->addWidget(gameLab);
-    poolFields->addWidget(gameCombo, 1);
+    poolFields->addWidget(gameCombo);
+    poolFields->addStretch(1);
     poolLay->addLayout(poolFields);
 
     auto* turnRow = new QHBoxLayout();
-    turnRow->setSpacing(8);
+    turnRow->setSpacing(6);
     auto* turnLab = makeFieldLab(QStringLiteral("At table"), poolBox);
     auto* turnA = new QPushButton(QStringLiteral("A"), poolBox);
     auto* turnB = new QPushButton(QStringLiteral("B"), poolBox);
@@ -314,10 +316,29 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* rackBox = new QWidget(poolBox);
     auto* rackBoxLay = new QVBoxLayout(rackBox);
     rackBoxLay->setContentsMargins(0, 0, 0, 0);
-    rackBoxLay->setSpacing(3);
+    rackBoxLay->setSpacing(4);
+    auto* rackHead = new QHBoxLayout();
+    rackHead->setContentsMargins(0, 0, 0, 0);
+    rackHead->setSpacing(6);
     auto* rackLab = new QLabel(QStringLiteral("Balls on table"), rackBox);
     rackLab->setObjectName(QStringLiteral("sec"));
-    rackBoxLay->addWidget(rackLab);
+    rackHead->addWidget(rackLab);
+    rackHead->addStretch(1);
+    auto* rackReset = new QPushButton(QStringLiteral("All on"), rackBox);
+    auto* rackClear = new QPushButton(QStringLiteral("All off"), rackBox);
+    for (auto* b : {rackReset, rackClear}) {
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFixedHeight(20);
+        b->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
+            "font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;}"
+            "QPushButton:hover{border-color:#4F9EFF;color:#E0E2E8;}"));
+    }
+    rackReset->setToolTip(QStringLiteral("Put all balls back on the table"));
+    rackClear->setToolTip(QStringLiteral("Mark all balls pocketed"));
+    rackHead->addWidget(rackReset);
+    rackHead->addWidget(rackClear);
+    rackBoxLay->addLayout(rackHead);
     auto* rackHint = new QLabel(QStringLiteral("Click a ball to pocket / put back"), rackBox);
     rackHint->setStyleSheet(QStringLiteral("color:#6A7384; font-size:8px; background:transparent; border:none;"));
     rackBoxLay->addWidget(rackHint);
@@ -330,15 +351,23 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         QColor(230, 120, 20), QColor(30, 140, 55), QColor(130, 30, 40),
     };
 
-    auto* rackGrid = new QGridLayout();
-    rackGrid->setContentsMargins(0, 0, 0, 0);
-    rackGrid->setHorizontalSpacing(3);
-    rackGrid->setVerticalSpacing(3);
+    // Tight centered rack — do NOT use a stretching QGridLayout (that spaced balls across the dock).
+    auto* rackCluster = new QWidget(rackBox);
+    rackCluster->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    auto* rackClusterLay = new QVBoxLayout(rackCluster);
+    rackClusterLay->setContentsMargins(0, 0, 0, 0);
+    rackClusterLay->setSpacing(3);
+    auto* ballRow1 = new QHBoxLayout();
+    ballRow1->setContentsMargins(0, 0, 0, 0);
+    ballRow1->setSpacing(3);
+    auto* ballRow2 = new QHBoxLayout();
+    ballRow2->setContentsMargins(0, 0, 0, 0);
+    ballRow2->setSpacing(3);
     QVector<QPushButton*> ballBtns;
     ballBtns.reserve(15);
     const int mask0 = model->state().pocketedMask;
     for (int n = 1; n <= 15; ++n) {
-        auto* btn = new QPushButton(QString::number(n), rackBox);
+        auto* btn = new QPushButton(QString::number(n), rackCluster);
         btn->setCheckable(true);
         btn->setChecked((mask0 & (1 << (n - 1))) == 0); // checked = still on table
         btn->setFixedSize(22, 22);
@@ -356,28 +385,16 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
             "QPushButton:hover{border-color:#86EFAC;}")
                                .arg(c.name(), fg));
         ballBtns.push_back(btn);
-        rackGrid->addWidget(btn, (n - 1) / 8, (n - 1) % 8);
+        (n <= 8 ? ballRow1 : ballRow2)->addWidget(btn);
     }
-    rackBoxLay->addLayout(rackGrid);
-
-    auto* rackActions = new QHBoxLayout();
-    rackActions->setSpacing(4);
-    auto* rackReset = new QPushButton(QStringLiteral("All on"), rackBox);
-    auto* rackClear = new QPushButton(QStringLiteral("All off"), rackBox);
-    for (auto* b : {rackReset, rackClear}) {
-        b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(20);
-        b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
-            "font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;}"
-            "QPushButton:hover{border-color:#4F9EFF;color:#E0E2E8;}"));
-    }
-    rackReset->setToolTip(QStringLiteral("Put all balls back on the table"));
-    rackClear->setToolTip(QStringLiteral("Mark all balls pocketed"));
-    rackActions->addWidget(rackReset);
-    rackActions->addWidget(rackClear);
-    rackActions->addStretch(1);
-    rackBoxLay->addLayout(rackActions);
+    rackClusterLay->addLayout(ballRow1);
+    rackClusterLay->addLayout(ballRow2);
+    auto* rackCenter = new QHBoxLayout();
+    rackCenter->setContentsMargins(0, 0, 0, 0);
+    rackCenter->addStretch(1);
+    rackCenter->addWidget(rackCluster);
+    rackCenter->addStretch(1);
+    rackBoxLay->addLayout(rackCenter);
     poolLay->addWidget(rackBox);
     lay->addWidget(poolBox);
 
