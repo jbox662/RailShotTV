@@ -39,30 +39,30 @@ struct BoardPreset {
 };
 
 const BoardPreset kPresets[] = {
-    {"railshot", "RailShot Dark", "Lower third · signature orange / blue",
-     "standard", "railshot", "#FF5A2C", "#4F9EFF", "", "", "8ball"},
-    {"broadcast", "Broadcast Navy", "Full-width bar · deep broadcast look",
-     "wide", "broadcast", "#F97316", "#38BDF8", "#F8FAFC", "#081428", "generic"},
-    {"neon", "Neon Night", "Glow edges · magenta / cyan clash",
-     "standard", "neon", "#FF00AA", "#00F0FF", "#FFFFFF", "#080414", "custom"},
-    {"classic", "Clean Light", "Light board · crisp dark type",
-     "standard", "classic", "#C2410C", "#1D4ED8", "#14161C", "#F5F5F8", "generic"},
-    {"corners", "Corner Badges", "Top corners · compact dual badges",
+    {"pool_felt", "Pool Race", "Billiards · race-to · felt rails · at-table",
+     "standard", "railshot", "#15803D", "#B45309", "#F0FDF4", "#0A120E", "8ball"},
+    {"pool_neon", "Cue Neon", "Billiards · neon clash · race pill",
+     "standard", "neon", "#FF00AA", "#00F0FF", "#FFFFFF", "#080414", "8ball"},
+    {"pool_wide", "Tournament Bar", "Billiards · full-width race bar",
+     "wide", "broadcast", "#22C55E", "#F97316", "#F8FAFC", "#081428", "8ball"},
+    {"pool_corner", "Corner Racks", "Billiards · compact corner bug",
      "compact", "railshot", "#FF5A2C", "#4F9EFF", "", "", "8ball"},
-    {"esports", "Esports Dual", "Wide neon · purple / green",
-     "wide", "neon", "#A855F7", "#22C55E", "#F8FAFC", "#0A0614", "custom"},
-    {"pool", "Pool Hall", "Felt green · amber challenger",
-     "standard", "railshot", "#15803D", "#B45309", "#F0FDF4", "#0C1410", "8ball"},
-    {"court", "Court Side", "Basketball · orange / royal",
+    {"baseball", "Diamond Bug", "Baseball · bases · count · outs",
+     "standard", "broadcast", "#22C55E", "#EF4444", "#FFFFFF", "#0B1220", "baseball"},
+    {"baseball_wide", "Diamond Wide", "Baseball · full lower bar",
+     "wide", "carbon", "#16A34A", "#DC2626", "#F8FAFC", "#121214", "baseball"},
+    {"court", "Court Side", "Basketball · quarter + game clock",
      "wide", "broadcast", "#EA580C", "#2563EB", "#FFFFFF", "#0B1220", "basketball"},
-    {"pitch", "Pitch Night", "Soccer · green / white",
+    {"pitch", "Pitch Night", "Soccer · minute badge · scoreline",
      "standard", "broadcast", "#16A34A", "#E2E8F0", "#F8FAFC", "#052E16", "soccer"},
-    {"center", "Center Clash", "Mid-screen banner · duel focus",
+    {"tennis", "Baseline", "Tennis · sets · games · serve dot",
+     "compact", "gold", "#F59E0B", "#D97706", "#FFECB3", "#1C160A", "tennis"},
+    {"generic_dark", "Generic Dark", "Simple lower third",
+     "standard", "railshot", "#FF5A2C", "#4F9EFF", "", "", "generic"},
+    {"generic_light", "Generic Light", "Clean light board",
+     "standard", "classic", "#C2410C", "#1D4ED8", "#14161C", "#F5F5F8", "generic"},
+    {"center", "Center Clash", "Mid-screen duel banner",
      "center", "railshot", "#FF5A2C", "#4F9EFF", "", "", "generic"},
-    {"carbon", "Carbon Edge", "Matte dark · steel accents",
-     "wide", "carbon", "#94A3B8", "#64748B", "#E2E8F0", "#121214", "generic"},
-    {"gold", "Championship Gold", "Premium gold on deep bronze",
-     "center", "gold", "#F59E0B", "#D97706", "#FFECB3", "#1C160A", "tennis"},
 };
 
 constexpr int kPresetCount = int(sizeof(kPresets) / sizeof(kPresets[0]));
@@ -70,6 +70,7 @@ constexpr int kPresetCount = int(sizeof(kPresets) / sizeof(kPresets[0]));
 QString mapSportUiToModel(const QString& ui)
 {
     if (ui == QLatin1String("Pool")) return QStringLiteral("8ball");
+    if (ui == QLatin1String("Baseball")) return QStringLiteral("baseball");
     if (ui == QLatin1String("Basketball")) return QStringLiteral("basketball");
     if (ui == QLatin1String("Soccer")) return QStringLiteral("soccer");
     if (ui == QLatin1String("Tennis")) return QStringLiteral("tennis");
@@ -78,7 +79,10 @@ QString mapSportUiToModel(const QString& ui)
 }
 QString mapSportModelToUi(const QString& model)
 {
-    if (model == QLatin1String("8ball")) return QStringLiteral("Pool");
+    if (model == QLatin1String("8ball") || model == QLatin1String("pool")
+        || model == QLatin1String("9ball") || model == QLatin1String("snooker"))
+        return QStringLiteral("Pool");
+    if (model == QLatin1String("baseball")) return QStringLiteral("Baseball");
     if (model == QLatin1String("basketball")) return QStringLiteral("Basketball");
     if (model == QLatin1String("soccer")) return QStringLiteral("Soccer");
     if (model == QLatin1String("tennis")) return QStringLiteral("Tennis");
@@ -190,7 +194,19 @@ QPixmap makePresetThumb(const BoardPreset& pr, int width)
     thumbSt.insert(QStringLiteral("playerB"), QStringLiteral("AWAY"));
     thumbSt.insert(QStringLiteral("scoreA"), 3);
     thumbSt.insert(QStringLiteral("scoreB"), 2);
+    thumbSt.insert(QStringLiteral("raceTo"), 7);
+    thumbSt.insert(QStringLiteral("activeSide"), 1);
     thumbSt.insert(QStringLiteral("clockSeconds"), 125);
+    thumbSt.insert(QStringLiteral("period"), 2);
+    thumbSt.insert(QStringLiteral("balls"), 2);
+    thumbSt.insert(QStringLiteral("strikes"), 1);
+    thumbSt.insert(QStringLiteral("outs"), 1);
+    thumbSt.insert(QStringLiteral("inning"), 3);
+    thumbSt.insert(QStringLiteral("topHalf"), false);
+    thumbSt.insert(QStringLiteral("onFirst"), true);
+    thumbSt.insert(QStringLiteral("onSecond"), true);
+    thumbSt.insert(QStringLiteral("onThird"), false);
+    thumbSt.insert(QStringLiteral("sport"), QString::fromUtf8(pr.sport));
     thumbSt.insert(QStringLiteral("layout"), QString::fromUtf8(pr.layout));
     thumbSt.insert(QStringLiteral("theme"), QString::fromUtf8(pr.theme));
     thumbSt.insert(QStringLiteral("colorA"), QString::fromUtf8(pr.colorA));
@@ -252,7 +268,23 @@ QJsonObject ScoreboardSettingsDialog::previewState() const
     st.insert(QStringLiteral("playerB"), live.playerB);
     st.insert(QStringLiteral("scoreA"), live.scoreA);
     st.insert(QStringLiteral("scoreB"), live.scoreB);
+    st.insert(QStringLiteral("raceTo"), live.raceTo);
+    st.insert(QStringLiteral("activeSide"), live.activeSide);
     st.insert(QStringLiteral("clockSeconds"), live.clockSeconds);
+    st.insert(QStringLiteral("clockRunning"), live.clockRunning);
+    st.insert(QStringLiteral("balls"), live.balls);
+    st.insert(QStringLiteral("strikes"), live.strikes);
+    st.insert(QStringLiteral("outs"), live.outs);
+    st.insert(QStringLiteral("inning"), live.inning);
+    st.insert(QStringLiteral("topHalf"), live.topHalf);
+    st.insert(QStringLiteral("onFirst"), live.onFirst);
+    st.insert(QStringLiteral("onSecond"), live.onSecond);
+    st.insert(QStringLiteral("onThird"), live.onThird);
+    st.insert(QStringLiteral("period"), live.period);
+    QString sportUi = QStringLiteral("Generic");
+    if (m_sportGroup && m_sportGroup->checkedButton())
+        sportUi = m_sportGroup->checkedButton()->text();
+    st.insert(QStringLiteral("sport"), mapSportUiToModel(sportUi));
     st.insert(QStringLiteral("layout"), mapLayoutUiToModel(m_layoutBox->currentText()));
     st.insert(QStringLiteral("theme"), mapThemeUiToModel(m_themeBox->currentText()));
     st.insert(QStringLiteral("colorA"), colorCss(m_colorA));
@@ -569,8 +601,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     auto* sportGrid = new QGridLayout();
     sportGrid->setSpacing(5);
     const QStringList sports = {QStringLiteral("Generic"), QStringLiteral("Pool"),
-                                QStringLiteral("Basketball"), QStringLiteral("Soccer"),
-                                QStringLiteral("Tennis"), QStringLiteral("Custom")};
+                                QStringLiteral("Baseball"), QStringLiteral("Basketball"),
+                                QStringLiteral("Soccer"), QStringLiteral("Tennis")};
     m_sportGroup = new QButtonGroup(this);
     m_sportGroup->setExclusive(true);
     const QString sportUi = mapSportModelToUi(st0.sport);
@@ -735,6 +767,9 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         refreshPreview();
     });
     connect(m_themeBox, &QComboBox::currentTextChanged, this, [this](const QString&) {
+        refreshPreview();
+    });
+    connect(m_sportGroup, &QButtonGroup::buttonClicked, this, [this](QAbstractButton*) {
         refreshPreview();
     });
 

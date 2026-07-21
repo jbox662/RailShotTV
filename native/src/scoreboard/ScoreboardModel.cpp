@@ -19,6 +19,16 @@ QJsonObject ScoreboardState::toJson() const
         {QStringLiteral("bgColor"), bgColor},
         {QStringLiteral("clockRunning"), clockRunning},
         {QStringLiteral("clockSeconds"), clockSeconds},
+        {QStringLiteral("activeSide"), activeSide},
+        {QStringLiteral("balls"), balls},
+        {QStringLiteral("strikes"), strikes},
+        {QStringLiteral("outs"), outs},
+        {QStringLiteral("inning"), inning},
+        {QStringLiteral("topHalf"), topHalf},
+        {QStringLiteral("onFirst"), onFirst},
+        {QStringLiteral("onSecond"), onSecond},
+        {QStringLiteral("onThird"), onThird},
+        {QStringLiteral("period"), period},
     };
 }
 
@@ -39,6 +49,16 @@ ScoreboardState ScoreboardState::fromJson(const QJsonObject& o)
     s.bgColor = o.value(QStringLiteral("bgColor")).toString();
     s.clockRunning = o.value(QStringLiteral("clockRunning")).toBool();
     s.clockSeconds = o.value(QStringLiteral("clockSeconds")).toInt();
+    s.activeSide = o.value(QStringLiteral("activeSide")).toInt(1);
+    s.balls = o.value(QStringLiteral("balls")).toInt();
+    s.strikes = o.value(QStringLiteral("strikes")).toInt();
+    s.outs = o.value(QStringLiteral("outs")).toInt();
+    s.inning = o.value(QStringLiteral("inning")).toInt(1);
+    s.topHalf = o.value(QStringLiteral("topHalf")).toBool(true);
+    s.onFirst = o.value(QStringLiteral("onFirst")).toBool();
+    s.onSecond = o.value(QStringLiteral("onSecond")).toBool();
+    s.onThird = o.value(QStringLiteral("onThird")).toBool();
+    s.period = o.value(QStringLiteral("period")).toInt(1);
     return s;
 }
 
@@ -69,6 +89,9 @@ void ScoreboardModel::resetScores()
 {
     m_state.scoreA = 0;
     m_state.scoreB = 0;
+    m_state.balls = 0;
+    m_state.strikes = 0;
+    m_state.outs = 0;
     emit changed(m_state);
 }
 

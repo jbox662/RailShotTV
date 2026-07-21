@@ -16,9 +16,18 @@
 #include <QScrollArea>
 #include <QFrame>
 #include <QSizePolicy>
+#include <QButtonGroup>
 #include <utility>
 
 namespace railshot {
+
+namespace {
+bool isPoolSport(const QString& s)
+{
+    return s == QLatin1String("8ball") || s == QLatin1String("pool") || s == QLatin1String("9ball")
+           || s == QLatin1String("snooker");
+}
+} // namespace
 
 ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
@@ -60,7 +69,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
-    // Scroll so a short bottom dock never clips score / match controls.
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -80,7 +88,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
 
     auto* topRow = new QHBoxLayout();
     topRow->setSpacing(4);
-
     auto* overlayBtn = new QPushButton(QStringLiteral("Overlay"), host);
     overlayBtn->setCheckable(true);
     overlayBtn->setChecked(true);
@@ -92,21 +99,23 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "font-weight:800;font-size:9px;border-radius:3px;padding:1px 8px;}"
         "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
         "border:1px solid #86EFAC;color:#04140A;}"));
-    topRow->addWidget(overlayBtn);
-
     auto* settingsBtn = new QPushButton(QStringLiteral("Settings"), host);
     settingsBtn->setCursor(Qt::PointingHandCursor);
     settingsBtn->setFixedHeight(22);
-    settingsBtn->setToolTip(QStringLiteral("Presets, colors, layout…"));
+    settingsBtn->setToolTip(QStringLiteral("Sport boards, presets, colors…"));
     settingsBtn->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
         "font-weight:700;font-size:9px;border-radius:3px;padding:1px 8px;}"
         "QPushButton:hover{border-color:#22C55E;color:#FFFFFF;}"));
+    topRow->addWidget(overlayBtn);
     topRow->addWidget(settingsBtn);
     topRow->addStretch(1);
     lay->addLayout(topRow);
 
-    // Names side-by-side to save vertical space
+    auto* sportTag = new QLabel(host);
+    sportTag->setObjectName(QStringLiteral("sec"));
+    lay->addWidget(sportTag);
+
     auto* names = new QHBoxLayout();
     names->setSpacing(4);
     auto* aName = new QLineEdit(model->state().playerA, host);
@@ -117,7 +126,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     names->addWidget(bName, 1);
     lay->addLayout(names);
 
-    // Score readout + ± on one compact band
     auto* scoreBand = new QHBoxLayout();
     scoreBand->setSpacing(3);
     auto makeScoreBtn = [&](const QString& t, const QString& color) {
@@ -133,7 +141,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* aPlus = makeScoreBtn(QStringLiteral("A+"), QStringLiteral("#FF5A2C"));
     auto* bMinus = makeScoreBtn(QStringLiteral("B−"), QStringLiteral("#4F9EFF"));
     auto* bPlus = makeScoreBtn(QStringLiteral("B+"), QStringLiteral("#4F9EFF"));
-
     auto* scoreRead = new QLabel(host);
     scoreRead->setAlignment(Qt::AlignCenter);
     scoreRead->setMinimumWidth(72);
@@ -147,15 +154,139 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     scoreBand->addWidget(bPlus);
     lay->addLayout(scoreBand);
 
-    // Match: race-to + clock on one row
-    auto* matchRow = new QHBoxLayout();
-    matchRow->setSpacing(4);
-    auto* raceLab = new QLabel(QStringLiteral("Race"), host);
+    // ── Pool extras ──
+    auto* poolBox = new QWidget(host);
+    auto* poolLay = new QVBoxLayout(poolBox);
+    poolLay->setContentsMargins(0, 0, 0, 0);
+    poolLay->setSpacing(3);
+    auto* raceRow = new QHBoxLayout();
+    auto* raceLab = new QLabel(QStringLiteral("Race to"), poolBox);
     raceLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
-    auto* raceTo = new QSpinBox(host);
+    auto* raceTo = new QSpinBox(poolBox);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
     raceTo->setFixedWidth(44);
+    raceRow->addWidget(raceLab);
+    raceRow->addWidget(raceTo);
+    raceRow->addStretch(1);
+    poolLay->addLayout(raceRow);
+    auto* turnRow = new QHBoxLayout();
+    auto* turnLab = new QLabel(QStringLiteral("At table"), poolBox);
+    turnLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    auto* turnA = new QPushButton(QStringLiteral("A"), poolBox);
+    auto* turnB = new QPushButton(QStringLiteral("B"), poolBox);
+    for (auto* b : {turnA, turnB}) {
+        b->setCheckable(true);
+        b->setFixedSize(28, 22);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;font-weight:800;font-size:10px;}"
+            "QPushButton:checked{border-color:#22C55E;color:#86EFAC;background:#0F1A14;}"));
+    }
+    auto* turnGroup = new QButtonGroup(poolBox);
+    turnGroup->setExclusive(true);
+    turnGroup->addButton(turnA, 1);
+    turnGroup->addButton(turnB, 2);
+    turnRow->addWidget(turnLab);
+    turnRow->addWidget(turnA);
+    turnRow->addWidget(turnB);
+    turnRow->addStretch(1);
+    poolLay->addLayout(turnRow);
+    lay->addWidget(poolBox);
+
+    // ── Baseball extras ──
+    auto* bbBox = new QWidget(host);
+    auto* bbLay = new QVBoxLayout(bbBox);
+    bbLay->setContentsMargins(0, 0, 0, 0);
+    bbLay->setSpacing(3);
+    auto* countRow = new QHBoxLayout();
+    auto* ballsSp = new QSpinBox(bbBox);
+    ballsSp->setRange(0, 3);
+    ballsSp->setPrefix(QStringLiteral("B "));
+    ballsSp->setValue(model->state().balls);
+    auto* strikesSp = new QSpinBox(bbBox);
+    strikesSp->setRange(0, 2);
+    strikesSp->setPrefix(QStringLiteral("S "));
+    strikesSp->setValue(model->state().strikes);
+    auto* outsSp = new QSpinBox(bbBox);
+    outsSp->setRange(0, 2);
+    outsSp->setPrefix(QStringLiteral("O "));
+    outsSp->setValue(model->state().outs);
+    countRow->addWidget(ballsSp);
+    countRow->addWidget(strikesSp);
+    countRow->addWidget(outsSp);
+    bbLay->addLayout(countRow);
+    auto* innRow = new QHBoxLayout();
+    auto* innSp = new QSpinBox(bbBox);
+    innSp->setRange(1, 20);
+    innSp->setPrefix(QStringLiteral("Inn "));
+    innSp->setValue(model->state().inning);
+    auto* topBtn = new QPushButton(QStringLiteral("TOP"), bbBox);
+    auto* botBtn = new QPushButton(QStringLiteral("BOT"), bbBox);
+    for (auto* b : {topBtn, botBtn}) {
+        b->setCheckable(true);
+        b->setFixedHeight(22);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;font-weight:800;font-size:9px;}"
+            "QPushButton:checked{border-color:#F97316;color:#FDBA74;background:#1A1208;}"));
+    }
+    auto* halfGroup = new QButtonGroup(bbBox);
+    halfGroup->setExclusive(true);
+    halfGroup->addButton(topBtn);
+    halfGroup->addButton(botBtn);
+    innRow->addWidget(innSp);
+    innRow->addWidget(topBtn);
+    innRow->addWidget(botBtn);
+    bbLay->addLayout(innRow);
+    auto* baseRow = new QHBoxLayout();
+    auto* b1 = new QCheckBox(QStringLiteral("1B"), bbBox);
+    auto* b2 = new QCheckBox(QStringLiteral("2B"), bbBox);
+    auto* b3 = new QCheckBox(QStringLiteral("3B"), bbBox);
+    b1->setChecked(model->state().onFirst);
+    b2->setChecked(model->state().onSecond);
+    b3->setChecked(model->state().onThird);
+    baseRow->addWidget(b1);
+    baseRow->addWidget(b2);
+    baseRow->addWidget(b3);
+    baseRow->addStretch(1);
+    bbLay->addLayout(baseRow);
+    lay->addWidget(bbBox);
+
+    // ── Basketball period ──
+    auto* hoopBox = new QWidget(host);
+    auto* hoopLay = new QHBoxLayout(hoopBox);
+    hoopLay->setContentsMargins(0, 0, 0, 0);
+    auto* periodLab = new QLabel(QStringLiteral("Quarter"), hoopBox);
+    periodLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    auto* periodSp = new QSpinBox(hoopBox);
+    periodSp->setRange(1, 10);
+    periodSp->setValue(model->state().period);
+    periodSp->setFixedWidth(44);
+    hoopLay->addWidget(periodLab);
+    hoopLay->addWidget(periodSp);
+    hoopLay->addStretch(1);
+    lay->addWidget(hoopBox);
+
+    // ── Tennis sets (reuse balls/strikes) ──
+    auto* tennisBox = new QWidget(host);
+    auto* tennisLay = new QHBoxLayout(tennisBox);
+    tennisLay->setContentsMargins(0, 0, 0, 0);
+    auto* setASp = new QSpinBox(tennisBox);
+    setASp->setRange(0, 5);
+    setASp->setPrefix(QStringLiteral("Sets A "));
+    setASp->setValue(model->state().balls);
+    auto* setBSp = new QSpinBox(tennisBox);
+    setBSp->setRange(0, 5);
+    setBSp->setPrefix(QStringLiteral("B "));
+    setBSp->setValue(model->state().strikes);
+    tennisLay->addWidget(setASp);
+    tennisLay->addWidget(setBSp);
+    lay->addWidget(tennisBox);
+
+    // Clock row (shared)
+    auto* matchRow = new QHBoxLayout();
+    matchRow->setSpacing(4);
     auto* clockLbl = new QLabel(QStringLiteral("00:00"), host);
     clockLbl->setStyleSheet(QStringLiteral(
         "font-family:'Bebas Neue','Arial Narrow',sans-serif; font-size:14px; color:#22C55E;"
@@ -165,12 +296,9 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* clockReset = new QPushButton(QStringLiteral("0:00"), host);
     clockReset->setFixedHeight(20);
     clockReset->setCursor(Qt::PointingHandCursor);
-    clockReset->setToolTip(QStringLiteral("Reset clock"));
     clockReset->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
         "font-size:8px;font-weight:700;padding:1px 5px;}"));
-    matchRow->addWidget(raceLab);
-    matchRow->addWidget(raceTo);
     matchRow->addStretch(1);
     matchRow->addWidget(clockLbl);
     matchRow->addWidget(clockRun);
@@ -213,6 +341,71 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         st.raceTo = v;
         model->setState(st);
     });
+    connect(turnGroup, &QButtonGroup::idClicked, this, [model](int id) {
+        auto st = model->state();
+        st.activeSide = id;
+        model->setState(st);
+    });
+    connect(ballsSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.balls = v;
+        model->setState(st);
+    });
+    connect(strikesSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.strikes = v;
+        model->setState(st);
+    });
+    connect(outsSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.outs = v;
+        model->setState(st);
+    });
+    connect(innSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.inning = v;
+        model->setState(st);
+    });
+    connect(topBtn, &QPushButton::clicked, this, [model] {
+        auto st = model->state();
+        st.topHalf = true;
+        model->setState(st);
+    });
+    connect(botBtn, &QPushButton::clicked, this, [model] {
+        auto st = model->state();
+        st.topHalf = false;
+        model->setState(st);
+    });
+    connect(b1, &QCheckBox::toggled, this, [model](bool on) {
+        auto st = model->state();
+        st.onFirst = on;
+        model->setState(st);
+    });
+    connect(b2, &QCheckBox::toggled, this, [model](bool on) {
+        auto st = model->state();
+        st.onSecond = on;
+        model->setState(st);
+    });
+    connect(b3, &QCheckBox::toggled, this, [model](bool on) {
+        auto st = model->state();
+        st.onThird = on;
+        model->setState(st);
+    });
+    connect(periodSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.period = v;
+        model->setState(st);
+    });
+    connect(setASp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.balls = v;
+        model->setState(st);
+    });
+    connect(setBSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
+        auto st = model->state();
+        st.strikes = v;
+        model->setState(st);
+    });
 
     connect(aPlus, &QPushButton::clicked, model, [model] { model->incrementA(1); });
     connect(aMinus, &QPushButton::clicked, model, [model] { model->incrementA(-1); });
@@ -223,6 +416,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         auto s = model->state();
         std::swap(s.playerA, s.playerB);
         std::swap(s.scoreA, s.scoreB);
+        std::swap(s.colorA, s.colorB);
         model->setState(s);
     });
     connect(push, &QPushButton::clicked, engine, &EngineController::pushScoreboardToProgram);
@@ -259,24 +453,73 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
 
     auto refresh = [=](const ScoreboardState& st) {
         scoreRead->setText(QStringLiteral("%1 — %2").arg(st.scoreA).arg(st.scoreB));
-        scoreRead->setToolTip(QStringLiteral("%1  %2 — %3  %4")
-                                  .arg(st.playerA)
-                                  .arg(st.scoreA)
-                                  .arg(st.scoreB)
-                                  .arg(st.playerB));
         const int m = st.clockSeconds / 60;
         const int sec = st.clockSeconds % 60;
         clockLbl->setText(QStringLiteral("%1:%2")
                               .arg(m, 2, 10, QLatin1Char('0'))
                               .arg(sec, 2, 10, QLatin1Char('0')));
-        if (aName->text() != st.playerA)
-            aName->setText(st.playerA);
-        if (bName->text() != st.playerB)
-            bName->setText(st.playerB);
-        if (raceTo->value() != st.raceTo)
+        if (aName->text() != st.playerA) aName->setText(st.playerA);
+        if (bName->text() != st.playerB) bName->setText(st.playerB);
+        if (raceTo->value() != st.raceTo) {
+            QSignalBlocker b(raceTo);
             raceTo->setValue(st.raceTo);
-        if (clockRun->isChecked() != st.clockRunning)
+        }
+        if (clockRun->isChecked() != st.clockRunning) {
+            QSignalBlocker b(clockRun);
             clockRun->setChecked(st.clockRunning);
+        }
+
+        const bool pool = isPoolSport(st.sport);
+        const bool baseball = st.sport == QLatin1String("baseball");
+        const bool basketball = st.sport == QLatin1String("basketball");
+        const bool tennis = st.sport == QLatin1String("tennis");
+        poolBox->setVisible(pool);
+        bbBox->setVisible(baseball);
+        hoopBox->setVisible(basketball);
+        tennisBox->setVisible(tennis);
+
+        QString tag = QStringLiteral("GENERIC");
+        if (pool) tag = QStringLiteral("BILLIARDS");
+        else if (baseball) tag = QStringLiteral("BASEBALL");
+        else if (basketball) tag = QStringLiteral("BASKETBALL");
+        else if (st.sport == QLatin1String("soccer")) tag = QStringLiteral("SOCCER");
+        else if (tennis) tag = QStringLiteral("TENNIS");
+        sportTag->setText(tag);
+
+        if (pool) {
+            QSignalBlocker ba(turnA);
+            QSignalBlocker bb(turnB);
+            turnA->setChecked(st.activeSide == 1);
+            turnB->setChecked(st.activeSide == 2);
+        }
+        if (baseball) {
+            QSignalBlocker b1b(ballsSp);
+            QSignalBlocker b2b(strikesSp);
+            QSignalBlocker b3b(outsSp);
+            QSignalBlocker b4b(innSp);
+            ballsSp->setValue(st.balls);
+            strikesSp->setValue(st.strikes);
+            outsSp->setValue(st.outs);
+            innSp->setValue(st.inning);
+            topBtn->setChecked(st.topHalf);
+            botBtn->setChecked(!st.topHalf);
+            QSignalBlocker c1(b1);
+            QSignalBlocker c2(b2);
+            QSignalBlocker c3(b3);
+            b1->setChecked(st.onFirst);
+            b2->setChecked(st.onSecond);
+            b3->setChecked(st.onThird);
+        }
+        if (basketball && periodSp->value() != st.period) {
+            QSignalBlocker b(periodSp);
+            periodSp->setValue(st.period);
+        }
+        if (tennis) {
+            QSignalBlocker ba(setASp);
+            QSignalBlocker bb(setBSp);
+            setASp->setValue(st.balls);
+            setBSp->setValue(st.strikes);
+        }
 
         bool anyVisible = false;
         bool anyScoreboard = false;

@@ -23,6 +23,22 @@ struct ScoreboardState {
     bool clockRunning = false;
     int clockSeconds = 0;
 
+    /// Billiards: 0 = none, 1 = player A at table, 2 = player B.
+    int activeSide = 1;
+
+    /// Baseball state
+    int balls = 0;
+    int strikes = 0;
+    int outs = 0;
+    int inning = 1;
+    bool topHalf = true;
+    bool onFirst = false;
+    bool onSecond = false;
+    bool onThird = false;
+
+    /// Basketball / soccer period (1-based). Tennis uses scoreA/B as games.
+    int period = 1;
+
     QJsonObject toJson() const;
     static ScoreboardState fromJson(const QJsonObject& o);
 };
