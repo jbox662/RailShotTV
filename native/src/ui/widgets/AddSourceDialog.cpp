@@ -14,6 +14,13 @@
 #include <QSet>
 #include <QWidgetAction>
 #include <QFrame>
+#include <QScrollArea>
+#include <QEventLoop>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QCursor>
+#include <QEvent>
+#include <QMouseEvent>
 
 namespace railshot {
 
@@ -105,30 +112,167 @@ QString AddSourceDialog::defaultNameForType(SourceType type)
 
 SourceType showAddSourceTypeMenu(QWidget* parent, const QPoint& globalPos)
 {
-    QMenu menu(parent);
-    menu.setStyleSheet(QStringLiteral(
-        "QMenu{background:#1A1D24; border:1px solid #4A4D55; color:#E0E2E8; padding:4px 0;}"
-        "QMenu::item{padding:8px 28px 8px 16px;}"
-        "QMenu::item:selected{background:#102438; color:#FFFFFF;}"
-        "QMenu::separator{height:1px; background:#2A2D35; margin:4px 8px;}"));
+    // Custom popup (not QMenu) so we get scroll + Chromatic styling + correct placement.
+    auto* popup = new QFrame(parent, Qt::Popup | Qt::FramelessWindowHint);
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->setObjectName(QStringLiteral("addSourceTypePopup"));
+    popup->setStyleSheet(QStringLiteral(
+        "QFrame#addSourceTypePopup{"
+        "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1E2228,stop:1 #12151A);"
+        "  border:1px solid #5A5E68; border-radius:6px;"
+        "}"
+        "QLabel#popupTitle{"
+        "  color:#4F9EFF; font-size:10px; font-weight:800; letter-spacing:1.5px;"
+        "  padding:10px 14px 6px; background:transparent;"
+        "}"
+        "QScrollArea{background:transparent; border:none;}"));
 
-    auto* title = new QLabel(QStringLiteral("Add Source"), &menu);
-    title->setStyleSheet(QStringLiteral(
-        "color:#8892A4; font-size:10px; font-weight:800; letter-spacing:1px; padding:6px 16px 4px;"));
-    auto* titleAct = new QWidgetAction(&menu);
-    titleAct->setDefaultWidget(title);
-    menu.addAction(titleAct);
-    menu.addSeparator();
+    auto* root = new QVBoxLayout(popup);
+    root->setContentsMargins(6, 4, 6, 8);
+    root->setSpacing(2);
+
+    auto* title = new QLabel(QStringLiteral("ADD SOURCE"), popup);
+    title->setObjectName(QStringLiteral("popupTitle"));
+    root->addWidget(title);
+
+    auto* rule = new QFrame(popup);
+    rule->setFixedHeight(1);
+    rule->setStyleSheet(QStringLiteral("background:#3A3D45; border:none; margin:0 8px;"));
+    root->addWidget(rule);
+
+    auto* scroll = new QScrollArea(popup);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setStyleSheet(QStringLiteral(
+        "QScrollBar:vertical{background:#0A0C0F; width:8px; margin:2px;}"
+        "QScrollBar::handle:vertical{background:#4A4D55; border-radius:3px; min-height:24px;}"
+        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"));
+
+    auto* list = new QWidget;
+    list->setObjectName(QStringLiteral("popupList"));
+    auto* listLay = new QVBoxLayout(list);
+    listLay->setContentsMargins(2, 4, 2, 4);
+    listLay->setSpacing(1);
+
+    struct ColoredType {
+        SourceType type;
+        const char* label;
+        const char* color;
+    };
+    const ColoredType types[] = {
+        {SourceType::Camera, "Video Capture Device", "#22C55E"},
+        {SourceType::Display, "Display Capture", "#4F9EFF"},
+        {SourceType::Window, "Window Capture", "#38BDF8"},
+        {SourceType::Game, "Game Capture", "#A3E635"},
+        {SourceType::AudioInput, "Audio Input Capture", "#F472B6"},
+        {SourceType::AudioOutput, "Audio Output Capture", "#FB7185"},
+        {SourceType::Image, "Image", "#FBBF24"},
+        {SourceType::Media, "Media Source", "#FB923C"},
+        {SourceType::Text, "Text (GDI+)", "#EC4899"},
+        {SourceType::Browser, "Browser", "#3B82F6"},
+        {SourceType::Color, "Color Source", "#EF4444"},
+        {SourceType::Scoreboard, "Scoreboard", "#A855F7"},
+        {SourceType::LowerThird, "Lower Third", "#F472B6"},
+        {SourceType::Ndi, "NDI Source", "#06B6D4"},
+        {SourceType::Alert, "Alert / Stinger", "#F59E0B"},
+    };
 
     SourceType chosen = SourceType::Unknown;
-    for (const auto& e : kMenuTypes) {
-        QAction* act = menu.addAction(QString::fromUtf8(e.label));
-        act->setData(static_cast<int>(e.type));
+    QEventLoop loop;
+
+    for (const auto& e : types) {
+        auto* row = new QFrame(list);
+        row->setObjectName(QStringLiteral("typeRow"));
+        row->setCursor(Qt::PointingHandCursor);
+        row->setFixedHeight(34);
+        row->setAttribute(Qt::WA_Hover, true);
+        row->setStyleSheet(QStringLiteral(
+            "QFrame#typeRow{background:transparent; border-radius:4px;}"
+            "QFrame#typeRow:hover{background:#102438;}"));
+        auto* rowLay = new QHBoxLayout(row);
+        rowLay->setContentsMargins(10, 0, 10, 0);
+        rowLay->setSpacing(10);
+        auto* dot = new QFrame(row);
+        dot->setFixedSize(7, 7);
+        dot->setStyleSheet(QStringLiteral(
+            "background:%1; border-radius:3px; border:none;").arg(QString::fromLatin1(e.color)));
+        auto* lab = new QLabel(QString::fromUtf8(e.label), row);
+        lab->setStyleSheet(QStringLiteral(
+            "background:transparent; color:#E0E2E8; font-size:12px; font-weight:600; border:none;"));
+        lab->setAttribute(Qt::WA_TransparentForMouseEvents);
+        rowLay->addWidget(dot, 0, Qt::AlignVCenter);
+        rowLay->addWidget(lab, 1);
+        row->setProperty("sourceType", static_cast<int>(e.type));
+        listLay->addWidget(row);
     }
-    if (QAction* picked = menu.exec(globalPos)) {
-        if (picked->data().isValid())
-            chosen = static_cast<SourceType>(picked->data().toInt());
+    listLay->addStretch(1);
+    scroll->setWidget(list);
+    root->addWidget(scroll, 1);
+
+    // Route clicks on type rows (hover via stylesheet; click via filter on popup).
+    class ClickFilter : public QObject {
+    public:
+        SourceType* out = nullptr;
+        QEventLoop* loop = nullptr;
+        QWidget* popup = nullptr;
+        bool eventFilter(QObject* obj, QEvent* ev) override
+        {
+            if (ev->type() == QEvent::MouseButtonRelease) {
+                if (auto* w = qobject_cast<QWidget*>(obj)) {
+                    const QVariant v = w->property("sourceType");
+                    if (v.isValid() && out && loop && popup) {
+                        *out = static_cast<SourceType>(v.toInt());
+                        loop->quit();
+                        popup->close();
+                        return true;
+                    }
+                }
+            }
+            return QObject::eventFilter(obj, ev);
+        }
+    };
+    auto* filter = new ClickFilter();
+    filter->out = &chosen;
+    filter->loop = &loop;
+    filter->popup = popup;
+    filter->setParent(popup);
+    for (auto* child : list->findChildren<QFrame*>(QStringLiteral("typeRow")))
+        child->installEventFilter(filter);
+
+    popup->setFixedWidth(268);
+    const int rows = int(sizeof(types) / sizeof(types[0]));
+    const int idealH = 52 + rows * 34 + 16;
+    QScreen* screen = QGuiApplication::screenAt(globalPos);
+    if (!screen && parent && parent->window())
+        screen = parent->window()->screen();
+    if (!screen)
+        screen = QGuiApplication::primaryScreen();
+    const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
+    const int maxH = qMin(idealH, qMin(440, avail.height() - 32));
+    popup->setFixedHeight(maxH);
+
+    int x = globalPos.x();
+    int y = globalPos.y() - maxH; // open upward from Sources +
+    if (y < avail.top() + 8) {
+        // Not enough room above — open downward but clamp to screen.
+        y = globalPos.y();
+        if (y + maxH > avail.bottom() - 8)
+            y = avail.bottom() - maxH - 8;
     }
+    if (x + popup->width() > avail.right() - 8)
+        x = avail.right() - popup->width() - 8;
+    if (x < avail.left() + 8)
+        x = avail.left() + 8;
+    if (y < avail.top() + 8)
+        y = avail.top() + 8;
+
+    popup->move(x, y);
+    popup->show();
+    popup->raise();
+
+    QObject::connect(popup, &QObject::destroyed, &loop, &QEventLoop::quit);
+    loop.exec();
     return chosen;
 }
 
