@@ -44,12 +44,20 @@ void SourcePropsPreviewWidget::setPlaceholder(const QString& msg)
 void SourcePropsPreviewWidget::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, false);
+    // Checker / void fill
     p.fillRect(rect(), QColor(8, 10, 13));
+    // Inner bezel so the preview reads as a framed viewport
+    p.setPen(QPen(QColor(42, 45, 53), 1));
+    p.drawRect(rect().adjusted(0, 0, -1, -1));
+    p.setPen(QPen(QColor(26, 29, 34), 1));
+    p.drawRect(rect().adjusted(1, 1, -2, -2));
+
     if (!m_frame.isNull()) {
-        const QSize box = size();
-        QImage scaled = m_frame.scaled(box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        const int x = (box.width() - scaled.width()) / 2;
-        const int y = (box.height() - scaled.height()) / 2;
+        const QRect box = rect().adjusted(4, 4, -4, -4);
+        QImage scaled = m_frame.scaled(box.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const int x = box.x() + (box.width() - scaled.width()) / 2;
+        const int y = box.y() + (box.height() - scaled.height()) / 2;
         p.drawImage(x, y, scaled);
         return;
     }
@@ -83,8 +91,16 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
 
     setStyleSheet(QStringLiteral(
         "QDialog#sourcePropertiesDialog {"
+        "  background:#0A0C0F;"
+        "}"
+        "QDialog#sourcePropertiesDialog QFrame#dialogShell {"
         "  background:#12151A;"
-        "  border:2px solid #4F9EFF;"
+        "  border:1px solid #5A6478;"
+        "  border-radius:0px;"
+        "}"
+        "QDialog#sourcePropertiesDialog QFrame#previewCard {"
+        "  background:#0A0C10;"
+        "  border:1px solid #3A3D45;"
         "}"
         "QDialogButtonBox QPushButton {"
         "  min-width:88px; min-height:28px; padding:4px 14px;"
@@ -100,25 +116,32 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
         "QDialogButtonBox QPushButton#defaultsBtn:hover { border-color:#4F9EFF; color:#fff; }"));
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
+    root->setContentsMargins(10, 10, 10, 10);
     root->setSpacing(0);
 
-    auto* accent = new QFrame(this);
+    auto* shell = new QFrame(this);
+    shell->setObjectName(QStringLiteral("dialogShell"));
+    auto* shellLay = new QVBoxLayout(shell);
+    shellLay->setContentsMargins(0, 0, 0, 0);
+    shellLay->setSpacing(0);
+
+    auto* accent = new QFrame(shell);
     accent->setFixedHeight(3);
     accent->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
         "stop:0 #4F9EFF, stop:0.5 #A855F7, stop:1 #FF5A2C); border:none;"));
-    root->addWidget(accent);
+    shellLay->addWidget(accent);
 
     // OBS BasicProperties: live source preview sits above the property form.
-    m_previewHost = new QWidget(this);
+    m_previewHost = new QWidget(shell);
     m_previewHost->setObjectName(QStringLiteral("sourcePropsPreviewHost"));
     m_previewHost->setStyleSheet(QStringLiteral(
         "QWidget#sourcePropsPreviewHost {"
-        "  background:#0A0C10; border-bottom:1px solid #2A2D35;"
+        "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #12151A,stop:1 #0A0C10);"
+        "  border-bottom:1px solid #2A2D35;"
         "}"));
     auto* previewLay = new QVBoxLayout(m_previewHost);
-    previewLay->setContentsMargins(10, 8, 10, 10);
+    previewLay->setContentsMargins(12, 10, 12, 12);
     previewLay->setSpacing(6);
 
     m_previewCaption = new QLabel(QStringLiteral("PREVIEW"), m_previewHost);
@@ -127,25 +150,32 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
         "font-family:'DM Sans'; background:transparent; border:none;"));
     previewLay->addWidget(m_previewCaption);
 
-    m_preview = new SourcePropsPreviewWidget(m_previewHost);
-    m_preview->setMinimumHeight(220);
-    previewLay->addWidget(m_preview, 1);
-    root->addWidget(m_previewHost, 0);
+    auto* previewCard = new QFrame(m_previewHost);
+    previewCard->setObjectName(QStringLiteral("previewCard"));
+    auto* cardLay = new QVBoxLayout(previewCard);
+    cardLay->setContentsMargins(3, 3, 3, 3);
+    cardLay->setSpacing(0);
+
+    m_preview = new SourcePropsPreviewWidget(previewCard);
+    m_preview->setMinimumHeight(200);
+    cardLay->addWidget(m_preview, 1);
+    previewLay->addWidget(previewCard, 1);
+    shellLay->addWidget(m_previewHost, 0);
 
     const bool showPreview = sourceHasVideoPreview();
     m_previewHost->setVisible(showPreview);
     if (!showPreview && m_preview)
         m_preview->setPlaceholder(QStringLiteral("Audio source — no video preview"));
 
-    m_props = new SourcePropertiesWidget(m_engine, this);
+    m_props = new SourcePropertiesWidget(m_engine, shell);
     m_props->setDialogMode(true);
-    root->addWidget(m_props, 1);
+    shellLay->addWidget(m_props, 1);
 
-    auto* foot = new QWidget(this);
+    auto* foot = new QWidget(shell);
     foot->setStyleSheet(QStringLiteral(
-        "background:#0F1114; border-top:1px solid #3A3D45;"));
+        "background:#0C0E12; border-top:1px solid #3A3D45;"));
     auto* footLay = new QHBoxLayout(foot);
-    footLay->setContentsMargins(12, 10, 12, 10);
+    footLay->setContentsMargins(14, 10, 14, 10);
 
     auto* defaults = new QPushButton(QStringLiteral("Defaults"), foot);
     defaults->setObjectName(QStringLiteral("defaultsBtn"));
@@ -169,7 +199,9 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     footLay->addWidget(defaults);
     footLay->addStretch();
     footLay->addWidget(box);
-    root->addWidget(foot);
+    shellLay->addWidget(foot);
+
+    root->addWidget(shell, 1);
 
     refreshTitle();
     // Pin/attach on first tick so dialog chrome appears before Browser helper start().

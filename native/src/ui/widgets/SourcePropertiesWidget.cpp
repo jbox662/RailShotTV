@@ -325,17 +325,40 @@ void SourcePropertiesWidget::setDialogMode(bool on)
             "QWidget#inputSettingsDialogBody {"
             "  background:#12151A; border:none;"
             "}"
-            "QTabBar::tab { background:#12151A; color:#8892A4; padding:9px 12px; font-size:10px; font-weight:800;"
-            "  border:1px solid #2A2D35; border-bottom:2px solid transparent; }"
-            "QTabBar::tab:selected { color:#7AB8FF; border-bottom:2px solid #4F9EFF; background:#0C1830; }"
-            "QLineEdit, QDoubleSpinBox { background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8;"
-            "  border-radius:3px; padding:5px 7px; font-size:11px; }"
-            "QLineEdit:focus, QDoubleSpinBox:focus { border:2px solid #4F9EFF; }"
-            "QLabel#sectionTitle { color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px; }"));
+            "QWidget#inputSettingsDialogBody QTabWidget::pane {"
+            "  background:#0E1014;"
+            "  border:1px solid #2A2D35;"
+            "  border-top:1px solid #3A3D45;"
+            "  top:-1px;"
+            "  margin:0 10px 10px 10px;"
+            "}"
+            "QTabBar::tab {"
+            "  background:#16181E; color:#8892A4; padding:8px 14px; font-size:10px; font-weight:800;"
+            "  border:1px solid #2A2D35; border-bottom:none; margin-right:2px;"
+            "}"
+            "QTabBar::tab:selected {"
+            "  color:#E8F0FF; border:1px solid #4F9EFF; border-bottom:1px solid #0E1014;"
+            "  background:#0C1830;"
+            "}"
+            "QTabBar::tab:hover:!selected { color:#C8CAD0; border-color:#3A3D45; }"
+            "QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {"
+            "  background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8;"
+            "  border-radius:3px; padding:5px 7px; font-size:11px;"
+            "}"
+            "QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {"
+            "  border:1px solid #4F9EFF;"
+            "}"
+            "QLabel#sectionTitle { color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px; }"
+            "QCheckBox { color:#C8CAD0; spacing:6px; }"
+            "QFrame#propsInfoCard {"
+            "  background:#0C1420; border:1px solid #2A3A55; border-left:3px solid #4F9EFF;"
+            "}"));
         if (m_header) {
             m_header->setStyleSheet(QStringLiteral(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.22),stop:0.55 transparent);"
-                "border-bottom:1px solid #3A3D45;"));
+                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 rgba(79,158,255,0.28),stop:0.45 rgba(79,158,255,0.08),stop:1 transparent);"
+                "border-bottom:1px solid #3A3D45;"
+                "border-left:3px solid #4F9EFF;"));
         }
         if (m_closeBtn) m_closeBtn->hide();
         if (m_footer) m_footer->hide();

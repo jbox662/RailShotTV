@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QFontComboBox>
+#include <QFrame>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -625,10 +626,23 @@ public:
         : SourcePropertiesPanel(engine, parent)
     {
         auto* lay = new QVBoxLayout(this);
-        auto* lab = new QLabel(note, this);
+        lay->setContentsMargins(4, 4, 4, 4);
+        auto* card = new QFrame(this);
+        card->setObjectName(QStringLiteral("propsInfoCard"));
+        auto* cardLay = new QVBoxLayout(card);
+        cardLay->setContentsMargins(12, 12, 12, 12);
+        cardLay->setSpacing(6);
+        auto* title = new QLabel(QStringLiteral("Controlled from dock"), card);
+        title->setStyleSheet(QStringLiteral(
+            "color:#7AB8FF; font-size:10px; font-weight:800; letter-spacing:0.5px;"
+            "background:transparent; border:none;"));
+        auto* lab = new QLabel(note, card);
         lab->setWordWrap(true);
-        lab->setStyleSheet(QStringLiteral("color:#A0A8B8;"));
-        lay->addWidget(lab);
+        lab->setStyleSheet(QStringLiteral(
+            "color:#C8CAD0; font-size:12px; line-height:1.35; background:transparent; border:none;"));
+        cardLay->addWidget(title);
+        cardLay->addWidget(lab);
+        lay->addWidget(card);
         lay->addStretch();
     }
     void loadFrom(const SourceItem&) override {}
