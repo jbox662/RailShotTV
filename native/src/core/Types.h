@@ -183,4 +183,9 @@ QString transitionTypeToString(TransitionType t);
 TransitionType transitionTypeFromString(const QString& s);
 QString newId(const QString& prefix = QStringLiteral("id"));
 
+/// OBS_SOURCE_AUDIO equivalent — this source type can produce audio.
+bool sourceTypeSupportsAudio(SourceType t);
+/// OBS mixer visibility (incl. Browser “Control audio via OBS”).
+bool sourceAppearsInAudioMixer(const SourceItem& src);
+
 } // namespace railshot

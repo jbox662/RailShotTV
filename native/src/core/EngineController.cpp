@@ -16,6 +16,7 @@
 #include "core/Logger.h"
 #include <QDateTime>
 #include <QDir>
+#include <QHash>
 #include <QImage>
 #include <QTimer>
 #include <QJsonArray>
@@ -115,9 +116,13 @@ bool EngineController::initialize(QString* error)
 
     m_capture->setSourceAudioCallback([this](const QString& id, const QString& name, const AudioBuffer& buf) {
         if (!m_audio) return;
+        const auto snap = m_sceneGraph->snapshot();
+        if (const auto* s = snap.findSourceAnywhere(id)) {
+            if (!sourceAppearsInAudioMixer(*s))
+                return; // OBS: no mixer / no OBS-routed audio for this source
+        }
         const bool created = m_audio->ensureChannelEx(id, name);
         if (created) {
-            const auto snap = m_sceneGraph->snapshot();
             if (const auto* s = snap.findSourceAnywhere(id))
                 syncSourceAudioToGraph(id, s->name, s->settings);
             else
@@ -126,7 +131,11 @@ bool EngineController::initialize(QString* error)
         m_audio->inject(id, buf);
     });
     connect(m_capture.get(), &CaptureManager::sourceStopped, this, [this](const QString& id) {
-        if (m_audio) m_audio->removeChannel(id);
+        // Keep mixer strip while the source still exists in the project (OBS behavior).
+        if (!m_audio || !m_sceneGraph) return;
+        if (m_sceneGraph->snapshot().findSourceAnywhere(id))
+            return;
+        m_audio->removeChannel(id);
     });
 
     m_transition = new TransitionEngine(this);
@@ -201,6 +210,7 @@ bool EngineController::initialize(QString* error)
     m_initialized = true;
     m_state = EngineState::Previewing;
     rebuildSourcesForActiveScenes();
+    syncMixerChannelsFromProject();
     Logger::info(QStringLiteral("EngineController initialized"));
     return true;
 }
@@ -241,6 +251,7 @@ bool EngineController::loadProject(const QString& path, QString* error)
         }
     }
     rebuildSourcesForActiveScenes();
+    syncMixerChannelsFromProject();
     emit projectLoaded(path);
     return true;
 }
@@ -271,6 +282,7 @@ bool EngineController::newProject()
     if (m_iso) m_iso->stopAll();
     m_sceneGraph->replace(p);
     rebuildSourcesForActiveScenes();
+    syncMixerChannelsFromProject();
     return true;
 }
 
@@ -366,8 +378,10 @@ QString EngineController::addSource(SourceType type, const QString& name, const 
             s->visible = true;
         }
     });
-    if (!id.isEmpty())
+    if (!id.isEmpty()) {
         rebuildSourcesForActiveScenes();
+        syncMixerChannelsFromProject();
+    }
     return id;
 }
 
@@ -385,6 +399,9 @@ void EngineController::removeSource(const QString& sourceId)
         }
     });
     m_capture->detachSource(sourceId);
+    if (m_audio)
+        m_audio->removeChannel(sourceId);
+    syncMixerChannelsFromProject();
 }
 
 void EngineController::setSourceVisible(const QString& sourceId, bool visible)
@@ -401,6 +418,7 @@ void EngineController::setSourceName(const QString& sourceId, const QString& nam
         if (auto* s = p.findSourceAnywhere(sourceId))
             s->name = name;
     });
+    syncMixerChannelsFromProject();
 }
 
 void EngineController::setSourceLocked(const QString& sourceId, bool locked)
@@ -470,7 +488,8 @@ void EngineController::updateSourceSettings(const QString& sourceId, const QJson
     });
     if (found) {
         m_capture->updateSource(updated);
-        syncSourceAudioToGraph(sourceId, updated.name, settings);
+        syncSourceAudioToGraph(sourceId, updated.name, updated.settings);
+        syncMixerChannelsFromProject();
     }
 }
 
@@ -478,8 +497,20 @@ void EngineController::syncSourceAudioToGraph(const QString& sourceId, const QSt
 {
     if (!m_audio || sourceId.isEmpty())
         return;
-    if (!settings.contains(QStringLiteral("audioVolume")) && !settings.contains(QStringLiteral("audioMute")))
+    SourceItem probe;
+    probe.id = sourceId;
+    probe.name = name;
+    probe.settings = settings;
+    if (const auto* s = m_sceneGraph->snapshot().findSourceAnywhere(sourceId))
+        probe.type = s->type;
+    if (!sourceAppearsInAudioMixer(probe)) {
+        m_audio->removeChannel(sourceId);
         return;
+    }
+    if (!settings.contains(QStringLiteral("audioVolume")) && !settings.contains(QStringLiteral("audioMute"))) {
+        m_audio->ensureChannel(sourceId, name);
+        return;
+    }
     m_audio->ensureChannel(sourceId, name);
     auto state = m_audio->channelState(sourceId);
     state.id = sourceId;
@@ -492,6 +523,21 @@ void EngineController::syncSourceAudioToGraph(const QString& sourceId, const QSt
     if (settings.contains(QStringLiteral("audioMute")))
         state.muted = settings.value(QStringLiteral("audioMute")).toBool(false);
     m_audio->setChannelState(sourceId, state);
+}
+
+void EngineController::syncMixerChannelsFromProject()
+{
+    if (!m_audio || !m_sceneGraph)
+        return;
+    QHash<QString, QString> keep;
+    const auto project = m_sceneGraph->snapshot();
+    for (const auto& sc : project.scenes) {
+        for (const auto& src : sc.sources) {
+            if (sourceAppearsInAudioMixer(src))
+                keep.insert(src.id, src.name);
+        }
+    }
+    m_audio->syncDynamicChannels(keep);
 }
 
 void EngineController::onScoreboardChanged()

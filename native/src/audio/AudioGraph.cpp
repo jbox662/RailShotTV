@@ -190,6 +190,44 @@ bool AudioGraph::ensureChannelEx(const QString& id, const QString& name)
     return created;
 }
 
+void AudioGraph::syncDynamicChannels(const QHash<QString, QString>& keepIdToName)
+{
+    bool changed = false;
+    {
+        std::lock_guard lock(m_mutex);
+        QStringList drop;
+        for (auto it = m_channels.constBegin(); it != m_channels.constEnd(); ++it) {
+            const QString& id = it.key();
+            if (id == QLatin1String("desktop") || id == QLatin1String("mic") || id == QLatin1String("master"))
+                continue;
+            if (!keepIdToName.contains(id))
+                drop.append(id);
+        }
+        for (const QString& id : drop) {
+            m_channels.remove(id);
+            m_pending.remove(id);
+            m_meters.remove(id);
+            m_delayLines.remove(id);
+            changed = true;
+        }
+        for (auto it = keepIdToName.constBegin(); it != keepIdToName.constEnd(); ++it) {
+            auto chIt = m_channels.find(it.key());
+            if (chIt == m_channels.end()) {
+                AudioChannelState ch;
+                ch.id = it.key();
+                ch.name = it.value();
+                m_channels.insert(it.key(), ch);
+                changed = true;
+            } else if (!it.value().isEmpty() && chIt->name != it.value()) {
+                chIt->name = it.value();
+                changed = true;
+            }
+        }
+    }
+    if (changed)
+        emit channelsChanged();
+}
+
 void AudioGraph::removeChannel(const QString& id)
 {
     if (id == QLatin1String("desktop") || id == QLatin1String("mic") || id == QLatin1String("master"))

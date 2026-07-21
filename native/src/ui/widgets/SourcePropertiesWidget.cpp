@@ -216,21 +216,24 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     layers->setStyleSheet(QStringLiteral("color:#808898; padding:16px;"));
     m_tabs->addTab(layers, QStringLiteral("Layers"));
 
-    // Audio
-    auto* audio = new QWidget(m_tabs);
-    auto* aForm = new QFormLayout(audio);
+    // Audio — only for OBS_SOURCE_AUDIO types (hidden for Image/Text/etc.)
+    m_audioTab = new QWidget(m_tabs);
+    auto* aForm = new QFormLayout(m_audioTab);
     aForm->setContentsMargins(14, 12, 14, 12);
-    m_volume = new QSlider(Qt::Horizontal, audio);
+    m_volume = new QSlider(Qt::Horizontal, m_audioTab);
     m_volume->setRange(0, 200);
     m_volume->setValue(100);
-    m_audioMute = new QCheckBox(QStringLiteral("Mute"), audio);
+    m_audioMute = new QCheckBox(QStringLiteral("Mute"), m_audioTab);
     aForm->addRow(QStringLiteral("Volume %"), m_volume);
     aForm->addRow(m_audioMute);
-    auto* audioNote = new QLabel(QStringLiteral("Per-source audio routes through the mixer channels."), audio);
+    auto* audioNote = new QLabel(
+        QStringLiteral("Matches OBS: only sources that produce audio appear in the mixer. "
+                       "Browser needs “Control audio via OBS” enabled."),
+        m_audioTab);
     audioNote->setWordWrap(true);
     audioNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
     aForm->addRow(audioNote);
-    m_tabs->addTab(audio, QStringLiteral("Audio"));
+    m_audioTabIndex = m_tabs->addTab(m_audioTab, QStringLiteral("Audio"));
 
     formLay->addWidget(m_tabs, 1);
 
@@ -393,8 +396,14 @@ void SourcePropertiesWidget::applyAll()
     settings.insert(QStringLiteral("chromaKey"), m_chromaKey && m_chromaKey->isChecked());
     settings.insert(QStringLiteral("chromaSimilarity"), m_chromaSim ? m_chromaSim->value() : 40);
     settings.insert(QStringLiteral("blur"), m_blur ? m_blur->value() : 0);
-    settings.insert(QStringLiteral("audioVolume"), m_volume->value());
-    settings.insert(QStringLiteral("audioMute"), m_audioMute->isChecked());
+    // Only persist audio keys for types that can appear in the OBS mixer.
+    if (sourceTypeSupportsAudio(src->type)) {
+        settings.insert(QStringLiteral("audioVolume"), m_volume->value());
+        settings.insert(QStringLiteral("audioMute"), m_audioMute->isChecked());
+    } else {
+        settings.remove(QStringLiteral("audioVolume"));
+        settings.remove(QStringLiteral("audioMute"));
+    }
     m_engine->updateSourceSettings(src->id, settings);
     emit closeRequested();
 }
@@ -441,6 +450,16 @@ void SourcePropertiesWidget::rebuild()
                 m_volume->setValue(int(std::lround(std::clamp(live.volume, 0.f, 20.f) * 100.f)));
                 m_audioMute->setChecked(live.muted);
             }
+        }
+
+        if (m_audioTabIndex >= 0) {
+            const bool showAudio = sourceTypeSupportsAudio(src->type);
+            m_tabs->setTabVisible(m_audioTabIndex, showAudio);
+            // Browser volume controls only apply when routed through OBS.
+            const bool browserControlled = src->type != SourceType::Browser
+                || src->settings.value(QStringLiteral("controlAudioViaObs")).toBool(false);
+            m_volume->setEnabled(browserControlled);
+            m_audioMute->setEnabled(browserControlled);
         }
 
         if (!m_sourcePanel || m_panelType != src->type) {

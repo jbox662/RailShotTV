@@ -268,6 +268,10 @@ public:
         m_fps->setValue(15);
         m_hw = new QCheckBox(QStringLiteral("Hardware acceleration"), this);
         m_hw->setChecked(true);
+        m_controlAudio = new QCheckBox(QStringLiteral("Control audio via OBS"), this);
+        m_controlAudio->setChecked(false);
+        m_controlAudio->setToolTip(QStringLiteral(
+            "When enabled, browser audio is routed through the Audio Mixer (OBS default: off)."));
         auto* refresh = new QPushButton(QStringLiteral("Reload page"), this);
         connect(refresh, &QPushButton::clicked, this, [this] {
             // bump a token so BrowserSource reloads
@@ -285,12 +289,14 @@ public:
         form->addRow(QStringLiteral("Height"), m_h);
         form->addRow(QStringLiteral("FPS"), m_fps);
         form->addRow(m_hw);
+        form->addRow(m_controlAudio);
         form->addRow(refresh);
         wireChanged(this, m_url);
         wireChanged(this, m_w);
         wireChanged(this, m_h);
         wireChanged(this, m_fps);
         wireChanged(this, m_hw);
+        wireChanged(this, m_controlAudio);
     }
     void loadFrom(const SourceItem& src) override
     {
@@ -299,6 +305,7 @@ public:
         m_h->setValue(src.settings.value(QStringLiteral("height")).toInt(720));
         m_fps->setValue(src.settings.value(QStringLiteral("fps")).toInt(15));
         m_hw->setChecked(src.settings.value(QStringLiteral("hwAccel")).toBool(true));
+        m_controlAudio->setChecked(src.settings.value(QStringLiteral("controlAudioViaObs")).toBool(false));
     }
     void applyTo(QJsonObject& s) const override
     {
@@ -307,6 +314,7 @@ public:
         s.insert(QStringLiteral("height"), m_h->value());
         s.insert(QStringLiteral("fps"), m_fps->value());
         s.insert(QStringLiteral("hwAccel"), m_hw->isChecked());
+        s.insert(QStringLiteral("controlAudioViaObs"), m_controlAudio->isChecked());
     }
     void resetDefaults(QJsonObject& s) const override
     {
@@ -315,6 +323,7 @@ public:
         s.insert(QStringLiteral("height"), 720);
         s.insert(QStringLiteral("fps"), 15);
         s.insert(QStringLiteral("hwAccel"), true);
+        s.insert(QStringLiteral("controlAudioViaObs"), false);
     }
 
 private:
@@ -323,6 +332,7 @@ private:
     QSpinBox* m_h = nullptr;
     QSpinBox* m_fps = nullptr;
     QCheckBox* m_hw = nullptr;
+    QCheckBox* m_controlAudio = nullptr;
 };
 
 class TextPanel : public SourcePropertiesPanel {

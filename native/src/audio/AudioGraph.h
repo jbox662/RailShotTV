@@ -38,6 +38,8 @@ public:
     /// Returns true if the channel was newly created.
     bool ensureChannelEx(const QString& id, const QString& name);
     void removeChannel(const QString& id);
+    /// OBS-style: keep only these dynamic source strips (+ desktop/mic). Emits once.
+    void syncDynamicChannels(const QHash<QString, QString>& keepIdToName);
     /// Inject a decoded media/NDI (or other) buffer into the mix.
     void inject(const QString& channelId, const AudioBuffer& buffer);
 

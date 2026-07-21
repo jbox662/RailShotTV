@@ -288,8 +288,16 @@ void SourcePropertiesDialog::onDefaults()
     settings.insert(QStringLiteral("chromaKey"), false);
     settings.insert(QStringLiteral("chromaSimilarity"), 40);
     settings.insert(QStringLiteral("blur"), 0);
-    settings.insert(QStringLiteral("audioVolume"), 100);
-    settings.insert(QStringLiteral("audioMute"), false);
+    if (src && sourceTypeSupportsAudio(src->type)) {
+        settings.insert(QStringLiteral("audioVolume"), 100);
+        settings.insert(QStringLiteral("audioMute"), false);
+        if (src->type == SourceType::Browser)
+            settings.insert(QStringLiteral("controlAudioViaObs"), false);
+    } else {
+        settings.remove(QStringLiteral("audioVolume"));
+        settings.remove(QStringLiteral("audioMute"));
+        settings.remove(QStringLiteral("controlAudioViaObs"));
+    }
     m_engine->updateSourceSettings(m_sourceId, settings);
     if (m_props)
         m_props->reload();

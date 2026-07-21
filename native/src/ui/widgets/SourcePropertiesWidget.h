@@ -65,6 +65,8 @@ private:
     QSlider* m_blur = nullptr;
     QSlider* m_volume = nullptr;
     QCheckBox* m_audioMute = nullptr;
+    QWidget* m_audioTab = nullptr;
+    int m_audioTabIndex = -1;
     QWidget* m_sourceTab = nullptr;
     QVBoxLayout* m_sourceTabLay = nullptr;
     SourcePropertiesPanel* m_sourcePanel = nullptr;

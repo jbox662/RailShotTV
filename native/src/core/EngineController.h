@@ -110,6 +110,8 @@ private:
     void updateEngineState();
     void tickIsoRecorders(qint64 ptsUs);
     void syncSourceAudioToGraph(const QString& sourceId, const QString& name, const QJsonObject& settings);
+    /// OBS mixer: only audio-capable sources (Browser needs controlAudioViaObs).
+    void syncMixerChannelsFromProject();
 
     std::unique_ptr<SceneGraph> m_sceneGraph;
     std::unique_ptr<SettingsStore> m_settings;

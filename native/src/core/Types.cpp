@@ -76,6 +76,42 @@ TransitionType transitionTypeFromString(const QString& s)
     return TransitionType::Cut;
 }
 
+bool sourceTypeSupportsAudio(SourceType t)
+{
+    // Match OBS output_flags OBS_SOURCE_AUDIO (not video-only types).
+    switch (t) {
+    case SourceType::Camera:      // dshow / MF: video+audio
+    case SourceType::Window:      // window capture can include app audio
+    case SourceType::Game:        // game capture can include app audio
+    case SourceType::Media:       // ffmpeg/vlc media
+    case SourceType::Ndi:
+    case SourceType::AudioInput:
+    case SourceType::AudioOutput:
+    case SourceType::Browser:     // CEF browser (gated by controlAudioViaObs)
+        return true;
+    case SourceType::Display:     // display capture is video-only; Desktop Audio is separate
+    case SourceType::Image:
+    case SourceType::Text:
+    case SourceType::Color:
+    case SourceType::Alert:
+    case SourceType::Scoreboard:
+    case SourceType::LowerThird:
+    case SourceType::Unknown:
+    default:
+        return false;
+    }
+}
+
+bool sourceAppearsInAudioMixer(const SourceItem& src)
+{
+    if (!sourceTypeSupportsAudio(src.type))
+        return false;
+    // OBS Browser: mixer strip only when "Control audio via OBS" is enabled (default off).
+    if (src.type == SourceType::Browser)
+        return src.settings.value(QStringLiteral("controlAudioViaObs")).toBool(false);
+    return true;
+}
+
 QJsonObject Transform::toJson() const
 {
     return QJsonObject{
