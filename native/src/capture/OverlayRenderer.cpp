@@ -212,14 +212,17 @@ void drawPoolBall(QPainter& p, const QPointF& c, qreal r, int number, bool pocke
         p.setBrush(pocketed ? QColor(col.red(), col.green(), col.blue(), 90) : col);
         p.drawEllipse(c, r, r);
     }
-    // Number disc
-    const qreal nr = r * (stripe || number == 8 ? 0.42 : 0.38);
+    // Number disc — keep digit inside the white circle
+    const qreal nr = r * (stripe || number == 8 ? 0.48 : 0.44);
     p.setPen(Qt::NoPen);
     p.setBrush(pocketed ? QColor(255, 255, 255, 120) : Qt::white);
     p.drawEllipse(c, nr, nr);
     p.setPen(pocketed ? QColor(40, 40, 40, 120) : QColor(20, 20, 24));
-    p.setFont(QFont(QStringLiteral("Segoe UI"), qMax(6, int(r * 0.7)), QFont::Bold));
-    p.drawText(QRectF(c.x() - r, c.y() - r, r * 2, r * 2), Qt::AlignCenter, QString::number(number));
+    QFont numFont(QStringLiteral("DM Sans"));
+    numFont.setBold(true);
+    numFont.setPixelSize(qMax(7, int(r * 0.95)));
+    p.setFont(numFont);
+    p.drawText(QRectF(c.x() - nr, c.y() - nr, nr * 2, nr * 2), Qt::AlignCenter, QString::number(number));
 }
 
 void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask, int ballCount = 15)
@@ -227,18 +230,31 @@ void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask, int ba
     const int n = qBound(1, ballCount, 15);
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(245, 247, 250));
-    p.drawRoundedRect(strip, 2, 2);
-    const qreal gap = 5;
-    const qreal usableW = strip.width() - gap * (n + 1);
-    // Keep balls circular: diameter limited by strip height and available width
-    const qreal ballD = qMin(strip.height() - 6.0, usableW / n);
+    p.drawRoundedRect(strip, 3, 3);
+
+    // Inset padding — spread balls across the FULL bar (not a tight centered clump).
+    constexpr qreal padX = 12.0;
+    constexpr qreal padY = 4.0;
+    constexpr qreal minGap = 6.0;
+    const QRectF inner = QRectF(strip).adjusted(padX, padY, -padX, -padY);
+    if (inner.width() < 8 || inner.height() < 8)
+        return;
+
+    // Diameter limited by height and by width with a minimum gap between balls.
+    const qreal maxFromHeight = inner.height();
+    const qreal maxFromWidth = (inner.width() - minGap * (n - 1)) / qreal(n);
+    const qreal ballD = qMax(10.0, qMin(maxFromHeight, maxFromWidth));
     const qreal r = ballD * 0.5;
-    const qreal span = n * ballD + (n - 1) * gap;
-    const qreal startX = strip.center().x() - span * 0.5 + r;
-    const qreal cy = strip.center().y();
+
+    // Leftover width becomes equal gaps (including side margins) so balls are uniform.
+    const qreal leftover = qMax(0.0, inner.width() - ballD * n);
+    const qreal gap = leftover / qreal(n + 1);
+    const qreal cy = inner.center().y();
+    qreal x = inner.left() + gap + r;
     for (int i = 1; i <= n; ++i) {
         const bool pocketed = (pocketedMask & (1 << (i - 1))) != 0;
-        drawPoolBall(p, QPointF(startX + (i - 1) * (ballD + gap), cy), r, i, pocketed);
+        drawPoolBall(p, QPointF(x, cy), r, i, pocketed);
+        x += ballD + gap;
     }
 }
 
@@ -277,7 +293,7 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
     const QString sport = state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball"));
     const bool showRack = scoreboardShowsBallRack(sport, theme, layout);
     constexpr int mainH = 58;
-    constexpr int rackH = 36;
+    constexpr int rackH = 44;
     constexpr int scoreBox = 46;
     constexpr int raceW = 120;
     constexpr int gap = 8;
@@ -341,7 +357,7 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
     p.setClipping(false);
 
     if (showRack) {
-        const QRect strip(main.left() + 12, main.bottom() + 4, main.width() - 24, rackH - 6);
+        const QRect strip(main.left() + 10, main.bottom() + 3, main.width() - 20, rackH - 5);
         drawBallRackStrip(p, strip, pocketed, ballCount);
     }
 }
@@ -603,7 +619,7 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
     const bool showRack = scoreboardShowsBallRack(
         state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball")), theme, layout);
     constexpr int mainH = 72;
-    constexpr int rackHFixed = 34;
+    constexpr int rackHFixed = 44;
     constexpr int scoreBox = 48;
     constexpr int raceW = 110;
     const int bh = mainH + (showRack ? rackHFixed : 0);
@@ -659,7 +675,7 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
                    QStringLiteral("SHOT %1").arg(clockText(clock)));
     }
     if (showRack && rackH > 8) {
-        drawBallRackStrip(p, QRect(main.left() + 8, main.bottom() + 2, main.width() - 16, rackH - 4),
+        drawBallRackStrip(p, QRect(main.left() + 10, main.bottom() + 2, main.width() - 20, rackH - 4),
                           pocketed, ballCount);
     }
 }
