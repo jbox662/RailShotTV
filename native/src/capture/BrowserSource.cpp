@@ -258,7 +258,7 @@ bool BrowserSource::start(ID3D11Device* device, QString* error)
             if (SUCCEEDED(m_device->CreateRenderTargetView(tex.Get(), nullptr, &rtv))) {
                 ComPtr<ID3D11DeviceContext> ctx;
                 m_device->GetImmediateContext(&ctx);
-                const float clear[4] = {0.08f, 0.14f, 0.28f, 1.0f}; // readable slate blue
+                const float clear[4] = {0.f, 0.f, 0.f, 0.f}; // transparent until first helper frame
                 ctx->ClearRenderTargetView(rtv.Get(), clear);
             }
             m_texture = tex.Detach();
@@ -296,7 +296,7 @@ bool BrowserSource::acquireLatest(VideoFrame& out)
     out.width = m_width;
     out.height = m_height;
     out.sourceId = m_id;
-    out.opaque = true;
+    out.opaque = false; // browser overlays composite with alpha (OBS default)
     return true;
 }
 

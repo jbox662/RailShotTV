@@ -174,7 +174,7 @@ QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
     std::atomic<bool> done{false};
     HRESULT captureHr = E_FAIL;
     const HRESULT startHr = webview->CapturePreview(
-        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
+        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, // PNG keeps alpha (JPEG is always opaque)
         stream,
         Callback<ICoreWebView2CapturePreviewCompletedHandler>(
             [&](HRESULT errorCode) -> HRESULT {
@@ -212,8 +212,10 @@ QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
             ULONG read = 0;
             if (SUCCEEDED(stream->Read(bytes.data(), ULONG(bytes.size()), &read)) && read > 0) {
                 QImage decoded;
-                if (decoded.loadFromData(bytes) && !decoded.isNull()) {
-                    if (decoded.format() != QImage::Format_ARGB32)
+                if (decoded.loadFromData(bytes, "PNG") && !decoded.isNull()) {
+                    // Keep alpha for overlay compositing (OBS browser default).
+                    if (decoded.format() != QImage::Format_ARGB32
+                        && decoded.format() != QImage::Format_ARGB32_Premultiplied)
                         decoded = decoded.convertToFormat(QImage::Format_ARGB32);
                     if (decoded.width() != w || decoded.height() != h)
                         decoded = decoded.scaled(w, h, Qt::IgnoreAspectRatio, Qt::FastTransformation);
@@ -270,9 +272,9 @@ struct WebViewHost {
         }
 
         lastFrame = QImage(w, h, QImage::Format_ARGB32);
-        lastFrame.fill(QColor(16, 20, 32));
+        lastFrame.fill(Qt::transparent);
         QPainter p(&lastFrame);
-        p.setPen(QColor(200, 210, 230));
+        p.setPen(QColor(200, 210, 230, 220));
         p.setFont(QFont(QStringLiteral("Segoe UI"), 18, QFont::Bold));
         p.drawText(lastFrame.rect(), Qt::AlignCenter, QStringLiteral("Loading browser…\n%1").arg(url));
         p.end();
@@ -301,8 +303,8 @@ struct WebViewHost {
                                 controller->put_Bounds(bounds);
                                 if (ComPtr<ICoreWebView2Controller2> c2;
                                     SUCCEEDED(controller.As(&c2))) {
-                                    // Opaque dark background (A,R,G,B) — avoid fully transparent pages.
-                                    COREWEBVIEW2_COLOR bg{255, 16, 20, 32};
+                                    // OBS browser default: transparent page chrome so overlays composite.
+                                    COREWEBVIEW2_COLOR bg{0, 0, 0, 0}; // A,R,G,B
                                     c2->put_DefaultBackgroundColor(bg);
                                 }
                                 controller->get_CoreWebView2(&webview);
@@ -310,6 +312,17 @@ struct WebViewHost {
                                     lastError = QStringLiteral("get_CoreWebView2 returned null");
                                     return E_FAIL;
                                 }
+                                // Match OBS default Custom CSS: transparent body for overlay use.
+                                webview->AddScriptToExecuteOnDocumentCreated(
+                                    L"(function(){try{"
+                                    L"var s=document.createElement('style');"
+                                    L"s.textContent='html,body{background:transparent!important;margin:0;overflow:hidden;}';"
+                                    L"document.documentElement.appendChild(s);"
+                                    L"if(document.body)document.body.style.background='transparent';"
+                                    L"}catch(e){}})();",
+                                    Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(
+                                        [](HRESULT, LPCWSTR) -> HRESULT { return S_OK; })
+                                        .Get());
                                 webview->add_ContentLoading(
                                     Callback<ICoreWebView2ContentLoadingEventHandler>(
                                         [this](ICoreWebView2*, ICoreWebView2ContentLoadingEventArgs*) -> HRESULT {
