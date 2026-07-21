@@ -13,6 +13,9 @@
 #include <QCheckBox>
 #include <QTimer>
 #include <QSignalBlocker>
+#include <QScrollArea>
+#include <QFrame>
+#include <QSizePolicy>
 #include <utility>
 
 namespace railshot {
@@ -21,29 +24,30 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("scoreboardControls"));
-    setMinimumWidth(200);
+    setMinimumWidth(180);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     setStyleSheet(QStringLiteral(
         "QWidget#scoreboardControls {"
         "  background:#0D0F12;"
         "  border:none;"
         "}"
         "QWidget#scoreboardControls QLabel#sec {"
-        "  color:#22C55E; font-size:9px; font-weight:900; letter-spacing:1px;"
+        "  color:#22C55E; font-size:8px; font-weight:900; letter-spacing:1px;"
         "  background:transparent; border:none;"
         "}"
         "QWidget#scoreboardControls QLineEdit, QWidget#scoreboardControls QSpinBox {"
         "  background:#12151A; border:1px solid #3A3D45; color:#E0E2E8;"
-        "  border-radius:3px; padding:3px 6px; font-size:11px;"
+        "  border-radius:3px; padding:2px 5px; font-size:10px; min-height:20px; max-height:22px;"
         "}"
         "QWidget#scoreboardControls QLineEdit:focus, QWidget#scoreboardControls QSpinBox:focus {"
         "  border-color:#22C55E;"
         "}"
         "QWidget#scoreboardControls QCheckBox {"
-        "  color:#A0A8B8; font-size:10px; font-weight:700; spacing:4px;"
+        "  color:#A0A8B8; font-size:9px; font-weight:700; spacing:3px;"
         "  background:transparent;"
         "}"
         "QWidget#scoreboardControls QCheckBox::indicator {"
-        "  width:14px; height:14px; border-radius:7px;"
+        "  width:12px; height:12px; border-radius:6px;"
         "  border:1px solid #3A3D45; background:#1A1D22;"
         "}"
         "QWidget#scoreboardControls QCheckBox::indicator:checked {"
@@ -51,129 +55,153 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "}"));
 
     auto* model = engine->scoreboard();
-    auto* lay = new QVBoxLayout(this);
-    lay->setContentsMargins(8, 8, 8, 8);
-    lay->setSpacing(6);
 
-    // Compact quick controls: overlay toggle + settings
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->setSpacing(0);
+
+    // Scroll so a short bottom dock never clips score / match controls.
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setStyleSheet(QStringLiteral(
+        "QScrollArea{background:transparent;border:none;}"
+        "QScrollBar:vertical{width:7px;background:#0A0C0F;}"
+        "QScrollBar::handle:vertical{background:#3A3D45;border-radius:3px;min-height:20px;}"));
+
+    auto* host = new QWidget(scroll);
+    host->setObjectName(QStringLiteral("scoreboardHost"));
+    host->setStyleSheet(QStringLiteral("QWidget#scoreboardHost{background:transparent;}"));
+    auto* lay = new QVBoxLayout(host);
+    lay->setContentsMargins(6, 4, 6, 6);
+    lay->setSpacing(4);
+
     auto* topRow = new QHBoxLayout();
-    topRow->setSpacing(6);
+    topRow->setSpacing(4);
 
-    auto* overlayBtn = new QPushButton(QStringLiteral("Overlay"), this);
+    auto* overlayBtn = new QPushButton(QStringLiteral("Overlay"), host);
     overlayBtn->setCheckable(true);
     overlayBtn->setChecked(true);
     overlayBtn->setCursor(Qt::PointingHandCursor);
-    overlayBtn->setFixedHeight(24);
+    overlayBtn->setFixedHeight(22);
     overlayBtn->setToolTip(QStringLiteral("Show / hide scoreboard overlay on Program"));
     overlayBtn->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#8892A4;"
-        "font-weight:800;font-size:10px;border-radius:3px;padding:2px 10px;}"
+        "font-weight:800;font-size:9px;border-radius:3px;padding:1px 8px;}"
         "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
         "border:1px solid #86EFAC;color:#04140A;}"));
     topRow->addWidget(overlayBtn);
 
-    auto* settingsBtn = new QPushButton(QStringLiteral("Settings"), this);
+    auto* settingsBtn = new QPushButton(QStringLiteral("Settings"), host);
     settingsBtn->setCursor(Qt::PointingHandCursor);
-    settingsBtn->setFixedHeight(24);
+    settingsBtn->setFixedHeight(22);
     settingsBtn->setToolTip(QStringLiteral("Sport, layout, theme…"));
     settingsBtn->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
-        "font-weight:700;font-size:10px;border-radius:3px;padding:2px 10px;}"
+        "font-weight:700;font-size:9px;border-radius:3px;padding:1px 8px;}"
         "QPushButton:hover{border-color:#22C55E;color:#FFFFFF;}"));
     topRow->addWidget(settingsBtn);
     topRow->addStretch(1);
     lay->addLayout(topRow);
 
-    auto* teamsLab = new QLabel(QStringLiteral("TEAMS"), this);
-    teamsLab->setObjectName(QStringLiteral("sec"));
-    lay->addWidget(teamsLab);
-
-    auto* aName = new QLineEdit(model->state().playerA, this);
-    auto* bName = new QLineEdit(model->state().playerB, this);
+    // Names side-by-side to save vertical space
+    auto* names = new QHBoxLayout();
+    names->setSpacing(4);
+    auto* aName = new QLineEdit(model->state().playerA, host);
+    auto* bName = new QLineEdit(model->state().playerB, host);
     aName->setPlaceholderText(QStringLiteral("Player A"));
     bName->setPlaceholderText(QStringLiteral("Player B"));
-    lay->addWidget(aName);
-    lay->addWidget(bName);
+    names->addWidget(aName, 1);
+    names->addWidget(bName, 1);
+    lay->addLayout(names);
 
-    auto* scoreRead = new QLabel(this);
-    scoreRead->setAlignment(Qt::AlignCenter);
-    scoreRead->setStyleSheet(QStringLiteral(
-        "font-family:'Bebas Neue'; font-size:22px; color:#F0F0F0; background:#12151A;"
-        "border:1px solid #3A3D45; border-radius:3px; padding:4px;"));
-    lay->addWidget(scoreRead);
-
-    auto* scoreRow = new QHBoxLayout();
-    scoreRow->setSpacing(4);
+    // Score readout + ± on one compact band
+    auto* scoreBand = new QHBoxLayout();
+    scoreBand->setSpacing(3);
     auto makeScoreBtn = [&](const QString& t, const QString& color) {
-        auto* b = new QPushButton(t, this);
-        b->setFixedHeight(28);
+        auto* b = new QPushButton(t, host);
+        b->setFixedSize(32, 26);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#1A1D22;border:1px solid %1;color:%1;"
-            "font-weight:900;font-size:14px;border-radius:3px;}").arg(color));
+            "font-weight:900;font-size:11px;border-radius:3px;padding:0;}").arg(color));
         return b;
     };
     auto* aMinus = makeScoreBtn(QStringLiteral("A−"), QStringLiteral("#FF5A2C"));
     auto* aPlus = makeScoreBtn(QStringLiteral("A+"), QStringLiteral("#FF5A2C"));
     auto* bMinus = makeScoreBtn(QStringLiteral("B−"), QStringLiteral("#4F9EFF"));
     auto* bPlus = makeScoreBtn(QStringLiteral("B+"), QStringLiteral("#4F9EFF"));
-    scoreRow->addWidget(aMinus, 1);
-    scoreRow->addWidget(aPlus, 1);
-    scoreRow->addWidget(bMinus, 1);
-    scoreRow->addWidget(bPlus, 1);
-    lay->addLayout(scoreRow);
 
-    auto* matchLab = new QLabel(QStringLiteral("MATCH"), this);
-    matchLab->setObjectName(QStringLiteral("sec"));
-    lay->addWidget(matchLab);
+    auto* scoreRead = new QLabel(host);
+    scoreRead->setAlignment(Qt::AlignCenter);
+    scoreRead->setMinimumWidth(72);
+    scoreRead->setStyleSheet(QStringLiteral(
+        "font-family:'Bebas Neue','Arial Narrow',sans-serif; font-size:20px; color:#F0F0F0;"
+        "background:#12151A; border:1px solid #3A3D45; border-radius:3px; padding:2px 6px;"));
+    scoreBand->addWidget(aMinus);
+    scoreBand->addWidget(aPlus);
+    scoreBand->addWidget(scoreRead, 1);
+    scoreBand->addWidget(bMinus);
+    scoreBand->addWidget(bPlus);
+    lay->addLayout(scoreBand);
 
-    auto* raceRow = new QHBoxLayout();
-    auto* raceLab = new QLabel(QStringLiteral("Race to"), this);
-    raceLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:10px; background:transparent; border:none;"));
-    auto* raceTo = new QSpinBox(this);
+    // Match: race-to + clock on one row
+    auto* matchRow = new QHBoxLayout();
+    matchRow->setSpacing(4);
+    auto* raceLab = new QLabel(QStringLiteral("Race"), host);
+    raceLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    auto* raceTo = new QSpinBox(host);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
-    raceRow->addWidget(raceLab);
-    raceRow->addWidget(raceTo, 1);
-    lay->addLayout(raceRow);
-
-    auto* clockRow = new QHBoxLayout();
-    auto* clockLbl = new QLabel(QStringLiteral("00:00"), this);
+    raceTo->setFixedWidth(44);
+    auto* clockLbl = new QLabel(QStringLiteral("00:00"), host);
     clockLbl->setStyleSheet(QStringLiteral(
-        "font-family:'Bebas Neue'; font-size:18px; color:#22C55E; background:transparent; border:none;"));
-    auto* clockRun = new QCheckBox(QStringLiteral("Clock"), this);
+        "font-family:'Bebas Neue','Arial Narrow',sans-serif; font-size:14px; color:#22C55E;"
+        "background:transparent; border:none;"));
+    auto* clockRun = new QCheckBox(QStringLiteral("Clock"), host);
     clockRun->setChecked(model->state().clockRunning);
-    auto* clockReset = new QPushButton(QStringLiteral("Reset"), this);
-    clockReset->setFixedHeight(22);
+    auto* clockReset = new QPushButton(QStringLiteral("0:00"), host);
+    clockReset->setFixedHeight(20);
     clockReset->setCursor(Qt::PointingHandCursor);
+    clockReset->setToolTip(QStringLiteral("Reset clock"));
     clockReset->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;font-size:9px;font-weight:700;}"));
-    clockRow->addWidget(clockLbl);
-    clockRow->addStretch();
-    clockRow->addWidget(clockRun);
-    clockRow->addWidget(clockReset);
-    lay->addLayout(clockRow);
+        "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
+        "font-size:8px;font-weight:700;padding:1px 5px;}"));
+    matchRow->addWidget(raceLab);
+    matchRow->addWidget(raceTo);
+    matchRow->addStretch(1);
+    matchRow->addWidget(clockLbl);
+    matchRow->addWidget(clockRun);
+    matchRow->addWidget(clockReset);
+    lay->addLayout(matchRow);
 
     auto* actions = new QHBoxLayout();
-    actions->setSpacing(4);
-    auto* reset = new QPushButton(QStringLiteral("Reset"), this);
-    auto* swap = new QPushButton(QStringLiteral("Swap"), this);
-    auto* push = new QPushButton(QStringLiteral("Push"), this);
+    actions->setSpacing(3);
+    auto* reset = new QPushButton(QStringLiteral("Reset"), host);
+    auto* swap = new QPushButton(QStringLiteral("Swap"), host);
+    auto* push = new QPushButton(QStringLiteral("Push"), host);
     for (auto* b : {reset, swap}) {
         b->setCursor(Qt::PointingHandCursor);
+        b->setFixedHeight(22);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
-            "font-size:10px;font-weight:800;padding:5px;border-radius:3px;}"));
+            "font-size:9px;font-weight:800;padding:2px 4px;border-radius:3px;}"));
     }
     push->setCursor(Qt::PointingHandCursor);
+    push->setFixedHeight(22);
     push->setStyleSheet(QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
-        "border:1px solid #86EFAC;color:#04140A;font-size:10px;font-weight:900;padding:5px;border-radius:3px;}"));
+        "border:1px solid #86EFAC;color:#04140A;font-size:9px;font-weight:900;padding:2px 4px;border-radius:3px;}"));
     actions->addWidget(reset, 1);
     actions->addWidget(swap, 1);
     actions->addWidget(push, 1);
     lay->addLayout(actions);
     lay->addStretch(1);
+
+    scroll->setWidget(host);
+    outer->addWidget(scroll, 1);
 
     connect(settingsBtn, &QPushButton::clicked, this, [this, engine] {
         ScoreboardSettingsDialog dlg(engine, this);
@@ -230,11 +258,12 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     });
 
     auto refresh = [=](const ScoreboardState& st) {
-        scoreRead->setText(QStringLiteral("%1  %2 — %3  %4")
-                               .arg(st.playerA)
-                               .arg(st.scoreA)
-                               .arg(st.scoreB)
-                               .arg(st.playerB));
+        scoreRead->setText(QStringLiteral("%1 — %2").arg(st.scoreA).arg(st.scoreB));
+        scoreRead->setToolTip(QStringLiteral("%1  %2 — %3  %4")
+                                  .arg(st.playerA)
+                                  .arg(st.scoreA)
+                                  .arg(st.scoreB)
+                                  .arg(st.playerB));
         const int m = st.clockSeconds / 60;
         const int sec = st.clockSeconds % 60;
         clockLbl->setText(QStringLiteral("%1:%2")
