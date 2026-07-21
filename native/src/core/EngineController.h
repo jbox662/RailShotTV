@@ -81,6 +81,8 @@ public:
 
     bool saveReplay(QString* error = nullptr);
     bool setVirtualCameraEnabled(bool enabled, QString* error = nullptr);
+    /// Capture Preview or Program to PNG under the recording directory.
+    bool takeScreenshot(bool program, QString* pathOut = nullptr, QString* error = nullptr);
     void pushScoreboardToProgram();
 
     TelemetrySnapshot telemetrySnapshot() const;
@@ -95,6 +97,7 @@ signals:
     void transitionStarted(TransitionType type);
     void transitionFinished();
     void replaySaved(const QString& path);
+    void screenshotSaved(const QString& path);
     void selectedSourceChanged(const QString& sourceId);
 
 private slots:

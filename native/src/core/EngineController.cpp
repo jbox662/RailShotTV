@@ -16,6 +16,7 @@
 #include "core/Logger.h"
 #include <QDateTime>
 #include <QDir>
+#include <QImage>
 #include <QTimer>
 #include <QJsonArray>
 #include <QThread>
@@ -603,6 +604,32 @@ bool EngineController::saveReplay(QString* error)
     if (!m_replay->saveReplay(path, error))
         return false;
     emit replaySaved(path);
+    return true;
+}
+
+bool EngineController::takeScreenshot(bool program, QString* pathOut, QString* error)
+{
+    if (!m_compositor) {
+        if (error) *error = QStringLiteral("Compositor unavailable");
+        return false;
+    }
+    const QImage img = program ? m_compositor->readbackProgram() : m_compositor->readbackPreview();
+    if (img.isNull()) {
+        if (error) *error = QStringLiteral("Screenshot readback failed");
+        return false;
+    }
+    QDir().mkpath(m_settings->recordingDirectory());
+    const QString path = m_settings->recordingDirectory()
+        + QStringLiteral("/RailShotTV-%1-%2.png")
+              .arg(program ? QStringLiteral("Program") : QStringLiteral("Preview"),
+                   QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    if (!img.save(path, "PNG")) {
+        if (error) *error = QStringLiteral("Failed to write %1").arg(path);
+        return false;
+    }
+    if (pathOut) *pathOut = path;
+    emit screenshotSaved(path);
+    Logger::info(QStringLiteral("Screenshot saved: %1").arg(path));
     return true;
 }
 

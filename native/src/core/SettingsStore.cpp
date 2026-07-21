@@ -94,6 +94,8 @@ QJsonObject SettingsStore::hotkeys() const
         {QStringLiteral("scene7"), QStringLiteral("7")},
         {QStringLiteral("scene8"), QStringLiteral("8")},
         {QStringLiteral("fullscreen"), QStringLiteral("F")},
+        {QStringLiteral("screenshotPreview"), QStringLiteral("F12")},
+        {QStringLiteral("screenshotProgram"), QStringLiteral("Shift+F12")},
     };
     const auto raw = m_settings.value(QStringLiteral("hotkeys")).toByteArray();
     if (raw.isEmpty()) return defaults;

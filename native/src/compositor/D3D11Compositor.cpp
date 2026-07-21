@@ -389,35 +389,49 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
 #endif
 }
 
-QImage D3D11Compositor::readbackProgram() const
+QImage D3D11Compositor::readbackTexture(ID3D11Texture2D* tex) const
 {
 #ifdef _WIN32
-    if (!m_programTex || !m_device) return {};
+    if (!tex || !m_device) return {};
     auto* dev = m_device->device();
     auto* ctx = m_device->context();
     D3D11_TEXTURE2D_DESC desc{};
-    m_programTex->GetDesc(&desc);
+    tex->GetDesc(&desc);
     desc.Usage = D3D11_USAGE_STAGING;
     desc.BindFlags = 0;
     desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
     ComPtr<ID3D11Texture2D> staging;
     if (FAILED(dev->CreateTexture2D(&desc, nullptr, &staging)))
         return {};
-    ctx->CopyResource(staging.Get(), m_programTex);
+    ctx->CopyResource(staging.Get(), tex);
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
         return {};
-    QImage img(m_width, m_height, QImage::Format_ARGB32);
-    for (int y = 0; y < m_height; ++y) {
+    const int w = static_cast<int>(desc.Width);
+    const int h = static_cast<int>(desc.Height);
+    QImage img(w, h, QImage::Format_ARGB32);
+    for (int y = 0; y < h; ++y) {
         memcpy(img.scanLine(y),
                static_cast<const char*>(mapped.pData) + y * mapped.RowPitch,
-               static_cast<size_t>(m_width) * 4);
+               static_cast<size_t>(w) * 4);
     }
     ctx->Unmap(staging.Get(), 0);
     return img;
 #else
+    Q_UNUSED(tex);
     return {};
 #endif
+}
+
+QImage D3D11Compositor::readbackProgram() const
+{
+    return readbackTexture(m_programTex);
+}
+
+QImage D3D11Compositor::readbackPreview() const
+{
+    return readbackTexture(m_previewTex);
 }
 
 } // namespace railshot

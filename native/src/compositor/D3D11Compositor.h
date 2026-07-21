@@ -44,8 +44,9 @@ public:
     /// After compose of new program, blend hold over it (crossfade / wipe).
     void blendProgramHold(float progress, TransitionType type);
 
-    /// Readback program frame for encoder (BGRA). Avoid in steady UI path.
+    /// Readback program/preview frame (BGRA). Avoid in steady UI path.
     QImage readbackProgram() const;
+    QImage readbackPreview() const;
 
     int width() const { return m_width; }
     int height() const { return m_height; }
@@ -54,6 +55,7 @@ signals:
     void frameComposed(bool program);
 
 private:
+    QImage readbackTexture(ID3D11Texture2D* tex) const;
     bool createTargets(QString* error);
     bool createPipeline(QString* error);
     void clearTarget(ID3D11RenderTargetView* rtv, float r, float g, float b, float a);

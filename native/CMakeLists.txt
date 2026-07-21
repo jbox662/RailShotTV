@@ -343,6 +343,10 @@ add_library(railshot_ui STATIC
     src/ui/widgets/InteractDialog.cpp
     src/ui/widgets/Wave4Dialogs.h
     src/ui/widgets/Wave4Dialogs.cpp
+    src/ui/widgets/Wave7Dialogs.h
+    src/ui/widgets/Wave7Dialogs.cpp
+    src/ui/widgets/MultiviewWindow.h
+    src/ui/widgets/MultiviewWindow.cpp
     src/ui/widgets/GoLiveDialog.h
     src/ui/widgets/GoLiveDialog.cpp
     src/ui/widgets/SidebarRail.h

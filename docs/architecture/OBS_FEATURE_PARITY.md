@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 6 (Extra browsers, dropfiles, hotkey UI, stats dock).
+Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 
 ## Design rules
 
@@ -26,11 +26,11 @@ Last updated: Wave 6 (Extra browsers, dropfiles, hotkey UI, stats dock).
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio |
 | OBSBasic_Transitions | Transitions | partial | `TransitionPanel` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
-| OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` (Preview/Program; Multiview later) |
+| OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
 | OBSBasic_ContextToolbar | Source context toolbar | partial | `SourceContextToolbar` |
 | OBSBasic_Hotkeys | Hotkeys | partial | `HotkeyDispatcher` + Settings labels + Shortcuts overlay |
 | OBSBasic_Recording/_Streaming/_ReplayBuffer/_VirtualCam | Outputs | partial | `OutputHub` + Settings Stream/Output/Advanced |
-| OBSBasic_Screenshots | Screenshots | todo | — |
+| OBSBasic_Screenshots | Screenshots | partial | Preview/Program PNG via View menu + F12 |
 | OBSBasic_Projectors | Projector windows | partial | `ProjectorWindow` + View menu |
 | OBSBasic_Docks | Dock layout | partial | Nested QMainWindow docks |
 | OBSBasic_Profiles / _SceneCollections | Profiles/collections | partial | `ProfilesDialog` / `SceneCollectionsDialog` |
@@ -49,8 +49,8 @@ Last updated: Wave 6 (Extra browsers, dropfiles, hotkey UI, stats dock).
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` |
-| OBSBasicVCamConfig | todo | External/VCam toggle |
-| OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / auto-remux / `LogViewerDialog` (MissingFiles later) |
+| OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
+| OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
 
 ## Wave progress
@@ -62,3 +62,4 @@ Last updated: Wave 6 (Extra browsers, dropfiles, hotkey UI, stats dock).
 - [x] Wave 4 — Profiles / collections / remux / logs
 - [x] Wave 5 — Output/service polish (Settings Stream/Output/Advanced, rate control, reconnect, delay, auto-remux, filename tokens)
 - [x] Wave 6 — Extra browsers, dropfiles, hotkey UI, stats dock
+- [x] Wave 7 — Screenshots, Missing Files, VCam config, Multiview

@@ -25,6 +25,11 @@ signals:
     void openAdvAudio();
     /// program=true → Program feed; fullscreen=true → fullscreen projector.
     void openProjector(bool program, bool fullscreen);
+    void openMultiview(bool fullscreen);
+    void screenshotPreview();
+    void screenshotProgram();
+    void openVCamConfig();
+    void openMissingFiles();
     void openProfiles();
     void openCollections();
     void openRemux();

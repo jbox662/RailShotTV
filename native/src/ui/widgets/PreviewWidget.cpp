@@ -515,10 +515,17 @@ private:
         auto* projMenu = menu.addMenu(QStringLiteral("Projector"));
         QAction* projWin = projMenu->addAction(QStringLiteral("Windowed Projector"));
         QAction* projFs = projMenu->addAction(QStringLiteral("Fullscreen Projector"));
+        menu.addSeparator();
+        QAction* shot = menu.addAction(QStringLiteral("Screenshot"));
 
         QAction* chosen = menu.exec(e->globalPosition().toPoint());
         if (!chosen) return true;
 
+        if (chosen == shot) {
+            QString err;
+            m_owner->m_engine->takeScreenshot(m_owner->m_program, nullptr, &err);
+            return true;
+        }
         if (chosen == interact && src) {
             emit m_owner->interactRequested(src->id);
             return true;

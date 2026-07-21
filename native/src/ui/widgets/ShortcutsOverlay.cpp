@@ -100,6 +100,7 @@ ShortcutsOverlay::ShortcutsOverlay(EngineController* engine, QWidget* parent)
     }), body));
     lay->addWidget(section(QStringLiteral("STREAM / RECORD"), rowsFor({
         QStringLiteral("streamToggle"), QStringLiteral("recordToggle"), QStringLiteral("saveReplay"),
+        QStringLiteral("screenshotPreview"), QStringLiteral("screenshotProgram"),
     }), body));
     lay->addWidget(section(QStringLiteral("AUDIO / SCOREBOARD"), rowsFor({
         QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),

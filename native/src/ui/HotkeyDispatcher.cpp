@@ -53,6 +53,8 @@ QString HotkeyDispatcher::labelForAction(const QString& action)
         {QStringLiteral("scene7"), QStringLiteral("Preview Scene 7")},
         {QStringLiteral("scene8"), QStringLiteral("Preview Scene 8")},
         {QStringLiteral("fullscreen"), QStringLiteral("Toggle Fullscreen (UI)")},
+        {QStringLiteral("screenshotPreview"), QStringLiteral("Screenshot Preview")},
+        {QStringLiteral("screenshotProgram"), QStringLiteral("Screenshot Program")},
     };
     return kLabels.value(action, action);
 }
@@ -69,6 +71,7 @@ QStringList HotkeyDispatcher::orderedActions()
         QStringLiteral("scene4"), QStringLiteral("scene5"), QStringLiteral("scene6"),
         QStringLiteral("scene7"), QStringLiteral("scene8"),
         QStringLiteral("fullscreen"),
+        QStringLiteral("screenshotPreview"), QStringLiteral("screenshotProgram"),
     };
 }
 
@@ -143,6 +146,16 @@ void HotkeyDispatcher::dispatch(const QString& action)
     if (action == QLatin1String("saveReplay")) {
         QString err;
         m_engine->saveReplay(&err);
+        return;
+    }
+    if (action == QLatin1String("screenshotPreview")) {
+        QString err;
+        m_engine->takeScreenshot(false, nullptr, &err);
+        return;
+    }
+    if (action == QLatin1String("screenshotProgram")) {
+        QString err;
+        m_engine->takeScreenshot(true, nullptr, &err);
         return;
     }
     if (action == QLatin1String("muteMic")) {

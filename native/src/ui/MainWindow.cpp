@@ -16,6 +16,8 @@
 #include "ui/widgets/AdvAudioDialog.h"
 #include "ui/widgets/ProjectorWindow.h"
 #include "ui/widgets/Wave4Dialogs.h"
+#include "ui/widgets/Wave7Dialogs.h"
+#include "ui/widgets/MultiviewWindow.h"
 #include "core/EngineController.h"
 #include "core/ProfileCollectionStore.h"
 #include "overlays/ReplayBuffer.h"
@@ -153,6 +155,51 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
             ProjectorWindow::openFullscreen(m_engine, kind, this);
         else
             ProjectorWindow::openWindowed(m_engine, kind, this);
+    });
+    connect(m_top, &TopMenuBar::openMultiview, this, [this](bool fullscreen) {
+        if (fullscreen)
+            MultiviewWindow::openFullscreen(m_engine, this);
+        else
+            MultiviewWindow::openWindowed(m_engine, this);
+    });
+    connect(m_top, &TopMenuBar::screenshotPreview, this, [this] {
+        QString path, err;
+        if (m_engine->takeScreenshot(false, &path, &err))
+            statusBar()->showMessage(QStringLiteral("Screenshot: %1").arg(path), 4000);
+        else
+            QMessageBox::warning(this, QStringLiteral("Screenshot"),
+                                 err.isEmpty() ? QStringLiteral("Failed") : err);
+    });
+    connect(m_top, &TopMenuBar::screenshotProgram, this, [this] {
+        QString path, err;
+        if (m_engine->takeScreenshot(true, &path, &err))
+            statusBar()->showMessage(QStringLiteral("Screenshot: %1").arg(path), 4000);
+        else
+            QMessageBox::warning(this, QStringLiteral("Screenshot"),
+                                 err.isEmpty() ? QStringLiteral("Failed") : err);
+    });
+    connect(m_top, &TopMenuBar::openVCamConfig, this, [this] {
+        VCamConfigDialog dlg(m_engine, this);
+        dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::openMissingFiles, this, [this] {
+        auto entries = scanMissingFiles(m_engine->projectSnapshot());
+        if (entries.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("Missing Files"),
+                                     QStringLiteral("No missing local media files found."));
+            return;
+        }
+        MissingFilesDialog dlg(m_engine, entries, this);
+        dlg.exec();
+    });
+    connect(m_engine, &EngineController::projectLoaded, this, [this](const QString&) {
+        auto entries = scanMissingFiles(m_engine->projectSnapshot());
+        if (entries.isEmpty()) return;
+        MissingFilesDialog dlg(m_engine, entries, this);
+        dlg.exec();
+    });
+    connect(m_engine, &EngineController::screenshotSaved, this, [this](const QString& path) {
+        statusBar()->showMessage(QStringLiteral("Screenshot: %1").arg(path), 4000);
     });
     connect(m_top, &TopMenuBar::openProfiles, this, [this] {
         ProfilesDialog dlg(m_engine, this);

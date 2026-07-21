@@ -112,6 +112,7 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("Remux Recordings…"), this, &TopMenuBar::openRemux);
+    editMenu->addAction(QStringLiteral("Missing Files…"), this, &TopMenuBar::openMissingFiles);
     editBtn->setMenu(editMenu);
 
     auto* viewBtn = addChrome(QStringLiteral("View"));
@@ -130,6 +131,17 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
         emit openProjector(true, true);
     });
     viewMenu->addSeparator();
+    viewMenu->addAction(QStringLiteral("Multiview (Windowed)"), this, [this] {
+        emit openMultiview(false);
+    });
+    viewMenu->addAction(QStringLiteral("Multiview (Fullscreen)"), this, [this] {
+        emit openMultiview(true);
+    });
+    viewMenu->addSeparator();
+    viewMenu->addAction(QStringLiteral("Screenshot (Preview)"), this, &TopMenuBar::screenshotPreview);
+    viewMenu->addAction(QStringLiteral("Screenshot (Program)"), this, &TopMenuBar::screenshotProgram);
+    viewMenu->addSeparator();
+    viewMenu->addAction(QStringLiteral("Virtual Camera…"), this, &TopMenuBar::openVCamConfig);
     viewMenu->addAction(QStringLiteral("Current Log…"), this, &TopMenuBar::openLogViewer);
     viewBtn->setMenu(viewMenu);
 

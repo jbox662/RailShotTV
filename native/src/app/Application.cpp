@@ -54,7 +54,14 @@ bool Application::bootstrap(QString* error)
 
     ensureDefaultProfile(m_engine->settings()->outputProfile());
 
-    // Restore last project if present
+    if (listCollectionNames().isEmpty()) {
+        // Defer untitled save until after first project exists.
+    }
+
+    m_window = std::make_unique<MainWindow>(m_engine.get());
+    m_window->show();
+
+    // Load after MainWindow so Missing Files dialog can connect to projectLoaded.
     const auto last = m_engine->settings()->lastProjectPath();
     if (!last.isEmpty() && QFile::exists(last)) {
         QString err;
@@ -70,8 +77,12 @@ bool Application::bootstrap(QString* error)
         setCurrentCollectionName(name);
     }
 
-    m_window = std::make_unique<MainWindow>(m_engine.get());
-    m_window->show();
+    // Optional Virtual Camera auto-start
+    if (m_engine->settings()->uiState().value(QStringLiteral("vcamStartOnLaunch")).toBool(false)) {
+        QString err;
+        m_engine->setVirtualCameraEnabled(true, &err);
+    }
+
     Logger::info(QStringLiteral("RailShotTV %1 ready").arg(QStringLiteral(RAILSHOT_VERSION)));
     return true;
 }
