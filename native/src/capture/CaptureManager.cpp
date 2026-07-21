@@ -294,6 +294,12 @@ void CaptureManager::syncWithScenes(const QVector<const SceneItem*>& scenes)
             items.insert(src.id, src);
         }
     }
+    // Pinned sources (Properties dialog) stay attached even if not in sync set.
+    for (auto it = m_pinned.cbegin(); it != m_pinned.cend(); ++it) {
+        wanted.insert(it.key());
+        if (!items.contains(it.key()))
+            items.insert(it.key(), it.value());
+    }
     for (auto it = items.cbegin(); it != items.cend(); ++it) {
         if (!m_sources.contains(it.key())) {
             QString err;
@@ -308,6 +314,31 @@ void CaptureManager::syncWithScenes(const QVector<const SceneItem*>& scenes)
         if (!wanted.contains(id))
             detachSource(id);
     }
+}
+
+void CaptureManager::pinSource(const SourceItem& source)
+{
+    m_pinned.insert(source.id, source);
+    QString err;
+    if (!attachSource(source, &err))
+        emit sourceError(source.id, err);
+}
+
+void CaptureManager::unpinSource(const QString& sourceId)
+{
+    m_pinned.remove(sourceId);
+}
+
+bool CaptureManager::pollSource(const QString& sourceId)
+{
+    if (m_paused) return false;
+    auto* src = source(sourceId);
+    if (!src) return false;
+    VideoFrame frame;
+    if (!src->acquireLatest(frame) || !frame.texture)
+        return false;
+    m_bus.publish(sourceId, frame);
+    return true;
 }
 
 IVideoSource* CaptureManager::source(const QString& id) const

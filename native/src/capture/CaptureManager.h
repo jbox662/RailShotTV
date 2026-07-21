@@ -36,6 +36,11 @@ public:
     /// Attach visible sources from all scenes; detach anything not listed.
     void syncWithScenes(const QVector<const SceneItem*>& scenes);
 
+    /// Keep a source attached while Properties (etc.) is open, even if not in the
+    /// active preview/program scene sync set.
+    void pinSource(const SourceItem& source);
+    void unpinSource(const QString& sourceId);
+
     IVideoSource* source(const QString& id) const;
     QVector<QString> activeSourceIds() const;
 
@@ -44,6 +49,8 @@ public:
 
     /// Poll all sources into the frame bus (call from render thread).
     void poll();
+    /// Poll a single source into the frame bus (Properties preview).
+    bool pollSource(const QString& sourceId);
 
 signals:
     void sourceStarted(const QString& id);
@@ -59,6 +66,7 @@ private:
     class AudioGraph* m_audioGraph = nullptr;
     FrameBus m_bus;
     QHash<QString, std::shared_ptr<IVideoSource>> m_sources;
+    QHash<QString, SourceItem> m_pinned;
     bool m_paused = false;
     std::function<void(const QString&, const QString&, const AudioBuffer&)> m_audioCb;
 };

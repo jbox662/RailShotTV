@@ -1,6 +1,6 @@
 #include "ui/widgets/SourcePropertiesDialog.h"
 #include "ui/widgets/SourcePropertiesWidget.h"
-#include "compositor/PreviewSurface.h"
+#include "compositor/D3D11Compositor.h"
 #include "capture/CaptureManager.h"
 #include "capture/IVideoSource.h"
 #include "core/EngineController.h"
@@ -13,8 +13,60 @@
 #include <QFrame>
 #include <QJsonObject>
 #include <QTimer>
+#include <QPainter>
+#include <QPaintEvent>
 
 namespace railshot {
+
+SourcePropsPreviewWidget::SourcePropsPreviewWidget(QWidget* parent)
+    : QWidget(parent)
+{
+    setMinimumHeight(200);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setAttribute(Qt::WA_OpaquePaintEvent);
+}
+
+void SourcePropsPreviewWidget::setFrame(const QImage& img)
+{
+    m_frame = img;
+    if (!m_frame.isNull())
+        m_placeholder.clear();
+    update();
+}
+
+void SourcePropsPreviewWidget::setPlaceholder(const QString& msg)
+{
+    m_placeholder = msg;
+    m_frame = {};
+    update();
+}
+
+void SourcePropsPreviewWidget::paintEvent(QPaintEvent*)
+{
+    QPainter p(this);
+    p.fillRect(rect(), QColor(8, 10, 13));
+    if (!m_frame.isNull()) {
+        const QSize box = size();
+        QImage scaled = m_frame.scaled(box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const int x = (box.width() - scaled.width()) / 2;
+        const int y = (box.height() - scaled.height()) / 2;
+        p.drawImage(x, y, scaled);
+        return;
+    }
+    p.setPen(QColor(64, 69, 80));
+    QFont iconFont = p.font();
+    iconFont.setPointSize(22);
+    p.setFont(iconFont);
+    p.drawText(rect().adjusted(0, -18, 0, 0), Qt::AlignCenter, QStringLiteral("▣"));
+    QFont msgFont = p.font();
+    msgFont.setFamily(QStringLiteral("DM Sans"));
+    msgFont.setPointSize(10);
+    msgFont.setBold(true);
+    p.setFont(msgFont);
+    p.setPen(QColor(58, 69, 96));
+    p.drawText(rect().adjusted(0, 28, 0, 0), Qt::AlignCenter,
+               m_placeholder.isEmpty() ? QStringLiteral("No Signal") : m_placeholder);
+}
 
 SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const QString& sourceId,
                                                QWidget* parent)
@@ -75,18 +127,15 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
         "font-family:'DM Sans'; background:transparent; border:none;"));
     previewLay->addWidget(m_previewCaption);
 
-    m_preview = new PreviewSurface(m_previewHost);
-    m_preview->setMinimumHeight(200);
-    m_preview->setEmptyMessage(QStringLiteral("No Signal"));
-    if (m_engine && m_engine->graphicsDevice())
-        m_preview->setDevice(m_engine->graphicsDevice());
+    m_preview = new SourcePropsPreviewWidget(m_previewHost);
+    m_preview->setMinimumHeight(220);
     previewLay->addWidget(m_preview, 1);
     root->addWidget(m_previewHost, 0);
 
     const bool showPreview = sourceHasVideoPreview();
     m_previewHost->setVisible(showPreview);
     if (!showPreview && m_preview)
-        m_preview->setEmptyMessage(QStringLiteral("Audio source — no video preview"));
+        m_preview->setPlaceholder(QStringLiteral("Audio source — no video preview"));
 
     m_props = new SourcePropertiesWidget(m_engine, this);
     m_props->setDialogMode(true);
@@ -123,11 +172,20 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     root->addWidget(foot);
 
     refreshTitle();
+    // Pin/attach on first tick so dialog chrome appears before Browser helper start().
 
     m_previewTimer = new QTimer(this);
     connect(m_previewTimer, &QTimer::timeout, this, &SourcePropertiesDialog::tickPreview);
-    if (showPreview)
-        m_previewTimer->start(33);
+    if (showPreview) {
+        m_preview->setPlaceholder(QStringLiteral("Starting preview…"));
+        m_previewTimer->start(50); // ~20 fps — readback path
+        QTimer::singleShot(0, this, &SourcePropertiesDialog::tickPreview);
+    }
+}
+
+SourcePropertiesDialog::~SourcePropertiesDialog()
+{
+    unpinCaptureSource();
 }
 
 bool SourcePropertiesDialog::sourceHasVideoPreview() const
@@ -138,30 +196,54 @@ bool SourcePropertiesDialog::sourceHasVideoPreview() const
     return src->type != SourceType::AudioInput && src->type != SourceType::AudioOutput;
 }
 
+void SourcePropertiesDialog::pinCaptureSource()
+{
+    if (!m_engine || !m_engine->capture()) return;
+    if (const auto* src = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId)) {
+        auto item = *src;
+        item.visible = true; // Properties always wants a feed
+        m_engine->capture()->pinSource(item);
+    }
+}
+
+void SourcePropertiesDialog::unpinCaptureSource()
+{
+    if (m_engine && m_engine->capture())
+        m_engine->capture()->unpinSource(m_sourceId);
+}
+
 void SourcePropertiesDialog::tickPreview()
 {
     if (!m_engine || !m_preview || !m_previewHost || !m_previewHost->isVisible())
         return;
-    if (m_engine->graphicsDevice())
-        m_preview->setDevice(m_engine->graphicsDevice());
+
+    // Refresh pin from latest settings (URL/size changes while dialog is open).
+    pinCaptureSource();
 
     CaptureManager* cap = m_engine->capture();
-    if (!cap)
+    D3D11Compositor* comp = m_engine->compositor();
+    if (!cap || !comp) {
+        m_preview->setPlaceholder(QStringLiteral("No Signal"));
         return;
-
-    // Prefer the frame bus (same path as the compositor) so we don't race capture threads.
-    if (const auto frame = cap->frameBus().latest(m_sourceId)) {
-        if (frame->texture) {
-            m_preview->presentTexture(frame->texture);
-            return;
-        }
     }
 
-    if (IVideoSource* src = cap->source(m_sourceId)) {
-        VideoFrame vf;
-        if (src->acquireLatest(vf) && vf.texture)
-            m_preview->presentTexture(vf.texture);
+    if (!cap->pollSource(m_sourceId)) {
+        m_preview->setPlaceholder(QStringLiteral("Waiting for source…"));
+        return;
     }
+
+    const auto frame = cap->frameBus().latest(m_sourceId);
+    if (!frame || !frame->texture) {
+        m_preview->setPlaceholder(QStringLiteral("No Signal"));
+        return;
+    }
+
+    const QImage img = comp->readbackTexture(frame->texture);
+    if (img.isNull()) {
+        m_preview->setPlaceholder(QStringLiteral("Preview readback failed"));
+        return;
+    }
+    m_preview->setFrame(img);
 }
 
 void SourcePropertiesDialog::refreshTitle()
@@ -174,8 +256,6 @@ void SourcePropertiesDialog::refreshTitle()
             name = sel->name;
     }
     setWindowTitle(QStringLiteral("Properties for '%1'").arg(name));
-    if (m_preview)
-        m_preview->setLabel(name, QColor(0x4F, 0x9E, 0xFF));
 }
 
 void SourcePropertiesDialog::onOk()

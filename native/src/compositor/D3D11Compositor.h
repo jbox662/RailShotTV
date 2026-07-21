@@ -47,6 +47,8 @@ public:
     /// Readback program/preview frame (BGRA). Avoid in steady UI path.
     QImage readbackProgram() const;
     QImage readbackPreview() const;
+    /// Readback any D3D texture (used by Properties source preview).
+    QImage readbackTexture(ID3D11Texture2D* tex) const;
 
     int width() const { return m_width; }
     int height() const { return m_height; }
@@ -55,7 +57,6 @@ signals:
     void frameComposed(bool program);
 
 private:
-    QImage readbackTexture(ID3D11Texture2D* tex) const;
     bool createTargets(QString* error);
     bool createPipeline(QString* error);
     void clearTarget(ID3D11RenderTargetView* rtv, float r, float g, float b, float a);
