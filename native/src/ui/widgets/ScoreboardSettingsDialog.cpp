@@ -41,13 +41,21 @@ struct BoardPreset {
 };
 
 const BoardPreset kPresets[] = {
-    {"pool_felt", "Pool Race", "Billiards · race-to · felt rails · at-table",
+    {"pool_mosconi", "Match Race", "Broadcast · white scores · Race-to tab · ball rack",
+     "standard", "broadcast", "#1B3A6B", "#3D1F5C", "#FFFFFF", "", "8ball"},
+    {"pool_clean", "Clean Navy", "Name · score tiles · RACE TO center",
+     "standard", "carbon", "#3B6EA5", "#3B6EA5", "#FFFFFF", "#121C30", "8ball"},
+    {"pool_slant", "Slant Duel", "Modern translucent wings · race shield",
+     "standard", "classic", "#1E3A5F", "#0F766E", "#142830", "#78C8C8", "8ball"},
+    {"pool_snooker", "Frame Bar", "Snooker-style names · white score chips",
+     "center", "carbon", "#DC2626", "#DC2626", "#FFFFFF", "#1C1E22", "8ball"},
+    {"pool_felt", "Felt Rails", "Tournament felt · 8-ball race pill · rack",
      "standard", "railshot", "#15803D", "#B45309", "#F0FDF4", "#0A120E", "8ball"},
-    {"pool_neon", "Cue Neon", "Billiards · neon clash · race pill",
-     "standard", "neon", "#FF00AA", "#00F0FF", "#FFFFFF", "#080414", "8ball"},
-    {"pool_wide", "Tournament Bar", "Billiards · full-width race bar",
-     "wide", "broadcast", "#22C55E", "#F97316", "#F8FAFC", "#081428", "8ball"},
-    {"pool_corner", "Corner Racks", "Billiards · compact corner bug",
+    {"pool_neon", "Cue Neon", "Neon felt · glow race · ball rack",
+     "wide", "neon", "#FF00AA", "#00F0FF", "#FFFFFF", "#080414", "8ball"},
+    {"pool_gold", "Championship", "Gold match bar · race tab · ball rack",
+     "wide", "gold", "#B45309", "#1B3A6B", "#FFECB3", "", "8ball"},
+    {"pool_corner", "Corner Racks", "Compact felt corner bug",
      "compact", "railshot", "#FF5A2C", "#4F9EFF", "", "", "8ball"},
     {"baseball", "Diamond Bug", "Baseball · bases · count · outs",
      "standard", "broadcast", "#22C55E", "#EF4444", "#FFFFFF", "#0B1220", "baseball"},
@@ -198,6 +206,7 @@ QPixmap makePresetThumb(const BoardPreset& pr, int width)
     thumbSt.insert(QStringLiteral("scoreB"), 2);
     thumbSt.insert(QStringLiteral("raceTo"), 7);
     thumbSt.insert(QStringLiteral("activeSide"), 1);
+    thumbSt.insert(QStringLiteral("pocketedMask"), 0);
     thumbSt.insert(QStringLiteral("clockSeconds"), 125);
     thumbSt.insert(QStringLiteral("period"), 2);
     thumbSt.insert(QStringLiteral("balls"), 2);
@@ -272,6 +281,7 @@ QJsonObject ScoreboardSettingsDialog::previewState() const
     st.insert(QStringLiteral("scoreB"), live.scoreB);
     st.insert(QStringLiteral("raceTo"), live.raceTo);
     st.insert(QStringLiteral("activeSide"), live.activeSide);
+    st.insert(QStringLiteral("pocketedMask"), live.pocketedMask);
     st.insert(QStringLiteral("clockSeconds"), live.clockSeconds);
     st.insert(QStringLiteral("clockRunning"), live.clockRunning);
     st.insert(QStringLiteral("balls"), live.balls);

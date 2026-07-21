@@ -25,6 +25,8 @@ struct ScoreboardState {
 
     /// Billiards: 0 = none, 1 = player A at table, 2 = player B.
     int activeSide = 1;
+    /// Bitmask of pocketed balls 1–15 (bit 0 = ball 1).
+    int pocketedMask = 0;
 
     /// Baseball state
     int balls = 0;

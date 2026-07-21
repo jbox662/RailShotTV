@@ -20,6 +20,7 @@ QJsonObject ScoreboardState::toJson() const
         {QStringLiteral("clockRunning"), clockRunning},
         {QStringLiteral("clockSeconds"), clockSeconds},
         {QStringLiteral("activeSide"), activeSide},
+        {QStringLiteral("pocketedMask"), pocketedMask},
         {QStringLiteral("balls"), balls},
         {QStringLiteral("strikes"), strikes},
         {QStringLiteral("outs"), outs},
@@ -50,6 +51,7 @@ ScoreboardState ScoreboardState::fromJson(const QJsonObject& o)
     s.clockRunning = o.value(QStringLiteral("clockRunning")).toBool();
     s.clockSeconds = o.value(QStringLiteral("clockSeconds")).toInt();
     s.activeSide = o.value(QStringLiteral("activeSide")).toInt(1);
+    s.pocketedMask = o.value(QStringLiteral("pocketedMask")).toInt();
     s.balls = o.value(QStringLiteral("balls")).toInt();
     s.strikes = o.value(QStringLiteral("strikes")).toInt();
     s.outs = o.value(QStringLiteral("outs")).toInt();
@@ -92,6 +94,7 @@ void ScoreboardModel::resetScores()
     m_state.balls = 0;
     m_state.strikes = 0;
     m_state.outs = 0;
+    m_state.pocketedMask = 0;
     emit changed(m_state);
 }
 

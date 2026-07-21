@@ -113,8 +113,397 @@ void drawEightBall(QPainter& p, const QPointF& c, qreal r)
     p.drawText(QRectF(c.x() - r, c.y() - r, r * 2, r * 2), Qt::AlignCenter, QStringLiteral("8"));
 }
 
-// ── Billiards / pool (primary) ───────────────────────────────────
-void renderBilliards(QPainter& p, const QJsonObject& state, int W, int H)
+QColor poolBallColor(int n)
+{
+    static const QColor k[] = {
+        QColor(0, 0, 0),
+        QColor(242, 196, 28),  // 1
+        QColor(30, 96, 210),   // 2
+        QColor(210, 40, 45),   // 3
+        QColor(110, 40, 160),  // 4
+        QColor(230, 120, 20),  // 5
+        QColor(30, 140, 55),   // 6
+        QColor(130, 30, 40),   // 7
+        QColor(18, 18, 20),    // 8
+    };
+    const int base = (n <= 8) ? n : (n - 8);
+    return k[qBound(1, base, 8)];
+}
+
+void drawPoolBall(QPainter& p, const QPointF& c, qreal r, int number, bool pocketed)
+{
+    const bool stripe = number >= 9 && number <= 15;
+    const QColor col = poolBallColor(number);
+    p.setPen(QPen(QColor(0, 0, 0, pocketed ? 60 : 160), 1));
+    if (stripe) {
+        p.setBrush(Qt::white);
+        p.drawEllipse(c, r, r);
+        p.setBrush(pocketed ? QColor(col.red(), col.green(), col.blue(), 90) : col);
+        p.setPen(Qt::NoPen);
+        p.drawRect(QRectF(c.x() - r, c.y() - r * 0.38, r * 2, r * 0.76));
+        p.setPen(QPen(QColor(0, 0, 0, pocketed ? 60 : 160), 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(c, r, r);
+    } else if (number == 8) {
+        p.setBrush(pocketed ? QColor(18, 18, 20, 100) : QColor(18, 18, 20));
+        p.drawEllipse(c, r, r);
+    } else {
+        p.setBrush(pocketed ? QColor(col.red(), col.green(), col.blue(), 90) : col);
+        p.drawEllipse(c, r, r);
+    }
+    // Number disc
+    const qreal nr = r * (stripe || number == 8 ? 0.42 : 0.38);
+    p.setPen(Qt::NoPen);
+    p.setBrush(pocketed ? QColor(255, 255, 255, 120) : Qt::white);
+    p.drawEllipse(c, nr, nr);
+    p.setPen(pocketed ? QColor(40, 40, 40, 120) : QColor(20, 20, 24));
+    p.setFont(QFont(QStringLiteral("Segoe UI"), qMax(6, int(r * 0.7)), QFont::Bold));
+    p.drawText(QRectF(c.x() - r, c.y() - r, r * 2, r * 2), Qt::AlignCenter, QString::number(number));
+}
+
+void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask)
+{
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(245, 247, 250));
+    p.drawRoundedRect(strip, 2, 2);
+    const int n = 15;
+    const qreal gap = 4;
+    const qreal totalGaps = gap * (n + 1);
+    const qreal ballD = qMin(strip.height() - 6.0, (strip.width() - totalGaps) / n);
+    const qreal r = ballD * 0.5;
+    const qreal startX = strip.center().x() - (n * (ballD + gap) - gap) * 0.5 + r;
+    const qreal cy = strip.center().y();
+    for (int i = 1; i <= n; ++i) {
+        const bool pocketed = (pocketedMask & (1 << (i - 1))) != 0;
+        drawPoolBall(p, QPointF(startX + (i - 1) * (ballD + gap), cy), r, i, pocketed);
+    }
+}
+
+void drawActiveChevron(QPainter& p, const QPointF& tip, bool pointRight, const QColor& col)
+{
+    QPolygonF poly;
+    if (pointRight) {
+        poly << tip << QPointF(tip.x() - 10, tip.y() - 8) << QPointF(tip.x() - 10, tip.y() + 8);
+    } else {
+        poly << tip << QPointF(tip.x() + 10, tip.y() - 8) << QPointF(tip.x() + 10, tip.y() + 8);
+    }
+    p.setPen(Qt::NoPen);
+    p.setBrush(col);
+    p.drawPolygon(poly);
+}
+
+// Mosconi / match-style: dark wings, white score tiles, Race-to tab, ball rack
+void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
+{
+    const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
+    const QString a = shortName(state.value(QStringLiteral("playerA")).toString(QStringLiteral("Player A")), 16);
+    const QString b = shortName(state.value(QStringLiteral("playerB")).toString(QStringLiteral("Player B")), 16);
+    const int sa = state.value(QStringLiteral("scoreA")).toInt();
+    const int sb = state.value(QStringLiteral("scoreB")).toInt();
+    const int race = state.value(QStringLiteral("raceTo")).toInt(7);
+    const int active = state.value(QStringLiteral("activeSide")).toInt(1);
+    const int pocketed = state.value(QStringLiteral("pocketedMask")).toInt();
+    QColor wingA(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#1B3A6B")));
+    QColor wingB(state.value(QStringLiteral("colorB")).toString(QStringLiteral("#2A1F4D")));
+    if (!wingA.isValid()) wingA = QColor(27, 58, 107);
+    if (!wingB.isValid()) wingB = QColor(42, 31, 77);
+    if (state.value(QStringLiteral("bgColor")).toString().isEmpty()) {
+        // Use accents as wing colors when provided as team colors
+    }
+
+    const bool showRack = layout != QLatin1String("compact");
+    const int rackH = showRack ? 34 : 0;
+    const int mainH = 56;
+    const int bh = mainH + rackH;
+    const int bw = layout == QLatin1String("wide") ? W : qMin(980, int(W * 0.78));
+    const QRect board = placeBoard(layout, W, H, bw, bh);
+    const QRect main(board.left(), board.top(), board.width(), mainH);
+
+    // Rounded outer path for main bar
+    QPainterPath shell;
+    shell.addRoundedRect(main, 6, 6);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(12, 14, 18));
+    p.drawPath(shell);
+
+    const int scoreBox = 52;
+    const int raceW = 110;
+    const int mid = main.center().x();
+    const QRect scoreAR(mid - raceW / 2 - scoreBox - 4, main.top() + 6, scoreBox, mainH - 12);
+    const QRect scoreBR(mid + raceW / 2 + 4, main.top() + 6, scoreBox, mainH - 12);
+    const QRect raceR(mid - raceW / 2, main.top() - 4, raceW, mainH + 2);
+    const QRect leftWing(main.left(), main.top(), scoreAR.left() - main.left(), mainH);
+    const QRect rightWing(scoreBR.right() + 1, main.top(), main.right() - scoreBR.right(), mainH);
+
+    // Wings
+    p.setBrush(wingA);
+    p.drawRect(leftWing);
+    p.setBrush(wingB);
+    p.drawRect(rightWing);
+    // Soft highlight
+    QLinearGradient lg(main.topLeft(), main.bottomLeft());
+    lg.setColorAt(0, QColor(255, 255, 255, 18));
+    lg.setColorAt(1, QColor(0, 0, 0, 40));
+    p.fillRect(main, lg);
+
+    // White score tiles
+    p.setBrush(Qt::white);
+    p.setPen(Qt::NoPen);
+    p.drawRoundedRect(scoreAR, 3, 3);
+    p.drawRoundedRect(scoreBR, 3, 3);
+    p.setPen(QColor(15, 18, 24));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
+    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
+    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+
+    // Raised race tab
+    p.setBrush(QColor(248, 250, 252));
+    p.setPen(QPen(QColor(200, 205, 215), 1));
+    p.drawRoundedRect(raceR, 4, 4);
+    p.setPen(QColor(30, 34, 42));
+    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
+    p.drawText(QRect(raceR.left(), raceR.top() + 8, raceR.width(), 16), Qt::AlignCenter,
+               QStringLiteral("Race to %1").arg(race));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 18, QFont::Bold));
+    // Keep single line look like refs — just the label is enough; number already in text
+
+    // Names
+    p.setPen(Qt::white);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 15, QFont::Bold));
+    p.drawText(leftWing.adjusted(16, 0, -12, 0), Qt::AlignVCenter | Qt::AlignLeft, a.toUpper());
+    p.drawText(rightWing.adjusted(12, 0, -16, 0), Qt::AlignVCenter | Qt::AlignRight, b.toUpper());
+
+    // Active pointer
+    if (active == 1)
+        drawActiveChevron(p, QPointF(scoreAR.left() - 2, main.center().y()), true, Qt::white);
+    else if (active == 2)
+        drawActiveChevron(p, QPointF(scoreBR.right() + 2, main.center().y()), false, Qt::white);
+
+    // Color dots (flag stand-ins)
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 220));
+    p.drawEllipse(QPointF(leftWing.left() + 10, main.center().y()), 4, 4);
+    p.drawEllipse(QPointF(rightWing.right() - 10, main.center().y()), 4, 4);
+
+    if (showRack) {
+        const QRect strip(main.left() + 10, main.bottom(), main.width() - 20, rackH);
+        drawBallRackStrip(p, strip.adjusted(0, 2, 0, -2), pocketed);
+    }
+}
+
+// Clean navy: name | white score | RACE TO | white score | name
+void renderBilliardsClean(QPainter& p, const QJsonObject& state, int W, int H)
+{
+    const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
+    const QString a = shortName(state.value(QStringLiteral("playerA")).toString(QStringLiteral("Team A")), 14);
+    const QString b = shortName(state.value(QStringLiteral("playerB")).toString(QStringLiteral("Team B")), 14);
+    const int sa = state.value(QStringLiteral("scoreA")).toInt();
+    const int sb = state.value(QStringLiteral("scoreB")).toInt();
+    const int race = state.value(QStringLiteral("raceTo")).toInt(7);
+    const int active = state.value(QStringLiteral("activeSide")).toInt(1);
+    QColor navy(state.value(QStringLiteral("bgColor")).toString());
+    if (!navy.isValid()) navy = QColor(18, 28, 48, 245);
+    QColor mid(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#3B6EA5")));
+    if (!mid.isValid()) mid = QColor(59, 110, 165);
+
+    const int barH = 58;
+    const int bh = barH + 10;
+    const int bw = layout == QLatin1String("wide") ? W : qMin(920, int(W * 0.72));
+    const QRect board = placeBoard(layout, W, H, bw, bh);
+    const QRect bar(board.left(), board.top(), board.width(), barH);
+
+    const int scoreBox = 48;
+    const int raceW = 100;
+    const int midX = bar.center().x();
+    const int nameW = (bar.width() - raceW - scoreBox * 2 - 8) / 2;
+    const QRect leftName(bar.left(), bar.top(), nameW, barH);
+    const QRect scoreA(leftName.right() + 2, bar.top() + 8, scoreBox, barH - 16);
+    const QRect raceR(midX - raceW / 2, bar.top(), raceW, barH);
+    const QRect scoreB(raceR.right() + 2, bar.top() + 8, scoreBox, barH - 16);
+    const QRect rightName(scoreB.right() + 2, bar.top(), bar.right() - scoreB.right(), barH);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(navy);
+    p.drawRoundedRect(bar, 8, 8);
+    p.setBrush(mid);
+    p.drawRect(raceR);
+    // clip race edges into bar
+    p.setBrush(navy);
+    p.drawRect(leftName);
+    p.drawRect(rightName);
+    p.setBrush(mid);
+    p.drawRect(raceR);
+
+    p.setBrush(Qt::white);
+    p.drawRoundedRect(scoreA, 2, 2);
+    p.drawRoundedRect(scoreB, 2, 2);
+
+    p.setBrush(Qt::white);
+    p.drawRect(QRect(leftName.left() + 20, bar.bottom() + 2, leftName.width() - 40, 4));
+    p.drawRect(QRect(rightName.left() + 20, bar.bottom() + 2, rightName.width() - 40, 4));
+
+    p.setPen(Qt::white);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 14, QFont::Bold));
+    p.drawText(leftName, Qt::AlignCenter, a);
+    p.drawText(rightName, Qt::AlignCenter, b);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 10, QFont::Bold));
+    p.drawText(QRect(raceR.left(), raceR.top() + 10, raceR.width(), 18), Qt::AlignCenter, QStringLiteral("RACE TO"));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 18, QFont::Bold));
+    p.drawText(QRect(raceR.left(), raceR.top() + 28, raceR.width(), 22), Qt::AlignCenter, QString::number(race));
+    p.setPen(QColor(15, 18, 24));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 26, QFont::Bold));
+    p.drawText(scoreA, Qt::AlignCenter, QString::number(sa));
+    p.drawText(scoreB, Qt::AlignCenter, QString::number(sb));
+
+    if (active == 1) {
+        p.setBrush(Qt::white);
+        p.setPen(Qt::NoPen);
+        p.drawRect(QRect(leftName.left(), leftName.top(), 4, leftName.height()));
+    } else if (active == 2) {
+        p.setBrush(Qt::white);
+        p.setPen(Qt::NoPen);
+        p.drawRect(QRect(rightName.right() - 3, rightName.top(), 4, rightName.height()));
+    }
+}
+
+// Snooker-ish: names + white score chips + frames center + thin stats bar
+void renderBilliardsSnooker(QPainter& p, const QJsonObject& state, int W, int H)
+{
+    const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
+    const QString a = shortName(state.value(QStringLiteral("playerA")).toString(QStringLiteral("Player A")), 14);
+    const QString b = shortName(state.value(QStringLiteral("playerB")).toString(QStringLiteral("Player B")), 14);
+    const int sa = state.value(QStringLiteral("scoreA")).toInt();
+    const int sb = state.value(QStringLiteral("scoreB")).toInt();
+    const int race = state.value(QStringLiteral("raceTo")).toInt(7);
+    const int active = state.value(QStringLiteral("activeSide")).toInt(1);
+    const QColor bg = QColor(28, 30, 34, 245);
+    const QColor fg = Qt::white;
+
+    const int mainH = 44;
+    const int subH = 26;
+    const int bh = mainH + subH;
+    const int bw = layout == QLatin1String("wide") ? W : qMin(760, int(W * 0.62));
+    const QRect board = placeBoard(layout, W, H, bw, bh);
+    const QRect main(board.left(), board.top(), board.width(), mainH);
+    const QRect sub(board.left() + 24, main.bottom(), board.width() - 48, subH);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(bg);
+    p.drawRoundedRect(main, 6, 6);
+    p.drawRoundedRect(sub, 0, 0);
+
+    const int chip = 36;
+    const QRect chipA(main.center().x() - 70, main.top() + 4, chip, mainH - 8);
+    const QRect chipB(main.center().x() + 34, main.top() + 4, chip, mainH - 8);
+    p.setBrush(Qt::white);
+    p.drawRoundedRect(chipA, 2, 2);
+    p.drawRoundedRect(chipB, 2, 2);
+    p.setPen(QColor(20, 22, 28));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 22, QFont::Bold));
+    p.drawText(chipA, Qt::AlignCenter, QString::number(sa));
+    p.drawText(chipB, Qt::AlignCenter, QString::number(sb));
+
+    p.setPen(fg);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
+    p.drawText(QRect(main.left() + 16, main.top(), chipA.left() - main.left() - 24, mainH),
+               Qt::AlignVCenter | Qt::AlignLeft, a);
+    p.drawText(QRect(chipB.right() + 12, main.top(), main.right() - chipB.right() - 28, mainH),
+               Qt::AlignVCenter | Qt::AlignRight, b);
+
+    p.setFont(QFont(QStringLiteral("DM Sans"), 11, QFont::Bold));
+    p.drawText(QRect(chipA.right(), main.top(), chipB.left() - chipA.right(), mainH), Qt::AlignCenter,
+               QStringLiteral("(%1)").arg(race));
+
+    if (active == 1) {
+        p.setBrush(QColor(220, 50, 50));
+        p.drawEllipse(QPointF(main.left() + 10, main.center().y()), 4, 4);
+    } else if (active == 2) {
+        p.setBrush(QColor(220, 50, 50));
+        p.drawEllipse(QPointF(main.right() - 10, main.center().y()), 4, 4);
+    }
+
+    p.setPen(QColor(200, 205, 215));
+    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
+    p.drawText(sub, Qt::AlignCenter, QStringLiteral("Race to %1  ·  frames").arg(race));
+}
+
+// Modern slanted translucent wings
+void renderBilliardsSlant(QPainter& p, const QJsonObject& state, int W, int H)
+{
+    const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
+    const QString a = shortName(state.value(QStringLiteral("playerA")).toString(QStringLiteral("Team A")), 12);
+    const QString b = shortName(state.value(QStringLiteral("playerB")).toString(QStringLiteral("Team B")), 12);
+    const int sa = state.value(QStringLiteral("scoreA")).toInt();
+    const int sb = state.value(QStringLiteral("scoreB")).toInt();
+    const int race = state.value(QStringLiteral("raceTo")).toInt(7);
+    const int active = state.value(QStringLiteral("activeSide")).toInt(1);
+    QColor panel(state.value(QStringLiteral("bgColor")).toString());
+    if (!panel.isValid()) panel = QColor(120, 200, 200, 200);
+    QColor ink(state.value(QStringLiteral("textColor")).toString());
+    if (!ink.isValid()) ink = QColor(20, 40, 50);
+    QColor shield(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#1E3A5F")));
+    if (!shield.isValid()) shield = QColor(30, 50, 80);
+
+    const int bh = 64;
+    const int bw = layout == QLatin1String("wide") ? W : qMin(880, int(W * 0.7));
+    const QRect board = placeBoard(layout, W, H, bw, bh);
+    const int mid = board.center().x();
+    const int half = (board.width() - 48) / 2;
+
+    auto slant = [&](const QRect& r, bool leanRight) {
+        QPolygonF poly;
+        if (leanRight) {
+            poly << r.topLeft() << QPointF(r.right() - 18, r.top()) << r.bottomRight() << r.bottomLeft();
+        } else {
+            poly << QPointF(r.left() + 18, r.top()) << r.topRight() << r.bottomRight() << r.bottomLeft();
+        }
+        p.setPen(Qt::NoPen);
+        p.setBrush(panel);
+        p.drawPolygon(poly);
+    };
+
+    const QRect leftR(board.left(), board.top() + 6, half, bh - 12);
+    const QRect rightR(board.right() - half, board.top() + 6, half, bh - 12);
+    slant(leftR, true);
+    slant(rightR, false);
+
+    // Center shield
+    QPainterPath sh;
+    const QRect sc(mid - 22, board.top(), 44, bh);
+    sh.moveTo(sc.center().x(), sc.top());
+    sh.lineTo(sc.right(), sc.top() + 10);
+    sh.lineTo(sc.right() - 4, sc.bottom() - 6);
+    sh.lineTo(sc.center().x(), sc.bottom());
+    sh.lineTo(sc.left() + 4, sc.bottom() - 6);
+    sh.lineTo(sc.left(), sc.top() + 10);
+    sh.closeSubpath();
+    p.setBrush(shield);
+    p.drawPath(sh);
+    p.setPen(Qt::white);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
+    p.drawText(sc, Qt::AlignCenter, QStringLiteral("R%1").arg(race));
+
+    p.setPen(ink);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
+    p.drawText(leftR.adjusted(16, 0, -50, 0), Qt::AlignVCenter | Qt::AlignLeft, a);
+    p.drawText(rightR.adjusted(50, 0, -16, 0), Qt::AlignVCenter | Qt::AlignRight, b);
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
+    p.drawText(leftR.adjusted(0, 0, -12, 0), Qt::AlignVCenter | Qt::AlignRight, QString::number(sa));
+    p.drawText(rightR.adjusted(12, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::number(sb));
+
+    if (active == 1) {
+        p.setBrush(shield);
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(QPointF(leftR.left() + 10, leftR.center().y()), 4, 4);
+    } else if (active == 2) {
+        p.setBrush(shield);
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(QPointF(rightR.right() - 10, rightR.center().y()), 4, 4);
+    }
+}
+
+// Felt / neon fallback — improved original
+void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
 {
     const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
     const QString theme = state.value(QStringLiteral("theme")).toString(QStringLiteral("railshot"));
@@ -125,103 +514,85 @@ void renderBilliards(QPainter& p, const QJsonObject& state, int W, int H)
     const int race = state.value(QStringLiteral("raceTo")).toInt(7);
     const int active = state.value(QStringLiteral("activeSide")).toInt(1);
     const int clock = state.value(QStringLiteral("clockSeconds")).toInt();
+    const int pocketed = state.value(QStringLiteral("pocketedMask")).toInt();
     QColor accentA(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#FF5A2C")));
     QColor accentB(state.value(QStringLiteral("colorB")).toString(QStringLiteral("#4F9EFF")));
     if (!accentA.isValid()) accentA = QColor(QStringLiteral("#FF5A2C"));
     if (!accentB.isValid()) accentB = QColor(QStringLiteral("#4F9EFF"));
     const QColor fg = resolveFg(state, theme);
+    const bool neon = theme == QLatin1String("neon");
     const QColor felt(16, 90, 48);
-    const QColor feltDeep(8, 48, 28);
     QColor bg = resolveBg(state, theme);
-    // Prefer felt-tinted plate for pool when using default dark themes
-    if (state.value(QStringLiteral("bgColor")).toString().isEmpty()
-        && (theme == QLatin1String("railshot") || theme == QLatin1String("broadcast")
-            || theme == QLatin1String("carbon"))) {
-        bg = QColor(10, 18, 14, 240);
-    }
+    if (state.value(QStringLiteral("bgColor")).toString().isEmpty())
+        bg = neon ? QColor(8, 4, 20, 240) : QColor(10, 18, 14, 240);
 
-    const bool wide = layout == QLatin1String("wide");
-    const int bh = wide ? 88 : 100;
-    const int bw = wide ? W : qMin(1180, int(W * 0.92));
+    const bool showRack = layout != QLatin1String("compact");
+    const int rackH = showRack ? 32 : 0;
+    const int mainH = 78;
+    const int bh = mainH + rackH;
+    const int bw = layout == QLatin1String("wide") ? W : qMin(1100, int(W * 0.88));
     const QRect board = placeBoard(layout, W, H, bw, bh);
+    const QRect main(board.left(), board.top(), board.width(), mainH);
 
-    // Outer shell + felt rail
-    drawRoundRect(p, board, 8, bg, QColor(255, 255, 255, 28));
-    p.fillRect(QRect(board.left() + 6, board.top() + 4, board.width() - 12, 3), felt);
-    p.fillRect(QRect(board.left() + 6, board.bottom() - 6, board.width() - 12, 3), feltDeep);
+    drawRoundRect(p, main, 8, bg, neon ? accentA : QColor(255, 255, 255, 28));
+    p.fillRect(QRect(main.left() + 8, main.top() + 5, main.width() - 16, 3), felt);
 
-    const int midX = board.center().x();
-    const int y0 = board.top() + 14;
-    const int rowH = board.height() - 28;
-
-    // Center race pill + 8-ball
-    const int raceW = 150;
-    const QRect raceR(midX - raceW / 2, y0 + 8, raceW, rowH - 16);
-    drawRoundRect(p, raceR, 6, QColor(6, 10, 8, 220), felt);
-    drawEightBall(p, QPointF(raceR.center().x(), raceR.top() + 22), 11);
-    p.setPen(felt.lighter(140));
-    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
-    p.drawText(QRect(raceR.left(), raceR.top() + 34, raceR.width(), 16), Qt::AlignHCenter | Qt::AlignVCenter,
-               QStringLiteral("RACE TO"));
+    const int midX = main.center().x();
+    const int raceW = 130;
+    const QRect raceR(midX - raceW / 2, main.top() + 12, raceW, mainH - 24);
+    drawRoundRect(p, raceR, 6, QColor(0, 0, 0, 160), felt);
+    drawEightBall(p, QPointF(raceR.center().x(), raceR.top() + 18), 10);
+    p.setPen(felt.lighter(150));
+    p.setFont(QFont(QStringLiteral("DM Sans"), 8, QFont::Bold));
+    p.drawText(QRect(raceR.left(), raceR.top() + 30, raceR.width(), 14), Qt::AlignCenter, QStringLiteral("RACE TO"));
     p.setPen(fg);
     p.setFont(QFont(QStringLiteral("Bebas Neue"), 22, QFont::Bold));
-    p.drawText(QRect(raceR.left(), raceR.top() + 48, raceR.width(), 28), Qt::AlignHCenter | Qt::AlignVCenter,
-               QString::number(race));
+    p.drawText(QRect(raceR.left(), raceR.top() + 42, raceR.width(), 24), Qt::AlignCenter, QString::number(race));
 
-    // Left player
-    const QRect leftR(board.left() + 12, y0, midX - raceW / 2 - board.left() - 20, rowH);
-    if (active == 1) {
-        p.fillRect(QRect(leftR.left(), leftR.top(), 4, leftR.height()), accentA);
-        p.fillRect(QRect(leftR.left() + 4, leftR.top(), leftR.width() - 4, leftR.height()),
-                   QColor(accentA.red(), accentA.green(), accentA.blue(), 35));
-    }
-    p.setPen(active == 1 ? accentA : fg);
-    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
-    p.drawText(QRect(leftR.left() + 14, leftR.top() + 6, leftR.width() - 70, 28),
-               Qt::AlignLeft | Qt::AlignVCenter, a.toUpper());
-    p.setPen(fg);
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 42, QFont::Bold));
-    p.drawText(QRect(leftR.right() - 72, leftR.top(), 68, leftR.height()),
-               Qt::AlignRight | Qt::AlignVCenter, QString::number(sa));
-    p.setPen(QColor(fg.red(), fg.green(), fg.blue(), 140));
-    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
-    p.drawText(QRect(leftR.left() + 14, leftR.bottom() - 26, 80, 18), Qt::AlignLeft | Qt::AlignVCenter,
-               QStringLiteral("RACKS"));
-
-    // Right player
-    const QRect rightR(midX + raceW / 2 + 8, y0, board.right() - (midX + raceW / 2) - 20, rowH);
-    if (active == 2) {
-        p.fillRect(QRect(rightR.right() - 3, rightR.top(), 4, rightR.height()), accentB);
-        p.fillRect(QRect(rightR.left(), rightR.top(), rightR.width() - 4, rightR.height()),
-                   QColor(accentB.red(), accentB.green(), accentB.blue(), 35));
-    }
-    p.setPen(fg);
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 42, QFont::Bold));
-    p.drawText(QRect(rightR.left(), rightR.top(), 68, rightR.height()),
-               Qt::AlignLeft | Qt::AlignVCenter, QString::number(sb));
-    p.setPen(active == 2 ? accentB : fg);
-    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
-    p.drawText(QRect(rightR.left() + 72, rightR.top() + 6, rightR.width() - 86, 28),
-               Qt::AlignRight | Qt::AlignVCenter, b.toUpper());
-    p.setPen(QColor(fg.red(), fg.green(), fg.blue(), 140));
-    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
-    p.drawText(QRect(rightR.right() - 90, rightR.bottom() - 26, 80, 18), Qt::AlignRight | Qt::AlignVCenter,
-               QStringLiteral("RACKS"));
-
-    // Shot clock chip (if running / non-zero)
-    if (clock > 0 || state.value(QStringLiteral("clockRunning")).toBool()) {
-        const QString ct = clockText(clock);
-        p.setPen(QColor(134, 239, 172));
-        p.setFont(QFont(QStringLiteral("JetBrains Mono"), 10, QFont::Bold));
-        p.drawText(QRect(board.left(), board.bottom() - 22, board.width(), 16), Qt::AlignCenter,
-                   QStringLiteral("SHOT  %1").arg(ct));
-    }
-
-    // Cue ball accents on active side
+    const QRect leftR(main.left() + 12, main.top() + 10, raceR.left() - main.left() - 20, mainH - 20);
+    const QRect rightR(raceR.right() + 8, main.top() + 10, main.right() - raceR.right() - 20, mainH - 20);
     if (active == 1)
-        drawCueBall(p, QPointF(leftR.left() + 22, leftR.bottom() - 18), 6);
-    else if (active == 2)
-        drawCueBall(p, QPointF(rightR.right() - 22, rightR.bottom() - 18), 6);
+        p.fillRect(QRect(leftR.left(), leftR.top(), 4, leftR.height()), accentA);
+    if (active == 2)
+        p.fillRect(QRect(rightR.right() - 3, rightR.top(), 4, rightR.height()), accentB);
+
+    p.setPen(fg);
+    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
+    p.drawText(leftR.adjusted(12, 0, -60, 0), Qt::AlignVCenter | Qt::AlignLeft, a.toUpper());
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 36, QFont::Bold));
+    p.drawText(leftR.adjusted(0, 0, -4, 0), Qt::AlignVCenter | Qt::AlignRight, QString::number(sa));
+    p.setFont(QFont(QStringLiteral("Bebas Neue"), 36, QFont::Bold));
+    p.drawText(rightR.adjusted(4, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::number(sb));
+    p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
+    p.drawText(rightR.adjusted(60, 0, -12, 0), Qt::AlignVCenter | Qt::AlignRight, b.toUpper());
+
+    if (clock > 0 || state.value(QStringLiteral("clockRunning")).toBool()) {
+        p.setPen(QColor(134, 239, 172));
+        p.setFont(QFont(QStringLiteral("JetBrains Mono"), 9, QFont::Bold));
+        p.drawText(QRect(main.left(), main.bottom() - 16, main.width(), 14), Qt::AlignCenter,
+                   QStringLiteral("SHOT %1").arg(clockText(clock)));
+    }
+    if (showRack) {
+        drawBallRackStrip(p, QRect(main.left() + 12, main.bottom() + 2, main.width() - 24, rackH - 4), pocketed);
+    }
+}
+
+// ── Billiards / pool (primary) ───────────────────────────────────
+void renderBilliards(QPainter& p, const QJsonObject& state, int W, int H)
+{
+    const QString theme = state.value(QStringLiteral("theme")).toString(QStringLiteral("railshot"));
+    const QString layout = state.value(QStringLiteral("layout")).toString(QStringLiteral("standard"));
+    // Center layout → snooker-style dual bar (names + white score chips)
+    if (layout == QLatin1String("center"))
+        renderBilliardsSnooker(p, state, W, H);
+    else if (theme == QLatin1String("broadcast") || theme == QLatin1String("gold"))
+        renderBilliardsMosconi(p, state, W, H);
+    else if (theme == QLatin1String("carbon"))
+        renderBilliardsClean(p, state, W, H);
+    else if (theme == QLatin1String("classic"))
+        renderBilliardsSlant(p, state, W, H);
+    else
+        renderBilliardsFelt(p, state, W, H);
 }
 
 // ── Baseball (diamond bug) ───────────────────────────────────────
