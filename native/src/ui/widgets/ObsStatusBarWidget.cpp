@@ -89,7 +89,9 @@ void ObsStatusBarWidget::refresh(const TelemetrySnapshot& s)
     m_bitrate->setText(s.streaming ? QStringLiteral("%1 kbps").arg(s.bitrateKbps)
                                    : QStringLiteral("— kbps"));
     m_streamTimer->setText(s.streaming
-                               ? QStringLiteral("LIVE %1").arg(formatUptime(s.streamUptimeSec))
+                               ? (s.streamState == ConnectionState::Reconnecting
+                                      ? QStringLiteral("RECONN %1").arg(formatUptime(s.streamUptimeSec))
+                                      : QStringLiteral("LIVE %1").arg(formatUptime(s.streamUptimeSec)))
                                : QStringLiteral("Stream —"));
     m_recordTimer->setText(s.recording
                                ? QStringLiteral("REC %1").arg(formatUptime(s.recordUptimeSec))
@@ -106,7 +108,9 @@ void ObsStatusBarWidget::refresh(const TelemetrySnapshot& s)
         m_message->setText(s.lastError);
         m_message->setStyleSheet(QStringLiteral("color:#F87171; border-right:none;"));
     } else if (s.streaming) {
-        m_message->setText(QStringLiteral("Streaming"));
+        m_message->setText(s.streamState == ConnectionState::Reconnecting
+                               ? QStringLiteral("Reconnecting…")
+                               : QStringLiteral("Streaming"));
         m_message->setStyleSheet(QStringLiteral("color:#FFB08A; border-right:none;"));
     } else if (s.recording) {
         m_message->setText(QStringLiteral("Recording"));

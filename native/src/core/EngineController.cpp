@@ -11,11 +11,14 @@
 #include "overlays/ReplayBuffer.h"
 #include "overlays/VirtualCamera.h"
 #include "recording/IsoRecordManager.h"
+#include "recording/RemuxUtil.h"
+#include "core/RecordingPath.h"
 #include "core/Logger.h"
 #include <QDateTime>
 #include <QDir>
 #include <QTimer>
 #include <QJsonArray>
+#include <QThread>
 #include <algorithm>
 
 namespace railshot {
@@ -40,6 +43,29 @@ EngineController::EngineController(QObject* parent)
     connect(&m_autosaveTimer, &QTimer::timeout, this, &EngineController::onAutosave);
     connect(m_telemetry.get(), &HealthTelemetry::updated, this, &EngineController::telemetryUpdated);
     connect(m_outputs.get(), &OutputHub::errorOccurred, this, &EngineController::errorOccurred);
+    connect(m_outputs.get(), &OutputHub::reconnecting, this, [this](int attempt) {
+        emit errorOccurred(QStringLiteral("Reconnecting to RTMP (attempt %1)…").arg(attempt));
+    });
+    connect(m_outputs.get(), &OutputHub::recordingStopped, this, [this](const QString& path) {
+        if (path.isEmpty() || !m_settings) return;
+        const auto ui = m_settings->uiState();
+        if (!ui.value(QStringLiteral("autoRemuxToMp4")).toBool())
+            return;
+        const QString out = defaultRemuxOutputPath(path);
+        // Run off the UI/engine tick thread so stopRecording stays snappy.
+        QThread* worker = QThread::create([this, path, out] {
+            QString err;
+            if (!remuxCopy(path, out, &err)) {
+                QMetaObject::invokeMethod(this, [this, err] {
+                    emit errorOccurred(err.isEmpty() ? QStringLiteral("Auto-remux failed") : err);
+                }, Qt::QueuedConnection);
+            } else {
+                Logger::info(QStringLiteral("Auto-remux complete: %1").arg(out));
+            }
+        });
+        connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+        worker->start();
+    });
     connect(m_scoreboard.get(), &ScoreboardModel::changed, this, &EngineController::onScoreboardChanged);
 
     connect(m_outputs.get(), &OutputHub::codecConfigReady, this,
@@ -516,6 +542,12 @@ bool EngineController::startStreamingTargets(const QVector<StreamTarget>& target
     }
     const auto p = m_sceneGraph->snapshot();
     const OutputProfile profile = p.output.width > 0 ? p.output : m_settings->outputProfile();
+    const auto ui = m_settings->uiState();
+    m_outputs->setNetworkOptions(
+        ui.value(QStringLiteral("reconnectEnabled")).toBool(true),
+        ui.value(QStringLiteral("reconnectMaxAttempts")).toInt(0),
+        ui.value(QStringLiteral("reconnectBaseMs")).toInt(500),
+        ui.value(QStringLiteral("streamDelaySec")).toInt(0));
     if (!m_outputs->startStreaming(targets, profile, error))
         return false;
     m_telemetry->setStreaming(true);
@@ -538,7 +570,13 @@ bool EngineController::startRecording(QString* error)
         profile.width = kDefaultCanvasWidth;
         profile.height = kDefaultCanvasHeight;
     }
-    if (!m_outputs->startRecording(m_settings->recordingDirectory(), profile, error))
+    const QString dir = m_settings->recordingDirectory();
+    QDir().mkpath(dir);
+    const auto ui = m_settings->uiState();
+    const QString pattern = ui.value(QStringLiteral("recordingFilenamePattern")).toString(
+        defaultRecordingFilenamePattern());
+    const QString path = buildRecordingFilePath(dir, pattern);
+    if (!m_outputs->startRecording(path, profile, error))
         return false;
     m_telemetry->setRecording(true);
     updateEngineState();

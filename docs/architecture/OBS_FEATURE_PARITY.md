@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
+Last updated: Wave 5 (Output/service polish).
 
 ## Design rules
 
@@ -18,9 +18,8 @@ Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
 |-----|------|--------|----------|
 | OBSBasic / OBSBasic_* | Main shell | partial | `MainWindow`, `DashboardPage`, `TopMenuBar` |
 | OBSBasicControls | Stream/Record/Replay/VCam/Studio | partial | `BottomToolbar` + Go Live |
-| OBSBasicStatusBar | FPS/CPU/dropped/bitrate/timers | partial | `ObsStatusBarWidget` |
+| OBSBasicStatusBar | FPS/CPU/dropped/bitrate/timers | partial | `ObsStatusBarWidget` (+ reconnect) |
 | OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + scale/lock/projectors |
-| OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle |
 | OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` |
@@ -30,7 +29,7 @@ Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` (Preview/Program; Multiview later) |
 | OBSBasic_ContextToolbar | Source context toolbar | partial | `SourceContextToolbar` |
 | OBSBasic_Hotkeys | Hotkeys | partial | `HotkeyDispatcher` |
-| OBSBasic_Recording/_Streaming/_ReplayBuffer/_VirtualCam | Outputs | partial | Engine + toolbar |
+| OBSBasic_Recording/_Streaming/_ReplayBuffer/_VirtualCam | Outputs | partial | `OutputHub` + Settings Stream/Output/Advanced |
 | OBSBasic_Screenshots | Screenshots | todo | — |
 | OBSBasic_Projectors | Projector windows | partial | `ProjectorWindow` + View menu |
 | OBSBasic_Docks | Dock layout | partial | Nested QMainWindow docks |
@@ -51,7 +50,7 @@ Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` |
 | OBSBasicVCamConfig | todo | External/VCam toggle |
-| OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `LogViewerDialog` (MissingFiles later) |
+| OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / auto-remux / `LogViewerDialog` (MissingFiles later) |
 | NameDialog | partial | QInputDialog |
 
 ## Wave progress
@@ -61,5 +60,5 @@ Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
 - [x] Wave 2 — Adv Audio + mixer depth (balance, monitor modes, sync, tracks, lock)
 - [x] Wave 3 — Preview power (lock, scale, projectors, interact)
 - [x] Wave 4 — Profiles / collections / remux / logs
-- [ ] Wave 5 — Output/service polish
+- [x] Wave 5 — Output/service polish (Settings Stream/Output/Advanced, rate control, reconnect, delay, auto-remux, filename tokens)
 - [ ] Wave 6 — Extra browsers, dropfiles, hotkey UI, stats dock

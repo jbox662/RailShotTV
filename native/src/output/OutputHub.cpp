@@ -4,6 +4,7 @@
 #include "core/SecretStore.h"
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <cstring>
 #include <vector>
 
@@ -167,7 +168,7 @@ void OutputHub::stopWorker()
     m_audioQueue.clear();
 }
 
-bool OutputHub::startRecording(const QString& directory, const OutputProfile& profile, QString* error)
+bool OutputHub::startRecording(const QString& filePath, const OutputProfile& profile, QString* error)
 {
     {
         QMutexLocker lock(&m_encMutex);
@@ -178,13 +179,12 @@ bool OutputHub::startRecording(const QString& directory, const OutputProfile& pr
         if (!ensureEncoders(profile, error))
             return false;
 
-        QDir().mkpath(directory);
-        const QString path = directory + QStringLiteral("/RailShotTV-%1.mkv")
-                                 .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+        const QFileInfo fi(filePath);
+        QDir().mkpath(fi.absolutePath());
 
         m_recorder = std::make_unique<MkvRecorder>();
         connect(m_recorder.get(), &MkvRecorder::writeError, this, &OutputHub::errorOccurred);
-        if (!m_recorder->open(path, profile,
+        if (!m_recorder->open(filePath, profile,
                               m_videoEnc->extradata(), m_audioEnc->extradata(),
                               m_audioEnc->sampleRate(), m_audioEnc->channels(), error)) {
             m_recorder.reset();
@@ -195,11 +195,19 @@ bool OutputHub::startRecording(const QString& directory, const OutputProfile& pr
 
         m_recording = true;
         m_recordTimer.start();
-        Logger::info(QStringLiteral("Recording started: %1").arg(path));
-        emit recordingStarted(path);
+        Logger::info(QStringLiteral("Recording started: %1").arg(filePath));
+        emit recordingStarted(filePath);
     }
     ensureWorker();
     return true;
+}
+
+void OutputHub::setNetworkOptions(bool reconnectEnabled, int maxAttempts, int baseBackoffMs, int delaySec)
+{
+    m_reconnectEnabled = reconnectEnabled;
+    m_reconnectMaxAttempts = maxAttempts;
+    m_reconnectBaseMs = baseBackoffMs;
+    m_streamDelaySec = delaySec;
 }
 
 void OutputHub::stopRecording()
@@ -263,8 +271,11 @@ bool OutputHub::startStreaming(const QVector<StreamTarget>& targets, const Outpu
             }
 
             auto rtmp = std::make_unique<RtmpOutput>();
+            rtmp->configureNetwork(m_reconnectEnabled, m_reconnectMaxAttempts,
+                                   m_reconnectBaseMs, m_streamDelaySec);
             connect(rtmp.get(), &RtmpOutput::stateChanged, this, &OutputHub::streamStateChanged);
             connect(rtmp.get(), &RtmpOutput::networkError, this, &OutputHub::errorOccurred);
+            connect(rtmp.get(), &RtmpOutput::reconnecting, this, &OutputHub::reconnecting);
             QString err;
             if (!rtmp->connectTo(target.rtmpUrl, key, profile,
                                  m_videoEnc->extradata(), m_audioEnc->extradata(),

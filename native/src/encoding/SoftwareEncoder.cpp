@@ -2,6 +2,7 @@
 #include "core/Logger.h"
 
 #include <QImage>
+#include <QtGlobal>
 #include <cstring>
 
 #if RAILSHOT_HAS_FFMPEG
@@ -73,10 +74,31 @@ bool SoftwareEncoder::open(const OutputProfile& profile, QString* error)
     m_ctx->time_base = AVRational{1, 1000000};
     m_ctx->framerate = av_d2q(m_profile.fps, 100000);
     m_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    m_ctx->bit_rate = static_cast<int64_t>(m_profile.videoBitrateKbps) * 1000;
     m_ctx->gop_size = qMax(1, static_cast<int>(m_profile.fps * m_profile.keyframeIntervalSec));
     m_ctx->max_b_frames = 0;
     m_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    const QString rc = m_profile.rateControl.toUpper();
+    if (rc == QLatin1String("CQP") || rc == QLatin1String("CRF")) {
+        // Approximate quality from bitrate slider (higher kbps → lower CRF).
+        const int crf = qBound(18, 32, 32 - (m_profile.videoBitrateKbps / 500));
+        m_ctx->bit_rate = 0;
+        if (m_ctx->priv_data) {
+            av_opt_set(m_ctx->priv_data, "crf", QByteArray::number(crf).constData(), 0);
+            av_opt_set(m_ctx->priv_data, "rc", "crf", 0);
+        }
+    } else {
+        m_ctx->bit_rate = static_cast<int64_t>(m_profile.videoBitrateKbps) * 1000;
+        if (rc == QLatin1String("CBR") && m_ctx->priv_data) {
+            av_opt_set(m_ctx->priv_data, "rc", "cbr", 0);
+            m_ctx->rc_max_rate = m_ctx->bit_rate;
+            m_ctx->rc_min_rate = m_ctx->bit_rate;
+            m_ctx->rc_buffer_size = static_cast<int>(m_ctx->bit_rate);
+        } else if (m_ctx->priv_data) {
+            av_opt_set(m_ctx->priv_data, "rc", "vbr", 0);
+            m_ctx->rc_max_rate = m_ctx->bit_rate * 3 / 2;
+        }
+    }
 
     if (codec->id == AV_CODEC_ID_H264) {
         av_opt_set(m_ctx->priv_data, "profile", "baseline", 0);

@@ -48,6 +48,8 @@ add_library(railshot_core STATIC
     src/core/Logger.cpp
     src/core/ProfileCollectionStore.h
     src/core/ProfileCollectionStore.cpp
+    src/core/RecordingPath.h
+    src/core/RecordingPath.cpp
 )
 target_include_directories(railshot_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -210,6 +212,8 @@ add_library(railshot_recording STATIC
     src/recording/RecordingSession.cpp
     src/recording/IsoRecordManager.h
     src/recording/IsoRecordManager.cpp
+    src/recording/RemuxUtil.h
+    src/recording/RemuxUtil.cpp
 )
 target_link_libraries(railshot_recording PUBLIC
     railshot_encoding

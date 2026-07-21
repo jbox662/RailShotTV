@@ -1,6 +1,7 @@
 #include "streaming/RtmpOutput.h"
 #include "core/Logger.h"
 #include <QUrl>
+#include <QDateTime>
 #include <cstring>
 
 #if RAILSHOT_HAS_FFMPEG
@@ -17,6 +18,14 @@ namespace railshot {
 RtmpOutput::RtmpOutput(QObject* parent)
     : QObject(parent)
 {
+}
+
+void RtmpOutput::configureNetwork(bool reconnectEnabled, int maxAttempts, int baseBackoffMs, int delaySec)
+{
+    m_reconnectEnabled = reconnectEnabled;
+    m_reconnectMaxAttempts = qMax(0, maxAttempts);
+    m_reconnectBaseMs = qMax(100, baseBackoffMs);
+    m_delayMs = qMax(0, delaySec) * 1000;
 }
 
 RtmpOutput::~RtmpOutput()
@@ -246,7 +255,7 @@ void RtmpOutput::pushVideo(const EncodedPacket& pkt)
     if (m_queue.size() >= kMaxQueue) {
         // Drop oldest non-keyframes first to relieve backpressure.
         for (int i = 0; i < m_queue.size(); ++i) {
-            if (!m_queue[i].keyframe) {
+            if (!m_queue[i].pkt.keyframe) {
                 m_queue.removeAt(i);
                 m_dropped++;
                 break;
@@ -257,7 +266,10 @@ void RtmpOutput::pushVideo(const EncodedPacket& pkt)
             return;
         }
     }
-    m_queue.enqueue(pkt);
+    QueuedPacket qp;
+    qp.pkt = pkt;
+    qp.readyAtMs = QDateTime::currentMSecsSinceEpoch() + m_delayMs;
+    m_queue.enqueue(qp);
     m_queueNotEmpty.wakeOne();
 }
 
@@ -327,7 +339,13 @@ void RtmpOutput::writerLoop()
             if (m_queue.isEmpty())
                 m_queueNotEmpty.wait(&m_queueMutex, 50);
             if (!m_queue.isEmpty()) {
-                pkt = m_queue.dequeue();
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
+                if (m_queue.head().readyAtMs > now) {
+                    const int waitMs = int(qMin<qint64>(50, m_queue.head().readyAtMs - now));
+                    m_queueNotEmpty.wait(&m_queueMutex, qMax(1, waitMs));
+                    continue;
+                }
+                pkt = m_queue.dequeue().pkt;
                 has = true;
             }
         }
@@ -342,9 +360,23 @@ void RtmpOutput::writerLoop()
         if (ok)
             continue;
 
+        if (!m_reconnectEnabled) {
+            setState(ConnectionState::Failed);
+            emit networkError(QStringLiteral("RTMP write failed (reconnect disabled)"));
+            m_connected = false;
+            break;
+        }
+        if (m_reconnectMaxAttempts > 0 && m_reconnectAttempt >= m_reconnectMaxAttempts) {
+            setState(ConnectionState::Failed);
+            emit networkError(QStringLiteral("RTMP reconnect attempts exhausted"));
+            m_connected = false;
+            break;
+        }
+
         setState(ConnectionState::Reconnecting);
         emit reconnecting(++m_reconnectAttempt);
-        const int backoffMs = qMin(30000, 500 * (1 << qMin(m_reconnectAttempt, 5)));
+        const int shift = qMin(m_reconnectAttempt, 5);
+        const int backoffMs = qMin(30000, m_reconnectBaseMs * (1 << shift));
         QThread::msleep(backoffMs);
         if (!m_running.load())
             break;

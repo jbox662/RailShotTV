@@ -105,7 +105,7 @@ void TestRtmpFlv::outputHubRecordsAndStreamsToFlv()
 
     OutputHub hub;
     QString err;
-    QVERIFY2(hub.startRecording(dir, profile, &err), qPrintable(err));
+    QVERIFY2(hub.startRecording(dir + QStringLiteral("/hub.mkv"), profile, &err), qPrintable(err));
 
     StreamTarget target;
     target.name = QStringLiteral("Local FLV");

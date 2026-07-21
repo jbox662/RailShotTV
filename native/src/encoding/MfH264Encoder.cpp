@@ -137,10 +137,27 @@ bool MfH264Encoder::configureTransform(QString* error)
         VARIANT v;
         VariantInit(&v);
         v.vt = VT_UI4;
-        v.ulVal = eAVEncCommonRateControlMode_CBR;
+        const QString rc = m_profile.rateControl.toUpper();
+        if (rc == QLatin1String("VBR"))
+            v.ulVal = eAVEncCommonRateControlMode_UnconstrainedVBR;
+        else if (rc == QLatin1String("CQP") || rc == QLatin1String("CRF"))
+            v.ulVal = eAVEncCommonRateControlMode_Quality;
+        else
+            v.ulVal = eAVEncCommonRateControlMode_CBR;
         codecApi->SetValue(&CODECAPI_AVEncCommonRateControlMode, &v);
-        v.ulVal = static_cast<ULONG>(m_profile.videoBitrateKbps) * 1000;
-        codecApi->SetValue(&CODECAPI_AVEncCommonMeanBitRate, &v);
+        if (rc == QLatin1String("CQP") || rc == QLatin1String("CRF")) {
+            // Map bitrate ladder loosely to quality 1–51 (lower = better). Mid ~23.
+            const ULONG q = static_cast<ULONG>(qBound(1, 51, 51 - (m_profile.videoBitrateKbps / 250)));
+            v.ulVal = q;
+            codecApi->SetValue(&CODECAPI_AVEncCommonQuality, &v);
+        } else {
+            v.ulVal = static_cast<ULONG>(m_profile.videoBitrateKbps) * 1000;
+            codecApi->SetValue(&CODECAPI_AVEncCommonMeanBitRate, &v);
+            if (rc == QLatin1String("VBR")) {
+                v.ulVal = static_cast<ULONG>(m_profile.videoBitrateKbps) * 1500;
+                codecApi->SetValue(&CODECAPI_AVEncCommonMaxBitRate, &v);
+            }
+        }
         v.ulVal = static_cast<ULONG>(qMax(1, m_profile.keyframeIntervalSec));
         codecApi->SetValue(&CODECAPI_AVEncMPVGOPSize, &v);
         VariantClear(&v);

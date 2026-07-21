@@ -33,6 +33,9 @@ public:
     bool isConnected() const { return m_connected.load(); }
     ConnectionState state() const { return m_state; }
 
+    /// Call before connectTo. maxAttempts 0 = unlimited. delaySec buffers packets before send.
+    void configureNetwork(bool reconnectEnabled, int maxAttempts, int baseBackoffMs, int delaySec);
+
     void pushVideo(const EncodedPacket& pkt);
     void pushAudio(const EncodedPacket& pkt);
 
@@ -68,10 +71,19 @@ private:
     int m_audioSampleRate = 48000;
     int m_audioChannels = 2;
     int m_reconnectAttempt = 0;
+    bool m_reconnectEnabled = true;
+    int m_reconnectMaxAttempts = 0; // 0 = unlimited
+    int m_reconnectBaseMs = 500;
+    int m_delayMs = 0;
+
+    struct QueuedPacket {
+        EncodedPacket pkt;
+        qint64 readyAtMs = 0;
+    };
 
     QMutex m_queueMutex;
     QWaitCondition m_queueNotEmpty;
-    QQueue<EncodedPacket> m_queue;
+    QQueue<QueuedPacket> m_queue;
     static constexpr int kMaxQueue = 180;
 
     QMutex m_muxMutex;

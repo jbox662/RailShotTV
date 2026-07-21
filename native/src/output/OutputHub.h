@@ -30,7 +30,7 @@ public:
     explicit OutputHub(QObject* parent = nullptr);
     ~OutputHub() override;
 
-    bool startRecording(const QString& directory, const OutputProfile& profile, QString* error = nullptr);
+    bool startRecording(const QString& filePath, const OutputProfile& profile, QString* error = nullptr);
     void stopRecording();
     bool isRecording() const { return m_recording.load(); }
 
@@ -39,6 +39,9 @@ public:
     void stopStreaming();
     bool isStreaming() const { return m_streaming.load(); }
     int activeStreamCount() const;
+
+    /// Applied to each new RTMP output before connect.
+    void setNetworkOptions(bool reconnectEnabled, int maxAttempts, int baseBackoffMs, int delaySec);
 
     void submitVideo(ID3D11Texture2D* texture, qint64 ptsUs);
     void submitVideoImage(const QImage& image, qint64 ptsUs);
@@ -64,6 +67,7 @@ signals:
     void streamingStarted();
     void streamingStopped();
     void streamStateChanged(ConnectionState state);
+    void reconnecting(int attempt);
     void errorOccurred(const QString& message);
     void encodedPacket(const EncodedPacket& pkt);
     void codecConfigReady(const OutputProfile& profile,
@@ -121,6 +125,11 @@ private:
     QElapsedTimer m_recordTimer;
     QElapsedTimer m_streamTimer;
     qint64 m_bytesAtStreamStart = 0;
+
+    bool m_reconnectEnabled = true;
+    int m_reconnectMaxAttempts = 0;
+    int m_reconnectBaseMs = 500;
+    int m_streamDelaySec = 0;
 };
 
 } // namespace railshot

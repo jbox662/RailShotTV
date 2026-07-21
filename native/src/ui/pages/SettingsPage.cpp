@@ -1,6 +1,8 @@
 #include "ui/pages/SettingsPage.h"
 #include "ui/Theme.h"
 #include "core/EngineController.h"
+#include "core/SecretStore.h"
+#include "core/RecordingPath.h"
 #include "compositor/D3D11Compositor.h"
 #include "overlays/ReplayBuffer.h"
 #include "ui/HotkeyDispatcher.h"
@@ -126,45 +128,112 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     {
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
+        const auto ui0 = engine->settings()->uiState();
         auto* plat = new QComboBox(w);
-        plat->addItems({QStringLiteral("YouTube"), QStringLiteral("Twitch"), QStringLiteral("Facebook"), QStringLiteral("Custom")});
+        plat->addItem(QStringLiteral("YouTube"), QStringLiteral("youtube"));
+        plat->addItem(QStringLiteral("Twitch"), QStringLiteral("twitch"));
+        plat->addItem(QStringLiteral("Facebook"), QStringLiteral("facebook"));
+        plat->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
+        const QString savedPlat = ui0.value(QStringLiteral("streamPlatformId")).toString(
+            ui0.value(QStringLiteral("streamPlatform")).toString(QStringLiteral("YouTube")).toLower());
+        {
+            const int idx = plat->findData(savedPlat.contains(QLatin1String("twitch")) ? QStringLiteral("twitch")
+                              : savedPlat.contains(QLatin1String("facebook")) ? QStringLiteral("facebook")
+                              : savedPlat.contains(QLatin1String("custom")) ? QStringLiteral("custom")
+                              : QStringLiteral("youtube"));
+            plat->setCurrentIndex(idx >= 0 ? idx : 0);
+        }
+
+        auto defaultUrl = [](const QString& id) -> QString {
+            if (id == QLatin1String("youtube"))
+                return QStringLiteral("rtmp://a.rtmp.youtube.com/live2");
+            if (id == QLatin1String("twitch"))
+                return QStringLiteral("rtmp://live.twitch.tv/app");
+            if (id == QLatin1String("facebook"))
+                return QStringLiteral("rtmps://live-api-s.facebook.com:443/rtmp/");
+            return {};
+        };
+
+        auto* url = new QLineEdit(w);
         auto* key = new QLineEdit(w);
         key->setEchoMode(QLineEdit::Password);
-        key->setPlaceholderText(QStringLiteral("Configured via Go Live / Credential Manager"));
-        key->setEnabled(false);
+        key->setPlaceholderText(QStringLiteral("Stream key (stored in Credential Manager)"));
+
+        auto loadPlatformFields = [=](const QString& id) {
+            const QString secretId = QStringLiteral("stream/platform/%1").arg(id);
+            const QString urlKey = QStringLiteral("streamUrl/%1").arg(id);
+            const QString savedUrl = ui0.value(urlKey).toString();
+            url->setText(savedUrl.isEmpty() ? defaultUrl(id) : savedUrl);
+            if (auto stored = SecretStore::load(secretId))
+                key->setText(*stored);
+            else
+                key->clear();
+        };
+        loadPlatformFields(plat->currentData().toString());
+
         auto profile = engine->settings()->outputProfile();
         auto* enc = new QComboBox(w);
-        enc->addItems({QStringLiteral("auto"), QStringLiteral("nvenc"), QStringLiteral("qsv"),
-                       QStringLiteral("amf"), QStringLiteral("x264"), QStringLiteral("mf"), QStringLiteral("software")});
-        enc->setCurrentText(profile.encoderPreference);
+        enc->addItem(QStringLiteral("Auto (prefer hardware)"), QStringLiteral("auto"));
+        enc->addItem(QStringLiteral("Hardware (Media Foundation)"), QStringLiteral("mf"));
+        enc->addItem(QStringLiteral("Software"), QStringLiteral("software"));
+        {
+            QString pref = profile.encoderPreference.toLower();
+            if (pref == QLatin1String("x264") || pref == QLatin1String("nvenc")
+                || pref == QLatin1String("amf") || pref == QLatin1String("qsv"))
+                pref = (pref == QLatin1String("x264")) ? QStringLiteral("software") : QStringLiteral("auto");
+            const int idx = enc->findData(pref);
+            enc->setCurrentIndex(idx >= 0 ? idx : 0);
+        }
         auto* rate = new QComboBox(w);
         rate->addItems({QStringLiteral("CBR"), QStringLiteral("VBR"), QStringLiteral("CQP")});
         rate->setCurrentText(profile.rateControl.isEmpty() ? QStringLiteral("CBR") : profile.rateControl);
         auto* bitrate = new QSpinBox(w);
         bitrate->setRange(500, 50000);
         bitrate->setValue(profile.videoBitrateKbps);
+        bitrate->setSuffix(QStringLiteral(" kbps"));
+        auto* audioBr = new QSpinBox(w);
+        audioBr->setRange(64, 320);
+        audioBr->setValue(profile.audioBitrateKbps > 0 ? profile.audioBitrateKbps : 160);
+        audioBr->setSuffix(QStringLiteral(" kbps"));
         auto* kf = new QSpinBox(w);
         kf->setRange(1, 10);
         kf->setValue(profile.keyframeIntervalSec > 0 ? profile.keyframeIntervalSec : 2);
-        f->addRow(QStringLiteral("Platform"), plat);
+        kf->setSuffix(QStringLiteral(" s"));
+        auto* note = new QLabel(
+            QStringLiteral("Encoder labels: vendor names (NVENC/AMF/QSV) currently map to Auto → MF hardware, then software."),
+            w);
+        note->setWordWrap(true);
+        note->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+
+        f->addRow(QStringLiteral("Service"), plat);
+        f->addRow(QStringLiteral("Server"), url);
         f->addRow(QStringLiteral("Stream Key"), key);
         f->addRow(QStringLiteral("Encoder"), enc);
         f->addRow(QStringLiteral("Rate control"), rate);
-        f->addRow(QStringLiteral("Bitrate (kbps)"), bitrate);
-        f->addRow(QStringLiteral("Keyframe (s)"), kf);
+        f->addRow(QStringLiteral("Video bitrate"), bitrate);
+        f->addRow(QStringLiteral("Audio bitrate"), audioBr);
+        f->addRow(QStringLiteral("Keyframe interval"), kf);
+        f->addRow(note);
+        connect(plat, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int) {
+            loadPlatformFields(plat->currentData().toString());
+            markDirty();
+        });
+        connect(url, &QLineEdit::textChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(key, &QLineEdit::textChanged, this, [markDirty](const QString&) { markDirty(); });
         connect(enc, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
         connect(rate, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
         connect(bitrate, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(audioBr, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
         connect(kf, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
-        // stash widgets for save via properties
-        enc->setObjectName(QStringLiteral("settingsEncoder"));
-        bitrate->setObjectName(QStringLiteral("settingsBitrate"));
         addScrollPage(w);
         m_streamEnc = enc;
         m_streamBitrate = bitrate;
+        m_streamAudioBitrate = audioBr;
         m_streamRate = rate;
         m_streamKeyframe = kf;
         m_streamPlatform = plat;
+        m_streamUrl = url;
+        m_streamKey = key;
     }
 
     // Output
@@ -172,13 +241,23 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
         auto profile = engine->settings()->outputProfile();
+        const auto ui0 = engine->settings()->uiState();
         auto* width = new QSpinBox(w); width->setRange(640, 3840); width->setValue(profile.width);
         auto* height = new QSpinBox(w); height->setRange(360, 2160); height->setValue(profile.height);
         auto* dir = new QLineEdit(engine->settings()->recordingDirectory(), w);
         auto* browse = new QPushButton(QStringLiteral("Browse…"), w);
-        auto* fmt = new QComboBox(w);
-        fmt->addItems({QStringLiteral("MKV"), QStringLiteral("MP4"), QStringLiteral("MOV"), QStringLiteral("FLV")});
-        const int replayDefault = engine->settings()->uiState().value(QStringLiteral("replaySeconds")).toInt(30);
+        auto* pattern = new QLineEdit(
+            ui0.value(QStringLiteral("recordingFilenamePattern")).toString(defaultRecordingFilenamePattern()), w);
+        pattern->setPlaceholderText(defaultRecordingFilenamePattern());
+        auto* patternHint = new QLabel(
+            QStringLiteral("Tokens: %CCYY %YY %MM %DD %HH %mm %ss. Always written as MKV (crash-safe)."), w);
+        patternHint->setWordWrap(true);
+        patternHint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+        auto* fmt = new QLabel(QStringLiteral("MKV (recording) → optional MP4 remux"), w);
+        fmt->setStyleSheet(QStringLiteral("color:#A8B0C0;"));
+        auto* autoRemux = new QCheckBox(QStringLiteral("Automatically remux to MP4 when recording stops"), w);
+        autoRemux->setChecked(ui0.value(QStringLiteral("autoRemuxToMp4")).toBool(false));
+        const int replayDefault = ui0.value(QStringLiteral("replaySeconds")).toInt(30);
         if (engine->replayBuffer())
             engine->replayBuffer()->setCapacitySeconds(replayDefault);
         auto* replaySec = new QSpinBox(w);
@@ -189,7 +268,10 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         f->addRow(QStringLiteral("Canvas H"), height);
         f->addRow(QStringLiteral("Recording path"), dir);
         f->addRow(browse);
+        f->addRow(QStringLiteral("Filename"), pattern);
+        f->addRow(patternHint);
         f->addRow(QStringLiteral("Container"), fmt);
+        f->addRow(autoRemux);
         f->addRow(QStringLiteral("Replay buffer"), replaySec);
         connect(browse, &QPushButton::clicked, this, [=] {
             const auto d = QFileDialog::getExistingDirectory(this, QStringLiteral("Recording Folder"));
@@ -197,11 +279,16 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         });
         connect(width, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
         connect(height, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(dir, &QLineEdit::textChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(pattern, &QLineEdit::textChanged, this, [markDirty](const QString&) { markDirty(); });
+        connect(autoRemux, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
         connect(replaySec, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
         addScrollPage(w);
         m_outW = width;
         m_outH = height;
         m_outDir = dir;
+        m_filenamePattern = pattern;
+        m_autoRemux = autoRemux;
         m_replaySec = replaySec;
     }
 
@@ -293,24 +380,48 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     {
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
+        const auto ui0 = engine->settings()->uiState();
         auto* prio = new QComboBox(w);
         prio->addItems({QStringLiteral("Normal"), QStringLiteral("Above normal"), QStringLiteral("High")});
         auto* net = new QCheckBox(QStringLiteral("Network optimize (saved preference)"), w);
         auto* lowLat = new QCheckBox(QStringLiteral("Low latency mode (saved preference)"), w);
+        auto* reconnect = new QCheckBox(QStringLiteral("Automatically reconnect on stream failure"), w);
+        reconnect->setChecked(ui0.value(QStringLiteral("reconnectEnabled")).toBool(true));
+        auto* reconnectMax = new QSpinBox(w);
+        reconnectMax->setRange(0, 100);
+        reconnectMax->setSpecialValueText(QStringLiteral("Unlimited"));
+        reconnectMax->setValue(ui0.value(QStringLiteral("reconnectMaxAttempts")).toInt(0));
+        reconnectMax->setToolTip(QStringLiteral("0 = keep trying with backoff"));
+        auto* delay = new QSpinBox(w);
+        delay->setRange(0, 600);
+        delay->setValue(ui0.value(QStringLiteral("streamDelaySec")).toInt(0));
+        delay->setSuffix(QStringLiteral(" sec"));
         auto* bind = new QLineEdit(w);
         bind->setPlaceholderText(QStringLiteral("0.0.0.0"));
-        auto* note = new QLabel(QStringLiteral("Priority / bind IP apply on next launch when process hooks land."), w);
+        auto* note = new QLabel(
+            QStringLiteral("Reconnect and stream delay apply on the next Go Live. "
+                           "Priority / bind IP apply on next launch when process hooks land."),
+            w);
         note->setWordWrap(true);
         note->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
         f->addRow(QStringLiteral("Process priority"), prio);
         f->addRow(net);
         f->addRow(lowLat);
+        f->addRow(reconnect);
+        f->addRow(QStringLiteral("Reconnect attempts"), reconnectMax);
+        f->addRow(QStringLiteral("Stream delay"), delay);
         f->addRow(QStringLiteral("Bind IP"), bind);
         f->addRow(note);
         connect(prio, &QComboBox::currentTextChanged, this, [markDirty](const QString&) { markDirty(); });
         connect(net, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
         connect(lowLat, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        connect(reconnect, &QCheckBox::toggled, this, [markDirty](bool) { markDirty(); });
+        connect(reconnectMax, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
+        connect(delay, QOverload<int>::of(&QSpinBox::valueChanged), this, [markDirty](int) { markDirty(); });
         addScrollPage(w);
+        m_reconnectEnabled = reconnect;
+        m_reconnectMax = reconnectMax;
+        m_streamDelay = delay;
     }
 
     // Plugins
@@ -367,7 +478,11 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         if (m_outW) p.width = m_outW->value();
         if (m_outH) p.height = m_outH->value();
         if (m_streamBitrate) p.videoBitrateKbps = m_streamBitrate->value();
-        if (m_streamEnc) p.encoderPreference = m_streamEnc->currentText();
+        if (m_streamAudioBitrate) p.audioBitrateKbps = m_streamAudioBitrate->value();
+        if (m_streamEnc) {
+            const QVariant d = m_streamEnc->currentData();
+            p.encoderPreference = d.isValid() ? d.toString() : m_streamEnc->currentText();
+        }
         if (m_streamRate) p.rateControl = m_streamRate->currentText();
         if (m_streamKeyframe) p.keyframeIntervalSec = m_streamKeyframe->value();
         if (m_videoFps) p.fps = m_videoFps->currentText().toDouble();
@@ -390,11 +505,38 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
                 m_engine->replayBuffer()->setCapacitySeconds(m_replaySec->value());
             ui.insert(QStringLiteral("replaySeconds"), m_replaySec->value());
         }
+        if (m_filenamePattern)
+            ui.insert(QStringLiteral("recordingFilenamePattern"),
+                      m_filenamePattern->text().trimmed().isEmpty()
+                          ? defaultRecordingFilenamePattern()
+                          : m_filenamePattern->text().trimmed());
+        if (m_autoRemux)
+            ui.insert(QStringLiteral("autoRemuxToMp4"), m_autoRemux->isChecked());
+        if (m_reconnectEnabled)
+            ui.insert(QStringLiteral("reconnectEnabled"), m_reconnectEnabled->isChecked());
+        if (m_reconnectMax)
+            ui.insert(QStringLiteral("reconnectMaxAttempts"), m_reconnectMax->value());
+        if (m_streamDelay)
+            ui.insert(QStringLiteral("streamDelaySec"), m_streamDelay->value());
         if (generalTheme) ui.insert(QStringLiteral("theme"), generalTheme->currentText());
         if (generalLang) ui.insert(QStringLiteral("language"), generalLang->currentText());
         if (generalConfirmQuit) ui.insert(QStringLiteral("confirmQuitWhileLive"), generalConfirmQuit->isChecked());
         if (generalRestoreProject) ui.insert(QStringLiteral("restoreLastProject"), generalRestoreProject->isChecked());
-        if (m_streamPlatform) ui.insert(QStringLiteral("streamPlatform"), m_streamPlatform->currentText());
+        if (m_streamPlatform) {
+            const QString platId = m_streamPlatform->currentData().toString();
+            ui.insert(QStringLiteral("streamPlatform"), m_streamPlatform->currentText());
+            ui.insert(QStringLiteral("streamPlatformId"), platId);
+            if (m_streamUrl)
+                ui.insert(QStringLiteral("streamUrl/%1").arg(platId), m_streamUrl->text().trimmed());
+            if (m_streamKey && !m_streamKey->text().trimmed().isEmpty()) {
+                QString err;
+                if (!SecretStore::store(QStringLiteral("stream/platform/%1").arg(platId),
+                                        m_streamKey->text().trimmed(), &err)) {
+                    QMessageBox::warning(this, QStringLiteral("Stream Key"),
+                                         err.isEmpty() ? QStringLiteral("Failed to store stream key") : err);
+                }
+            }
+        }
         m_engine->settings()->setUiState(ui);
         if (m_hotkeyEdits) {
             QJsonObject o;
