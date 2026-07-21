@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QTimer>
+#include <QJsonArray>
 
 namespace railshot {
 
@@ -78,6 +79,11 @@ bool EngineController::initialize(QString* error)
     m_capture->setOverlayCanvasSize(w, h);
     if (!m_audio->initialize(m_settings->desktopDeviceId(), m_settings->micDeviceId(), error))
         return false;
+    m_audio->applyChannelsFromJson(m_settings->audioChannels());
+    connect(m_audio.get(), &AudioGraph::channelsChanged, this, [this] {
+        if (m_settings && m_audio)
+            m_settings->setAudioChannels(m_audio->channelsToJson());
+    });
 
     m_capture->setSourceAudioCallback([this](const QString& id, const QString& name, const AudioBuffer& buf) {
         if (!m_audio) return;
@@ -191,6 +197,14 @@ bool EngineController::loadProject(const QString& path, QString* error)
     if (m_capture) m_capture->detachAll();
     m_sceneGraph->replace(*p);
     m_settings->setLastProjectPath(path);
+    if (m_audio) {
+        const auto arr = p->extras.value(QStringLiteral("audioChannels")).toArray();
+        if (!arr.isEmpty()) {
+            m_audio->applyChannelsFromJson(arr);
+            if (m_settings)
+                m_settings->setAudioChannels(arr);
+        }
+    }
     rebuildSourcesForActiveScenes();
     emit projectLoaded(path);
     return true;
@@ -200,6 +214,13 @@ bool EngineController::saveProject(const QString& path, QString* error)
 {
     auto p = m_sceneGraph->snapshot();
     p.path = path;
+    if (m_audio) {
+        auto extras = p.extras;
+        extras.insert(QStringLiteral("audioChannels"), m_audio->channelsToJson());
+        p.extras = extras;
+        if (m_settings)
+            m_settings->setAudioChannels(m_audio->channelsToJson());
+    }
     if (!p.saveToFile(path, error)) return false;
     m_sceneGraph->replace(p);
     m_settings->setLastProjectPath(path);
@@ -556,6 +577,8 @@ void EngineController::onTelemetryTick()
 
 void EngineController::onAutosave()
 {
+    if (m_audio && m_settings)
+        m_settings->setAudioChannels(m_audio->channelsToJson());
     const auto path = m_settings->lastProjectPath();
     if (path.isEmpty()) return;
     QString err;

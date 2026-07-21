@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QSettings>
 #include <QJsonObject>
+#include <QJsonArray>
 
 namespace railshot {
 
@@ -34,6 +35,9 @@ public:
     void setDesktopDeviceId(const QString& id);
     QString micDeviceId() const;
     void setMicDeviceId(const QString& id);
+
+    QJsonArray audioChannels() const;
+    void setAudioChannels(const QJsonArray& channels);
 
     void sync();
 

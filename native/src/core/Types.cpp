@@ -1,6 +1,8 @@
 #include "core/Types.h"
 #include <QUuid>
 #include <QDateTime>
+#include <QJsonObject>
+#include <QJsonArray>
 
 namespace railshot {
 
@@ -155,6 +157,42 @@ SceneItem SceneItem::fromJson(const QJsonObject& o)
     for (const auto& v : arr)
         sc.sources.append(SourceItem::fromJson(v.toObject()));
     return sc;
+}
+
+QJsonObject AudioChannelState::toJson() const
+{
+    return QJsonObject{
+        {QStringLiteral("id"), id},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("volume"), double(volume)},
+        {QStringLiteral("pan"), double(pan)},
+        {QStringLiteral("gainDb"), double(gainDb)},
+        {QStringLiteral("muted"), muted},
+        {QStringLiteral("solo"), solo},
+        {QStringLiteral("forceMono"), forceMono},
+        {QStringLiteral("locked"), locked},
+        {QStringLiteral("syncOffsetMs"), syncOffsetMs},
+        {QStringLiteral("monitoring"), int(monitoring)},
+        {QStringLiteral("trackMask"), int(trackMask)},
+    };
+}
+
+AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
+{
+    AudioChannelState s;
+    s.id = o.value(QStringLiteral("id")).toString();
+    s.name = o.value(QStringLiteral("name")).toString(s.id);
+    s.volume = float(o.value(QStringLiteral("volume")).toDouble(1.0));
+    s.pan = float(o.value(QStringLiteral("pan")).toDouble(0.0));
+    s.gainDb = float(o.value(QStringLiteral("gainDb")).toDouble(0.0));
+    s.muted = o.value(QStringLiteral("muted")).toBool(false);
+    s.solo = o.value(QStringLiteral("solo")).toBool(false);
+    s.forceMono = o.value(QStringLiteral("forceMono")).toBool(false);
+    s.locked = o.value(QStringLiteral("locked")).toBool(false);
+    s.syncOffsetMs = o.value(QStringLiteral("syncOffsetMs")).toInt(0);
+    s.monitoring = AudioMonitoringType(o.value(QStringLiteral("monitoring")).toInt(int(AudioMonitoringType::MonitorAndOutput)));
+    s.trackMask = quint8(o.value(QStringLiteral("trackMask")).toInt(0x01));
+    return s;
 }
 
 QJsonObject OutputProfile::toJson() const

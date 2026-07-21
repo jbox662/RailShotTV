@@ -137,6 +137,21 @@ void SettingsStore::setMicDeviceId(const QString& id)
     emit settingsChanged();
 }
 
+QJsonArray SettingsStore::audioChannels() const
+{
+    const auto raw = m_settings.value(QStringLiteral("audio/channels")).toByteArray();
+    if (raw.isEmpty()) return {};
+    const auto doc = QJsonDocument::fromJson(raw);
+    return doc.isArray() ? doc.array() : QJsonArray{};
+}
+
+void SettingsStore::setAudioChannels(const QJsonArray& channels)
+{
+    m_settings.setValue(QStringLiteral("audio/channels"),
+                        QJsonDocument(channels).toJson(QJsonDocument::Compact));
+    emit settingsChanged();
+}
+
 void SettingsStore::sync()
 {
     m_settings.sync();

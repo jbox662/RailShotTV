@@ -7,6 +7,34 @@
 
 namespace railshot {
 
+namespace {
+constexpr int kMaxSyncMs = 2000;
+constexpr int kTrack1Bit = 0x01;
+
+AudioBuffer resampleTo48k(const AudioBuffer& in)
+{
+    if (in.sampleRate == kAudioSampleRate || in.sampleRate <= 0 || in.frameCount() <= 0)
+        return in;
+    AudioBuffer out = in;
+    out.sampleRate = kAudioSampleRate;
+    const double ratio = double(kAudioSampleRate) / double(in.sampleRate);
+    const int outFrames = int(std::ceil(in.frameCount() * ratio));
+    out.samples.assign(size_t(outFrames) * size_t(in.channels), 0.f);
+    for (int i = 0; i < outFrames; ++i) {
+        const double srcPos = i / ratio;
+        const int i0 = int(srcPos);
+        const int i1 = std::min(i0 + 1, in.frameCount() - 1);
+        const float t = float(srcPos - i0);
+        for (int c = 0; c < in.channels; ++c) {
+            const float a = in.samples[size_t(i0) * in.channels + c];
+            const float b = in.samples[size_t(i1) * in.channels + c];
+            out.samples[size_t(i) * in.channels + c] = a + (b - a) * t;
+        }
+    }
+    return out;
+}
+} // namespace
+
 AudioGraph::AudioGraph(QObject* parent)
     : QObject(parent)
 {
@@ -76,7 +104,12 @@ void AudioGraph::shutdown()
 void AudioGraph::setChannelState(const QString& id, const AudioChannelState& state)
 {
     std::lock_guard lock(m_mutex);
-    m_channels[id] = state;
+    AudioChannelState s = state;
+    s.id = id;
+    s.syncOffsetMs = std::clamp(s.syncOffsetMs, -kMaxSyncMs, kMaxSyncMs);
+    s.volume = std::clamp(s.volume, 0.f, 20.f); // up to ~+26 dB like OBS
+    s.pan = std::clamp(s.pan, -1.f, 1.f);
+    m_channels[id] = s;
 }
 
 AudioChannelState AudioGraph::channelState(const QString& id) const
@@ -89,9 +122,12 @@ QVector<AudioChannelState> AudioGraph::channels() const
 {
     std::lock_guard lock(m_mutex);
     QVector<AudioChannelState> out;
-    for (auto it = m_channels.begin(); it != m_channels.end(); ++it) {
+    // Stable order: desktop, mic, then others by id
+    auto appendIf = [&](const QString& id) {
+        auto it = m_channels.constFind(id);
+        if (it == m_channels.cend()) return;
         AudioChannelState s = it.value();
-        auto mit = m_meters.constFind(it.key());
+        auto mit = m_meters.constFind(id);
         if (mit != m_meters.cend()) {
             s.peakL = mit->peakL();
             s.peakR = mit->peakR();
@@ -99,32 +135,66 @@ QVector<AudioChannelState> AudioGraph::channels() const
             s.rmsR = mit->rmsR();
         }
         out.append(s);
+    };
+    appendIf(QStringLiteral("desktop"));
+    appendIf(QStringLiteral("mic"));
+    QStringList rest;
+    for (auto it = m_channels.begin(); it != m_channels.end(); ++it) {
+        if (it.key() == QLatin1String("desktop") || it.key() == QLatin1String("mic"))
+            continue;
+        rest.append(it.key());
     }
+    rest.sort();
+    for (const auto& id : rest)
+        appendIf(id);
+
+    // Master strip (synthetic) for the mixer UI
+    AudioChannelState master;
+    master.id = QStringLiteral("master");
+    master.name = QStringLiteral("Master");
+    master.volume = m_masterVolume;
+    master.muted = m_masterMuted;
+    master.peakL = m_masterMeter.peakL();
+    master.peakR = m_masterMeter.peakR();
+    master.rmsL = m_masterMeter.rmsL();
+    master.rmsR = m_masterMeter.rmsR();
+    out.prepend(master);
     return out;
 }
 
 void AudioGraph::ensureChannel(const QString& id, const QString& name)
 {
-    std::lock_guard lock(m_mutex);
-    auto it = m_channels.find(id);
-    if (it == m_channels.end()) {
-        AudioChannelState ch;
-        ch.id = id;
-        ch.name = name;
-        m_channels.insert(id, ch);
-    } else if (!name.isEmpty() && it->name != name) {
-        it->name = name;
+    bool added = false;
+    {
+        std::lock_guard lock(m_mutex);
+        auto it = m_channels.find(id);
+        if (it == m_channels.end()) {
+            AudioChannelState ch;
+            ch.id = id;
+            ch.name = name;
+            m_channels.insert(id, ch);
+            added = true;
+        } else if (!name.isEmpty() && it->name != name) {
+            it->name = name;
+            added = true;
+        }
     }
+    if (added)
+        emit channelsChanged();
 }
 
 void AudioGraph::removeChannel(const QString& id)
 {
-    if (id == QLatin1String("desktop") || id == QLatin1String("mic"))
+    if (id == QLatin1String("desktop") || id == QLatin1String("mic") || id == QLatin1String("master"))
         return;
-    std::lock_guard lock(m_mutex);
-    m_channels.remove(id);
-    m_pending.remove(id);
-    m_meters.remove(id);
+    {
+        std::lock_guard lock(m_mutex);
+        m_channels.remove(id);
+        m_pending.remove(id);
+        m_meters.remove(id);
+        m_delayLines.remove(id);
+    }
+    emit channelsChanged();
 }
 
 void AudioGraph::inject(const QString& channelId, const AudioBuffer& buffer)
@@ -153,30 +223,103 @@ void AudioGraph::setMonitorEnabled(bool enabled)
     m_monitorEnabled = enabled;
 }
 
-namespace {
-AudioBuffer resampleTo48k(const AudioBuffer& in)
+QJsonArray AudioGraph::channelsToJson() const
 {
-    if (in.sampleRate == kAudioSampleRate || in.sampleRate <= 0 || in.frameCount() <= 0)
-        return in;
-    AudioBuffer out = in;
-    out.sampleRate = kAudioSampleRate;
-    const double ratio = double(kAudioSampleRate) / double(in.sampleRate);
-    const int outFrames = int(std::ceil(in.frameCount() * ratio));
-    out.samples.assign(size_t(outFrames) * size_t(in.channels), 0.f);
-    for (int i = 0; i < outFrames; ++i) {
-        const double srcPos = i / ratio;
-        const int i0 = int(srcPos);
-        const int i1 = std::min(i0 + 1, in.frameCount() - 1);
-        const float t = float(srcPos - i0);
-        for (int c = 0; c < in.channels; ++c) {
-            const float a = in.samples[size_t(i0) * in.channels + c];
-            const float b = in.samples[size_t(i1) * in.channels + c];
-            out.samples[size_t(i) * in.channels + c] = a + (b - a) * t;
+    std::lock_guard lock(m_mutex);
+    QJsonArray arr;
+    for (auto it = m_channels.begin(); it != m_channels.end(); ++it)
+        arr.append(it.value().toJson());
+    return arr;
+}
+
+void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
+{
+    {
+        std::lock_guard lock(m_mutex);
+        for (const auto& v : arr) {
+            const auto s = AudioChannelState::fromJson(v.toObject());
+            if (s.id.isEmpty() || s.id == QLatin1String("master"))
+                continue;
+            auto it = m_channels.find(s.id);
+            if (it == m_channels.end()) {
+                m_channels.insert(s.id, s);
+            } else {
+                // Keep live peaks; restore user settings
+                AudioChannelState cur = it.value();
+                cur.volume = s.volume;
+                cur.pan = s.pan;
+                cur.gainDb = s.gainDb;
+                cur.muted = s.muted;
+                cur.solo = s.solo;
+                cur.forceMono = s.forceMono;
+                cur.locked = s.locked;
+                cur.syncOffsetMs = std::clamp(s.syncOffsetMs, -kMaxSyncMs, kMaxSyncMs);
+                cur.monitoring = s.monitoring;
+                cur.trackMask = s.trackMask;
+                if (!s.name.isEmpty())
+                    cur.name = s.name;
+                *it = cur;
+            }
         }
+    }
+    emit channelsChanged();
+}
+
+AudioBuffer AudioGraph::applySyncDelay(const QString& channelId, const AudioBuffer& in, int syncOffsetMs)
+{
+    if (syncOffsetMs == 0 || in.frameCount() <= 0)
+        return in;
+
+    // Positive offset = delay this source (push past samples). Negative = advance (drop samples).
+    auto& line = m_delayLines[channelId];
+    const int ch = std::max(1, in.channels);
+    const int delayFrames = std::abs(syncOffsetMs) * kAudioSampleRate / 1000;
+    const int delaySamples = delayFrames * 2; // always store as stereo interleaved
+
+    // Push incoming as stereo
+    for (int i = 0; i < in.frameCount(); ++i) {
+        const float l = in.samples[size_t(i) * ch];
+        const float r = ch > 1 ? in.samples[size_t(i) * ch + 1] : l;
+        line.push_back(l);
+        line.push_back(r);
+    }
+
+    const int maxKeep = delaySamples + in.frameCount() * 2 + 64;
+    while (int(line.size()) > maxKeep)
+        line.pop_front();
+
+    AudioBuffer out;
+    out.channels = 2;
+    out.sampleRate = kAudioSampleRate;
+    out.ptsUs = in.ptsUs;
+    out.sourceId = in.sourceId;
+    out.samples.resize(size_t(in.frameCount()) * 2);
+
+    if (syncOffsetMs > 0) {
+        // Need delaySamples of history before emitting current block
+        while (int(line.size()) < delaySamples + in.frameCount() * 2) {
+            line.push_front(0.f);
+            line.push_front(0.f);
+        }
+        const int start = int(line.size()) - delaySamples - in.frameCount() * 2;
+        for (int i = 0; i < in.frameCount() * 2; ++i)
+            out.samples[size_t(i)] = line[size_t(start + i)];
+    } else {
+        // Negative: skip delayFrames from the front of the newest block
+        const int available = int(line.size()) / 2;
+        const int skip = std::min(delayFrames, std::max(0, available - in.frameCount()));
+        const int startSample = skip * 2;
+        for (int i = 0; i < in.frameCount() * 2; ++i) {
+            const int idx = startSample + i;
+            out.samples[size_t(i)] = (idx < int(line.size())) ? line[size_t(idx)] : 0.f;
+        }
+        // Drop consumed early samples so the buffer doesn't grow forever
+        const int drop = std::min(int(line.size()), in.frameCount() * 2);
+        for (int i = 0; i < drop; ++i)
+            line.pop_front();
     }
     return out;
 }
-} // namespace
 
 void AudioGraph::onCapture(const QString& channelId, const AudioBuffer& buffer)
 {
@@ -197,6 +340,10 @@ void AudioGraph::mixAndEmit()
     mixed.sampleRate = kAudioSampleRate;
     mixed.ptsUs = m_clock.nowUs();
 
+    AudioBuffer monitorBuf;
+    monitorBuf.channels = kAudioChannels;
+    monitorBuf.sampleRate = kAudioSampleRate;
+
     std::function<void(const AudioBuffer&)> cb;
     {
         std::lock_guard lock(m_mutex);
@@ -204,6 +351,8 @@ void AudioGraph::mixAndEmit()
         for (const auto& b : m_pending)
             frames = std::max(frames, b.frameCount());
         mixed.samples.assign(static_cast<size_t>(frames) * kAudioChannels, 0.f);
+        monitorBuf.samples.assign(static_cast<size_t>(frames) * kAudioChannels, 0.f);
+        monitorBuf.ptsUs = mixed.ptsUs;
 
         bool anySolo = false;
         for (const auto& ch : m_channels)
@@ -213,22 +362,44 @@ void AudioGraph::mixAndEmit()
             const auto ch = m_channels.value(it.key());
             if (ch.muted) continue;
             if (anySolo && !ch.solo) continue;
+
+            AudioBuffer buf = applySyncDelay(it.key(), it.value(), ch.syncOffsetMs);
+
             const float linear = ch.volume * std::pow(10.f, ch.gainDb / 20.f);
             const float panL = std::cos((ch.pan + 1.f) * 0.25f * 3.14159265f);
             const float panR = std::sin((ch.pan + 1.f) * 0.25f * 3.14159265f);
-            const auto& buf = it.value();
             const int n = std::min(frames, buf.frameCount());
+            const int bch = std::max(1, buf.channels);
+
+            const bool toOutput = (ch.monitoring != AudioMonitoringType::MonitorOnly)
+                                  && (ch.trackMask & kTrack1Bit);
+            const bool toMonitor = (ch.monitoring != AudioMonitoringType::None);
+
             for (int i = 0; i < n; ++i) {
-                const float l = buf.samples[i * buf.channels] * linear * panL;
-                const float r = (buf.channels > 1 ? buf.samples[i * buf.channels + 1] : buf.samples[i * buf.channels])
-                                * linear * panR;
-                mixed.samples[i * 2] += l;
-                mixed.samples[i * 2 + 1] += r;
+                float l = buf.samples[size_t(i) * bch];
+                float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+                if (ch.forceMono) {
+                    const float m = 0.5f * (l + r);
+                    l = m;
+                    r = m;
+                }
+                l *= linear * panL;
+                r *= linear * panR;
+                if (toOutput) {
+                    mixed.samples[size_t(i) * 2] += l;
+                    mixed.samples[size_t(i) * 2 + 1] += r;
+                }
+                if (toMonitor) {
+                    monitorBuf.samples[size_t(i) * 2] += l;
+                    monitorBuf.samples[size_t(i) * 2 + 1] += r;
+                }
             }
         }
 
         const float master = m_masterMuted ? 0.f : m_masterVolume;
         for (float& s : mixed.samples)
+            s = std::clamp(s * master, -1.f, 1.f);
+        for (float& s : monitorBuf.samples)
             s = std::clamp(s * master, -1.f, 1.f);
 
         m_masterMeter.process(mixed.samples.data(), frames, 2);
@@ -238,7 +409,7 @@ void AudioGraph::mixAndEmit()
     }
 
     if (m_monitor && m_monitorEnabled)
-        m_monitor->push(mixed);
+        m_monitor->push(monitorBuf);
     if (cb)
         cb(mixed);
     emit metersUpdated();

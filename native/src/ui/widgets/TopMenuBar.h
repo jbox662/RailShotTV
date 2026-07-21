@@ -22,6 +22,7 @@ signals:
     void openLastProject();
     void newProject();
     void openSettings();
+    void openAdvAudio();
     void toggleShortcuts();
     void basicModeChanged(bool on);
     /// Fired just before the Docks menu opens so Dashboard can refill toggles.

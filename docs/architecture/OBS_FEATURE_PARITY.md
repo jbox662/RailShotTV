@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 0+1 ship.
+Last updated: Wave 2 (Adv Audio + mixer depth).
 
 ## Design rules
 
@@ -23,7 +23,7 @@ Last updated: Wave 0+1 ship.
 | OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` |
-| AudioMixer | Mixer dock | partial | `AudioMixerWidget` |
+| AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio |
 | OBSBasic_Transitions | Transitions | partial | `TransitionPanel` |
 | OBSBasicStats | Stats dock | partial | Analytics page |
 | OBSProjector / Multiview | Projectors | todo | — |
@@ -48,7 +48,7 @@ Last updated: Wave 0+1 ship.
 | OBSBasicFilters | partial | `FiltersDialog` |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | todo | — |
-| OBSBasicAdvAudio | todo | — |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` |
 | OBSBasicVCamConfig | todo | External/VCam toggle |
 | OBSRemux / MissingFiles / LogViewer | todo | — |
 | NameDialog | partial | QInputDialog |
@@ -57,7 +57,7 @@ Last updated: Wave 0+1 ship.
 
 - [x] Wave 0 — this matrix
 - [x] Wave 1 — Controls polish, StatusBar, Scenes toolbar, Context toolbar, Filters + Transform
-- [ ] Wave 2 — Adv Audio + mixer depth
+- [x] Wave 2 — Adv Audio + mixer depth (balance, monitor modes, sync, tracks, lock)
 - [ ] Wave 3 — Preview power (lock, scale, projectors, interact)
 - [ ] Wave 4 — Profiles / collections / remux / logs
 - [ ] Wave 5 — Output/service polish

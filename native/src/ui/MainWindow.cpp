@@ -13,6 +13,7 @@
 #include "ui/widgets/ShortcutsOverlay.h"
 #include "ui/widgets/GoLiveDialog.h"
 #include "ui/widgets/ObsStatusBarWidget.h"
+#include "ui/widgets/AdvAudioDialog.h"
 #include "core/EngineController.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
@@ -139,6 +140,10 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
         statusBar()->showMessage(QStringLiteral("New project"), 2000);
     });
     connect(m_top, &TopMenuBar::openSettings, this, [this] { navigateTo(QStringLiteral("settings")); });
+    connect(m_top, &TopMenuBar::openAdvAudio, this, [this] {
+        AdvAudioDialog dlg(m_engine, this);
+        dlg.exec();
+    });
     connect(m_engine, &EngineController::errorOccurred, this, [this](const QString& msg) {
         Q_UNUSED(msg);
         // ObsStatusBarWidget also listens for errors.

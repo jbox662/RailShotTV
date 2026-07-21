@@ -101,18 +101,33 @@ struct SceneItem {
     static SceneItem fromJson(const QJsonObject& o);
 };
 
+/// OBS-style per-source monitoring (headphones vs stream/record).
+enum class AudioMonitoringType {
+    None = 0,            // stream/record only
+    MonitorOnly = 1,     // headphones only
+    MonitorAndOutput = 2 // both
+};
+
 struct AudioChannelState {
     QString id;
     QString name;
     float volume = 1.0f;      // 0..1 linear
-    float pan = 0.0f;         // -1..1
-    float gainDb = 0.0f;      // -12..+12
+    float pan = 0.0f;         // -1..1 balance
+    float gainDb = 0.0f;      // trim dB (Adv Audio / fader math)
     bool muted = false;
     bool solo = false;
+    bool forceMono = false;
+    bool locked = false;
+    int syncOffsetMs = 0;     // -2000..+2000
+    AudioMonitoringType monitoring = AudioMonitoringType::MonitorAndOutput;
+    quint8 trackMask = 0x01;  // bits 0..5 = tracks 1..6 (stream uses track 1)
     float peakL = 0.0f;
     float peakR = 0.0f;
     float rmsL = 0.0f;
     float rmsR = 0.0f;
+
+    QJsonObject toJson() const;
+    static AudioChannelState fromJson(const QJsonObject& o);
 };
 
 struct OutputProfile {

@@ -104,6 +104,11 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
         emit docksMenuAboutToShow(m_docksMenu);
     });
 
+    auto* editBtn = addChrome(QStringLiteral("Edit"));
+    auto* editMenu = new QMenu(editBtn);
+    editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
+    editBtn->setMenu(editMenu);
+
     row->addStretch();
 
     m_fullscreen = addChrome(QStringLiteral("Fullscreen"));

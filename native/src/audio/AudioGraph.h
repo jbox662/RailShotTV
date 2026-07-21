@@ -6,6 +6,8 @@
 #include "core/Types.h"
 #include <QObject>
 #include <QHash>
+#include <QJsonArray>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <functional>
@@ -48,6 +50,10 @@ public:
     QString desktopDeviceId() const { return m_desktopDeviceId; }
     QString micDeviceId() const { return m_micDeviceId; }
 
+    /// Persist / restore mixer strip settings (volume, pan, mono, sync, tracks…).
+    QJsonArray channelsToJson() const;
+    void applyChannelsFromJson(const QJsonArray& arr);
+
     /// Mixed output callback for encoders (float stereo @ 48k).
     void setOutputCallback(std::function<void(const AudioBuffer&)> cb);
 
@@ -56,10 +62,12 @@ public:
 signals:
     void metersUpdated();
     void audioError(const QString& message);
+    void channelsChanged();
 
 private:
     void onCapture(const QString& channelId, const AudioBuffer& buffer);
     void mixAndEmit();
+    AudioBuffer applySyncDelay(const QString& channelId, const AudioBuffer& in, int syncOffsetMs);
 
     AudioClock m_clock;
     std::unique_ptr<WasapiCapture> m_desktop;
@@ -72,6 +80,7 @@ private:
     QHash<QString, AudioChannelState> m_channels;
     QHash<QString, AudioBuffer> m_pending;
     QHash<QString, AudioMeter> m_meters;
+    QHash<QString, std::deque<float>> m_delayLines; // interleaved stereo delay ring
     AudioMeter m_masterMeter;
     float m_masterVolume = 1.0f;
     bool m_masterMuted = false;
