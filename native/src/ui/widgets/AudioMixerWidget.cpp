@@ -298,19 +298,26 @@ void AudioMixerWidget::rebuildStrips()
             auto* b = new QPushButton(text, row);
             b->setCheckable(true);
             b->setCursor(Qt::PointingHandCursor);
-            b->setFixedSize(22, 20);
+            b->setFixedHeight(22);
+            b->setMinimumWidth(44);
             b->setToolTip(tip);
             b->setStyleSheet(QStringLiteral(
-                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
-                "font-size:9px;font-weight:800;border-radius:2px;}"
-                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
+                "font-family:'DM Sans'; font-size:9px;font-weight:800;border-radius:3px;"
+                "padding:1px 6px;}"
+                "QPushButton:hover{border-color:#6B7280;color:#FFFFFF;}"
                 "QPushButton:checked{background:#B91C1C;color:#FFFFFF;border-color:#EF4444;}"));
             return b;
         };
 
-        auto* mute = makeCtrl(QStringLiteral("M"), QStringLiteral("Mute"));
+        auto* mute = makeCtrl(QStringLiteral("Mute"), QStringLiteral("Mute this channel"));
         mute->setObjectName(QStringLiteral("muteBtn"));
         mute->setChecked(ch.muted);
+        mute->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
+            "font-family:'DM Sans'; font-size:9px;font-weight:800;border-radius:3px;padding:1px 6px;}"
+            "QPushButton:hover{border-color:#F87171;color:#FEE2E2;}"
+            "QPushButton:checked{background:#B91C1C;color:#FFFFFF;border-color:#EF4444;}"));
         connect(mute, &QPushButton::clicked, this, [this, id = ch.id, master] {
             if (master) {
                 m_engine->audio()->setMasterMuted(!m_engine->audio()->masterMuted());
@@ -323,14 +330,14 @@ void AudioMixerWidget::rebuildStrips()
         lay->addWidget(mute);
 
         if (!master) {
-            auto* solo = makeCtrl(QStringLiteral("S"), QStringLiteral("Solo"));
+            auto* solo = makeCtrl(QStringLiteral("Solo"), QStringLiteral("Solo — hear only this channel"));
             solo->setObjectName(QStringLiteral("soloBtn"));
             solo->setChecked(ch.solo);
             solo->setStyleSheet(QStringLiteral(
-                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
-                "font-size:9px;font-weight:800;border-radius:2px;}"
-                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
-                "QPushButton:checked{background:#CA8A04;color:#111;border-color:#FBBF24;}"));
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
+                "font-family:'DM Sans'; font-size:9px;font-weight:800;border-radius:3px;padding:1px 6px;}"
+                "QPushButton:hover{border-color:#FBBF24;color:#FEF3C7;}"
+                "QPushButton:checked{background:#CA8A04;color:#111111;border-color:#FBBF24;}"));
             connect(solo, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
                 state.solo = !state.solo;
@@ -338,13 +345,14 @@ void AudioMixerWidget::rebuildStrips()
             });
             lay->addWidget(solo);
 
-            auto* mon = makeCtrl(QStringLiteral("H"), QStringLiteral("Monitor (cycle)"));
+            auto* mon = makeCtrl(QStringLiteral("Mon"),
+                                 QStringLiteral("Monitor — click to cycle: Off → Output → Monitor only"));
             mon->setObjectName(QStringLiteral("monBtn"));
             mon->setChecked(ch.monitoring != AudioMonitoringType::None);
             mon->setStyleSheet(QStringLiteral(
-                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
-                "font-size:9px;font-weight:800;border-radius:2px;}"
-                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
+                "font-family:'DM Sans'; font-size:9px;font-weight:800;border-radius:3px;padding:1px 6px;}"
+                "QPushButton:hover{border-color:#60A5FA;color:#DBEAFE;}"
                 "QPushButton:checked{background:#1D4ED8;color:#FFFFFF;border-color:#60A5FA;}"));
             connect(mon, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
@@ -409,19 +417,30 @@ void AudioMixerWidget::updateStripValues()
         if (auto* mute = row->findChild<QPushButton*>(QStringLiteral("muteBtn"))) {
             QSignalBlocker b(mute);
             mute->setChecked(ch.muted);
+            mute->setText(QStringLiteral("Mute"));
+            mute->setToolTip(ch.muted ? QStringLiteral("Unmute this channel")
+                                      : QStringLiteral("Mute this channel"));
         }
         if (auto* solo = row->findChild<QPushButton*>(QStringLiteral("soloBtn"))) {
             QSignalBlocker b(solo);
             solo->setChecked(ch.solo);
+            solo->setText(QStringLiteral("Solo"));
+            solo->setToolTip(ch.solo ? QStringLiteral("Unsolo — hear all channels again")
+                                     : QStringLiteral("Solo — hear only this channel"));
         }
         if (auto* mon = row->findChild<QPushButton*>(QStringLiteral("monBtn"))) {
             QSignalBlocker b(mon);
             mon->setChecked(ch.monitoring != AudioMonitoringType::None);
-            mon->setToolTip(ch.monitoring == AudioMonitoringType::MonitorOnly
-                                ? QStringLiteral("Monitor Only (muted in stream)")
-                                : ch.monitoring == AudioMonitoringType::MonitorAndOutput
-                                      ? QStringLiteral("Monitor and Output")
-                                      : QStringLiteral("Monitor Off — click to cycle"));
+            if (ch.monitoring == AudioMonitoringType::MonitorOnly) {
+                mon->setText(QStringLiteral("Mon Only"));
+                mon->setToolTip(QStringLiteral("Monitor Only (muted in stream) — click to turn off"));
+            } else if (ch.monitoring == AudioMonitoringType::MonitorAndOutput) {
+                mon->setText(QStringLiteral("Mon"));
+                mon->setToolTip(QStringLiteral("Monitor and Output — click for Monitor Only"));
+            } else {
+                mon->setText(QStringLiteral("Mon"));
+                mon->setToolTip(QStringLiteral("Monitor Off — click to monitor this channel"));
+            }
         }
         if (auto* fader = row->findChild<QSlider*>(QStringLiteral("volSlider"))) {
             if (!fader->isSliderDown()) {
