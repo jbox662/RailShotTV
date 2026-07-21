@@ -123,20 +123,24 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "  border-right:4px solid transparent;"
         "  border-top:5px solid #A0A8B8;"
         "}"
+        "QWidget#scoreboardControls QComboBox {"
+        "  padding:3px 4px 3px 6px;"
+        "  min-width:0;"
+        "}"
         "QWidget#scoreboardControls QComboBox::drop-down {"
         "  subcontrol-origin: padding;"
         "  subcontrol-position: top right;"
-        "  width:18px;"
+        "  width:16px;"
         "  border:none;"
         "  border-left:1px solid #3A3D45;"
         "  background:#1A1D22;"
         "}"
         "QWidget#scoreboardControls QComboBox::down-arrow {"
         "  width:0; height:0;"
-        "  border-left:4px solid transparent;"
-        "  border-right:4px solid transparent;"
-        "  border-top:5px solid #A0A8B8;"
-        "  margin-right:5px;"
+        "  border-left:3px solid transparent;"
+        "  border-right:3px solid transparent;"
+        "  border-top:4px solid #A0A8B8;"
+        "  margin-right:4px;"
         "}"
         "QWidget#scoreboardControls QComboBox QAbstractItemView {"
         "  background:#12151A; color:#E0E2E8;"
@@ -260,32 +264,46 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         return lab;
     };
 
-    // Race + Game on one compact row (controls sized to content, not full dock width)
+    // Race + Game as one tight cluster (no stretch gap between them)
     auto* poolFields = new QHBoxLayout();
     poolFields->setContentsMargins(0, 0, 0, 0);
-    poolFields->setSpacing(6);
+    poolFields->setSpacing(0);
 
-    auto* raceLab = makeFieldLab(QStringLiteral("Race"), poolBox);
-    auto* raceTo = new QSpinBox(poolBox);
+    auto* raceGame = new QWidget(poolBox);
+    raceGame->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    auto* raceGameLay = new QHBoxLayout(raceGame);
+    raceGameLay->setContentsMargins(0, 0, 0, 0);
+    raceGameLay->setSpacing(4);
+
+    auto* raceLab = makeFieldLab(QStringLiteral("Race"), raceGame);
+    auto* raceTo = new QSpinBox(raceGame);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
     raceTo->setAlignment(Qt::AlignCenter);
-    raceTo->setFixedWidth(64);
+    raceTo->setFixedWidth(56);
     raceTo->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
     raceTo->setToolTip(QStringLiteral("Race to"));
-    poolFields->addWidget(raceLab);
-    poolFields->addWidget(raceTo);
+    raceGameLay->addWidget(raceLab);
+    raceGameLay->addWidget(raceTo);
 
-    auto* gameLab = makeFieldLab(QStringLiteral("Game"), poolBox);
-    auto* gameCombo = new QComboBox(poolBox);
+    auto* gameLab = makeFieldLab(QStringLiteral("Game"), raceGame);
+    auto* gameCombo = new QComboBox(raceGame);
     gameCombo->addItems({QStringLiteral("8-Ball"), QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
                          QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
     gameCombo->setCurrentText(poolGameLabel(model->state().sport));
-    gameCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     gameCombo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    gameCombo->setFixedWidth(128); // fits "Straight Pool" + chevron; no dock stretch
-    poolFields->addWidget(gameLab);
-    poolFields->addWidget(gameCombo);
+    {
+        // Fit longest label + padding + chevron — not the dock width.
+        const QFontMetrics fm(gameCombo->font());
+        int maxTw = 0;
+        for (int i = 0; i < gameCombo->count(); ++i)
+            maxTw = qMax(maxTw, fm.horizontalAdvance(gameCombo->itemText(i)));
+        gameCombo->setFixedWidth(maxTw + 28);
+    }
+    raceGameLay->addWidget(gameLab);
+    raceGameLay->addWidget(gameCombo);
+
+    poolFields->addWidget(raceGame);
     poolFields->addStretch(1);
     poolLay->addLayout(poolFields);
 
