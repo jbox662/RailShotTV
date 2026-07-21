@@ -75,7 +75,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "QWidget#scoreboardControls QLabel#fieldLab {"
         "  color:#8892A4; font-size:9px; font-weight:700;"
         "  background:transparent; border:none;"
-        "  min-width:58px;"
         "}"
         "QWidget#scoreboardControls QLineEdit,"
         "QWidget#scoreboardControls QSpinBox,"
@@ -261,30 +260,31 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         return lab;
     };
 
-    auto* poolFields = new QGridLayout();
+    // Race to + Game on one row — compact, no full-width waste
+    auto* poolFields = new QHBoxLayout();
     poolFields->setContentsMargins(0, 0, 0, 0);
-    poolFields->setHorizontalSpacing(8);
-    poolFields->setVerticalSpacing(4);
-    poolFields->setColumnStretch(1, 1);
+    poolFields->setSpacing(6);
 
-    auto* raceLab = makeFieldLab(QStringLiteral("Race to"), poolBox);
+    auto* raceLab = makeFieldLab(QStringLiteral("Race"), poolBox);
     auto* raceTo = new QSpinBox(poolBox);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
     raceTo->setAlignment(Qt::AlignCenter);
-    raceTo->setMinimumWidth(72);
+    raceTo->setFixedWidth(64);
     raceTo->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
-    poolFields->addWidget(raceLab, 0, 0);
-    poolFields->addWidget(raceTo, 0, 1);
+    raceTo->setToolTip(QStringLiteral("Race to"));
+    poolFields->addWidget(raceLab);
+    poolFields->addWidget(raceTo);
 
     auto* gameLab = makeFieldLab(QStringLiteral("Game"), poolBox);
     auto* gameCombo = new QComboBox(poolBox);
     gameCombo->addItems({QStringLiteral("8-Ball"), QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
                          QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
     gameCombo->setCurrentText(poolGameLabel(model->state().sport));
+    gameCombo->setMinimumWidth(96);
     gameCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    poolFields->addWidget(gameLab, 1, 0);
-    poolFields->addWidget(gameCombo, 1, 1);
+    poolFields->addWidget(gameLab);
+    poolFields->addWidget(gameCombo, 1);
     poolLay->addLayout(poolFields);
 
     auto* turnRow = new QHBoxLayout();
