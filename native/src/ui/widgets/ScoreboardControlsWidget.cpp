@@ -225,30 +225,48 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
 
     auto* scoreBand = new QHBoxLayout();
     scoreBand->setSpacing(3);
+    scoreBand->setContentsMargins(0, 0, 0, 0);
     auto makeScoreBtn = [&](const QString& t, const QString& color) {
         auto* b = new QPushButton(t, host);
-        b->setFixedSize(32, 26);
+        b->setFixedSize(28, 26);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#1A1D22;border:1px solid %1;color:%1;"
             "font-weight:900;font-size:11px;border-radius:3px;padding:0;}").arg(color));
         return b;
     };
-    auto* aMinus = makeScoreBtn(QStringLiteral("A−"), QStringLiteral("#FF5A2C"));
-    auto* aPlus = makeScoreBtn(QStringLiteral("A+"), QStringLiteral("#FF5A2C"));
-    auto* bMinus = makeScoreBtn(QStringLiteral("B−"), QStringLiteral("#4F9EFF"));
-    auto* bPlus = makeScoreBtn(QStringLiteral("B+"), QStringLiteral("#4F9EFF"));
+    auto* aMinus = makeScoreBtn(QStringLiteral("−"), QStringLiteral("#FF5A2C"));
+    auto* aPlus = makeScoreBtn(QStringLiteral("+"), QStringLiteral("#FF5A2C"));
+    auto* bMinus = makeScoreBtn(QStringLiteral("−"), QStringLiteral("#4F9EFF"));
+    auto* bPlus = makeScoreBtn(QStringLiteral("+"), QStringLiteral("#4F9EFF"));
+    aMinus->setToolTip(QStringLiteral("Player A −1"));
+    aPlus->setToolTip(QStringLiteral("Player A +1"));
+    bMinus->setToolTip(QStringLiteral("Player B −1"));
+    bPlus->setToolTip(QStringLiteral("Player B +1"));
+
     auto* scoreRead = new QLabel(host);
     scoreRead->setAlignment(Qt::AlignCenter);
-    scoreRead->setMinimumWidth(72);
+    scoreRead->setFixedHeight(26);
+    scoreRead->setMinimumWidth(64);
+    scoreRead->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     scoreRead->setStyleSheet(QStringLiteral(
-        "font-family:'Bebas Neue','Arial Narrow',sans-serif; font-size:20px; color:#F0F0F0;"
-        "background:#12151A; border:1px solid #3A3D45; border-radius:3px; padding:2px 6px;"));
-    scoreBand->addWidget(aMinus);
-    scoreBand->addWidget(aPlus);
-    scoreBand->addWidget(scoreRead, 1);
-    scoreBand->addWidget(bMinus);
-    scoreBand->addWidget(bPlus);
+        "font-family:'Bebas Neue','Arial Narrow',sans-serif; font-size:18px; color:#F0F0F0;"
+        "background:#12151A; border:1px solid #3A3D45; border-radius:3px; padding:1px 10px;"));
+
+    // Tight centered cluster — score does not stretch across the dock
+    auto* scoreCluster = new QWidget(host);
+    scoreCluster->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    auto* scoreClusterLay = new QHBoxLayout(scoreCluster);
+    scoreClusterLay->setContentsMargins(0, 0, 0, 0);
+    scoreClusterLay->setSpacing(3);
+    scoreClusterLay->addWidget(aMinus);
+    scoreClusterLay->addWidget(aPlus);
+    scoreClusterLay->addWidget(scoreRead);
+    scoreClusterLay->addWidget(bMinus);
+    scoreClusterLay->addWidget(bPlus);
+    scoreBand->addStretch(1);
+    scoreBand->addWidget(scoreCluster);
+    scoreBand->addStretch(1);
     lay->addLayout(scoreBand);
 
     // ── Pool extras ──
