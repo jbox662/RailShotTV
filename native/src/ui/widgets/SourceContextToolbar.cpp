@@ -99,10 +99,9 @@ void SourceContextToolbar::rebuild()
     auto* lock = addBtn(src->locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"),
                         QStringLiteral("Toggle lock"));
     connect(lock, &QPushButton::clicked, this, [this] {
-        m_engine->sceneGraph()->mutate([this](Project& p) {
-            if (auto* s = p.findSourceAnywhere(m_sourceId))
-                s->locked = !s->locked;
-        });
+        const auto* cur = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId);
+        if (!cur) return;
+        m_engine->setSourceLocked(m_sourceId, !cur->locked);
     });
 
     auto* filters = addBtn(QStringLiteral("Filters"), QStringLiteral("Open Filters"));
@@ -113,6 +112,9 @@ void SourceContextToolbar::rebuild()
 
     auto* props = addBtn(QStringLiteral("Properties"), QStringLiteral("Source Properties"));
     connect(props, &QPushButton::clicked, this, [this] { emit propertiesRequested(m_sourceId); });
+
+    auto* interact = addBtn(QStringLiteral("Interact"), QStringLiteral("Open Interact window"));
+    connect(interact, &QPushButton::clicked, this, [this] { emit interactRequested(m_sourceId); });
 
     switch (src->type) {
     case SourceType::Browser: {

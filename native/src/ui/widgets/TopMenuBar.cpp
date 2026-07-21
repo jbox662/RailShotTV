@@ -109,6 +109,23 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
     editBtn->setMenu(editMenu);
 
+    auto* viewBtn = addChrome(QStringLiteral("View"));
+    auto* viewMenu = new QMenu(viewBtn);
+    viewMenu->addAction(QStringLiteral("Preview Projector (Windowed)"), this, [this] {
+        emit openProjector(false, false);
+    });
+    viewMenu->addAction(QStringLiteral("Preview Projector (Fullscreen)"), this, [this] {
+        emit openProjector(false, true);
+    });
+    viewMenu->addSeparator();
+    viewMenu->addAction(QStringLiteral("Program Projector (Windowed)"), this, [this] {
+        emit openProjector(true, false);
+    });
+    viewMenu->addAction(QStringLiteral("Program Projector (Fullscreen)"), this, [this] {
+        emit openProjector(true, true);
+    });
+    viewBtn->setMenu(viewMenu);
+
     row->addStretch();
 
     m_fullscreen = addChrome(QStringLiteral("Fullscreen"));

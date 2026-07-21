@@ -331,6 +331,10 @@ add_library(railshot_ui STATIC
     src/ui/widgets/TransformDialog.cpp
     src/ui/widgets/AdvAudioDialog.h
     src/ui/widgets/AdvAudioDialog.cpp
+    src/ui/widgets/ProjectorWindow.h
+    src/ui/widgets/ProjectorWindow.cpp
+    src/ui/widgets/InteractDialog.h
+    src/ui/widgets/InteractDialog.cpp
     src/ui/widgets/GoLiveDialog.h
     src/ui/widgets/GoLiveDialog.cpp
     src/ui/widgets/SidebarRail.h

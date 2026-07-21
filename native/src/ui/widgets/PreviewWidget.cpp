@@ -5,6 +5,8 @@
 #include "ui/widgets/SourcePropertiesDialog.h"
 #include "ui/widgets/FiltersDialog.h"
 #include "ui/widgets/TransformDialog.h"
+#include "ui/widgets/ProjectorWindow.h"
+#include "ui/widgets/InteractDialog.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -12,10 +14,16 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QFocusEvent>
+#include <QWheelEvent>
+#include <QResizeEvent>
 #include <QStackedLayout>
+#include <QScrollArea>
+#include <QPushButton>
+#include <QFrame>
 #include <QEvent>
 #include <QMenu>
 #include <QCursor>
+#include <QSignalBlocker>
 #include <cmath>
 #include <algorithm>
 
@@ -356,7 +364,7 @@ public:
 
     void nudgeSelected(double dx, double dy)
     {
-        if (!m_engine || !m_interactive) return;
+        if (!m_engine || !m_interactive || m_owner->editLocked()) return;
         auto src = m_engine->selectedSource();
         if (!src || src->locked) return;
         Transform t = src->transform;
@@ -416,7 +424,7 @@ private:
 
     bool handleKey(QKeyEvent* e)
     {
-        if (!m_interactive) return false;
+        if (!m_interactive || m_owner->editLocked()) return false;
         const bool shift = e->modifiers() & Qt::ShiftModifier;
         const double step = shift ? (10.0 / 1920.0) : (1.0 / 1920.0);
         switch (e->key()) {
@@ -487,10 +495,61 @@ private:
         QAction* fit = transform->addAction(QStringLiteral("Fit to Screen"));
         QAction* stretch = transform->addAction(QStringLiteral("Stretch to Screen"));
         QAction* center = transform->addAction(QStringLiteral("Center to Screen"));
-        transform->setEnabled(src.has_value() && !src->locked);
+        transform->setEnabled(src.has_value() && !src->locked && !m_owner->editLocked());
+
+        menu.addSeparator();
+        QAction* interact = menu.addAction(QStringLiteral("Interact…"));
+        interact->setEnabled(src.has_value());
+        menu.addSeparator();
+        auto* scaleMenu = menu.addMenu(QStringLiteral("Preview Scaling"));
+        QAction* fitWin = scaleMenu->addAction(QStringLiteral("Fit to Window"));
+        QAction* zoom100 = scaleMenu->addAction(QStringLiteral("Canvas (100%)"));
+        QAction* zoomIn = scaleMenu->addAction(QStringLiteral("Zoom In"));
+        QAction* zoomOut = scaleMenu->addAction(QStringLiteral("Zoom Out"));
+        QAction* zoomReset = scaleMenu->addAction(QStringLiteral("Reset Zoom"));
+        menu.addSeparator();
+        auto* projMenu = menu.addMenu(QStringLiteral("Projector"));
+        QAction* projWin = projMenu->addAction(QStringLiteral("Windowed Projector"));
+        QAction* projFs = projMenu->addAction(QStringLiteral("Fullscreen Projector"));
 
         QAction* chosen = menu.exec(e->globalPosition().toPoint());
-        if (!chosen || !src) return true;
+        if (!chosen) return true;
+
+        if (chosen == interact && src) {
+            emit m_owner->interactRequested(src->id);
+            return true;
+        }
+        if (chosen == fitWin) {
+            m_owner->setDisplayMode(PreviewDisplayMode::FitWindow);
+            return true;
+        }
+        if (chosen == zoom100) {
+            m_owner->setDisplayMode(PreviewDisplayMode::FixedScale);
+            m_owner->setScaleAmount(1.0f);
+            return true;
+        }
+        if (chosen == zoomIn) {
+            m_owner->zoomIn();
+            return true;
+        }
+        if (chosen == zoomOut) {
+            m_owner->zoomOut();
+            return true;
+        }
+        if (chosen == zoomReset) {
+            m_owner->resetScale();
+            return true;
+        }
+        if (chosen == projWin) {
+            m_owner->openProjectorWindowed();
+            return true;
+        }
+        if (chosen == projFs) {
+            m_owner->openProjectorFullscreen();
+            return true;
+        }
+
+        if (!src) return true;
 
         if (chosen == props) {
             emit m_owner->configureSourceRequested(src->id);
@@ -627,7 +686,7 @@ private:
         emit m_owner->sourceSelected(hitId);
         const auto src = m_engine->selectedSource();
         refreshChrome();
-        if (!src || src->locked)
+        if (!src || src->locked || m_owner->editLocked())
             return true;
 
         m_dragging = true;
@@ -975,6 +1034,65 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     clearBtn->installEventFilter(this);
     clearBtn->setProperty("clearRole", program ? QStringLiteral("program") : QStringLiteral("preview"));
     h->addWidget(clearBtn);
+
+    // Scale / lock / projector chrome (OBS Preview power)
+    m_scaleLabel = new QLabel(QStringLiteral("Fit"), header);
+    m_scaleLabel->setStyleSheet(QStringLiteral(
+        "font-family:'JetBrains Mono'; font-size:9px; color:#A0A8B8;"
+        "background:#0A0C0F; border:1px solid #3A3D45; border-radius:2px; padding:2px 6px;"));
+    h->addWidget(m_scaleLabel);
+
+    auto* scaleBtn = new QPushButton(QStringLiteral("Scale"), header);
+    scaleBtn->setCursor(Qt::PointingHandCursor);
+    scaleBtn->setFixedHeight(20);
+    scaleBtn->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
+        "font-size:9px;font-weight:700;padding:1px 8px;}"
+        "QPushButton:hover{border-color:#4F9EFF;}"));
+    auto* scaleMenu = new QMenu(scaleBtn);
+    scaleMenu->addAction(QStringLiteral("Fit to Window"), this, [this] {
+        setDisplayMode(PreviewDisplayMode::FitWindow);
+    });
+    scaleMenu->addAction(QStringLiteral("Canvas (100%)"), this, [this] {
+        setDisplayMode(PreviewDisplayMode::FixedScale);
+        setScaleAmount(1.0f);
+    });
+    scaleMenu->addSeparator();
+    scaleMenu->addAction(QStringLiteral("Zoom In"), this, &PreviewWidget::zoomIn);
+    scaleMenu->addAction(QStringLiteral("Zoom Out"), this, &PreviewWidget::zoomOut);
+    scaleMenu->addAction(QStringLiteral("Reset Zoom"), this, &PreviewWidget::resetScale);
+    scaleBtn->setMenu(scaleMenu);
+    h->addWidget(scaleBtn);
+
+    if (!program) {
+        m_lockBtn = new QPushButton(QStringLiteral("Lock"), header);
+        m_lockBtn->setCheckable(true);
+        m_lockBtn->setCursor(Qt::PointingHandCursor);
+        m_lockBtn->setFixedHeight(20);
+        m_lockBtn->setToolTip(QStringLiteral("Lock preview editing (move/resize)"));
+        m_lockBtn->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
+            "font-size:9px;font-weight:700;padding:1px 8px;}"
+            "QPushButton:checked{background:#3A2010;border-color:#F97316;color:#FDBA74;}"
+            "QPushButton:hover{border-color:#4F9EFF;}"));
+        connect(m_lockBtn, &QPushButton::toggled, this, &PreviewWidget::setEditLocked);
+        h->addWidget(m_lockBtn);
+    }
+
+    auto* projBtn = new QPushButton(QStringLiteral("Proj"), header);
+    projBtn->setCursor(Qt::PointingHandCursor);
+    projBtn->setFixedHeight(20);
+    projBtn->setToolTip(QStringLiteral("Open projector"));
+    projBtn->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
+        "font-size:9px;font-weight:700;padding:1px 8px;}"
+        "QPushButton:hover{border-color:#4F9EFF;}"));
+    auto* projMenu = new QMenu(projBtn);
+    projMenu->addAction(QStringLiteral("Windowed Projector"), this, &PreviewWidget::openProjectorWindowed);
+    projMenu->addAction(QStringLiteral("Fullscreen Projector"), this, &PreviewWidget::openProjectorFullscreen);
+    projBtn->setMenu(projMenu);
+    h->addWidget(projBtn);
+
     col->addWidget(header);
 
     stage = new StageChrome(program, this);
@@ -982,13 +1100,21 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     stageLay->setContentsMargins(3, 3, 3, 3);
     stageLay->setSpacing(0);
 
-    auto* stackHost = new QWidget(stage);
-    stackHost->setStyleSheet(QStringLiteral("background:#000000;"));
-    auto* stack = new QStackedLayout(stackHost);
+    m_scroll = new QScrollArea(stage);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+    m_scroll->setAlignment(Qt::AlignCenter);
+    m_scroll->setStyleSheet(QStringLiteral("QScrollArea{background:#000;border:none;}"));
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    m_stackHost = new QWidget();
+    m_stackHost->setStyleSheet(QStringLiteral("background:#000000;"));
+    auto* stack = new QStackedLayout(m_stackHost);
     stack->setStackingMode(QStackedLayout::StackAll);
     stack->setContentsMargins(0, 0, 0, 0);
 
-    m_surface = new PreviewSurface(stackHost);
+    m_surface = new PreviewSurface(m_stackHost);
     if (engine && engine->graphicsDevice())
         m_surface->setDevice(engine->graphicsDevice());
     m_surface->setLabel({}, QColor(accent));
@@ -997,7 +1123,8 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     m_overlay = new CanvasOverlay(engine, this, m_surface, program);
     m_overlay->setInteractive(!program);
-    stageLay->addWidget(stackHost, 1);
+    m_scroll->setWidget(m_stackHost);
+    stageLay->addWidget(m_scroll, 1);
     col->addWidget(stage, 1);
 
     if (engine && program) {
@@ -1071,6 +1198,125 @@ bool PreviewWidget::eventFilter(QObject* watched, QEvent* event)
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+int PreviewWidget::canvasWidth() const
+{
+    if (m_engine && m_engine->compositor())
+        return std::max(1, m_engine->compositor()->width());
+    return 1920;
+}
+
+int PreviewWidget::canvasHeight() const
+{
+    if (m_engine && m_engine->compositor())
+        return std::max(1, m_engine->compositor()->height());
+    return 1080;
+}
+
+void PreviewWidget::updateScaleLabel()
+{
+    if (!m_scaleLabel) return;
+    if (m_displayMode == PreviewDisplayMode::FitWindow)
+        m_scaleLabel->setText(QStringLiteral("Fit"));
+    else
+        m_scaleLabel->setText(QStringLiteral("%1%").arg(int(std::lround(m_scaleAmount * 100.f))));
+}
+
+void PreviewWidget::applyDisplayLayout()
+{
+    if (!m_scroll || !m_stackHost || !m_surface)
+        return;
+    if (m_displayMode == PreviewDisplayMode::FitWindow) {
+        m_scroll->setWidgetResizable(true);
+        m_stackHost->setMinimumSize(0, 0);
+        m_stackHost->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+        m_surface->setMinimumSize(160, 90);
+        m_surface->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+    } else {
+        m_scroll->setWidgetResizable(false);
+        const int w = std::max(160, int(std::lround(canvasWidth() * double(m_scaleAmount))));
+        const int h = std::max(90, int(std::lround(canvasHeight() * double(m_scaleAmount))));
+        m_stackHost->setFixedSize(w, h);
+        m_surface->setFixedSize(w, h);
+    }
+    updateScaleLabel();
+}
+
+void PreviewWidget::setDisplayMode(PreviewDisplayMode mode)
+{
+    m_displayMode = mode;
+    if (mode == PreviewDisplayMode::FitWindow)
+        m_scaleAmount = 1.0f;
+    applyDisplayLayout();
+}
+
+void PreviewWidget::setScaleAmount(float amount)
+{
+    m_scaleAmount = std::clamp(amount, 0.25f, 4.0f);
+    m_displayMode = PreviewDisplayMode::FixedScale;
+    applyDisplayLayout();
+}
+
+void PreviewWidget::zoomIn()
+{
+    setScaleAmount(m_scaleAmount * 1.25f);
+}
+
+void PreviewWidget::zoomOut()
+{
+    setScaleAmount(m_scaleAmount / 1.25f);
+}
+
+void PreviewWidget::resetScale()
+{
+    setDisplayMode(PreviewDisplayMode::FitWindow);
+}
+
+void PreviewWidget::setEditLocked(bool locked)
+{
+    m_editLocked = locked;
+    if (m_lockBtn) {
+        QSignalBlocker b(m_lockBtn);
+        m_lockBtn->setChecked(locked);
+        m_lockBtn->setText(locked ? QStringLiteral("Locked") : QStringLiteral("Lock"));
+    }
+    if (m_overlay)
+        m_overlay->refreshChrome();
+}
+
+void PreviewWidget::openProjectorWindowed()
+{
+    ProjectorWindow::openWindowed(m_engine,
+                                  m_program ? ProjectorKind::Program : ProjectorKind::Preview,
+                                  window());
+}
+
+void PreviewWidget::openProjectorFullscreen()
+{
+    ProjectorWindow::openFullscreen(m_engine,
+                                    m_program ? ProjectorKind::Program : ProjectorKind::Preview,
+                                    this);
+}
+
+void PreviewWidget::wheelEvent(QWheelEvent* event)
+{
+    if (event->modifiers() & Qt::ControlModifier) {
+        if (event->angleDelta().y() > 0)
+            zoomIn();
+        else if (event->angleDelta().y() < 0)
+            zoomOut();
+        event->accept();
+        return;
+    }
+    QWidget::wheelEvent(event);
+}
+
+void PreviewWidget::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (m_displayMode == PreviewDisplayMode::FitWindow)
+        applyDisplayLayout();
 }
 
 } // namespace railshot

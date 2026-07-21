@@ -22,6 +22,7 @@ signals:
     void filtersRequested(const QString& sourceId);
     void transformRequested(const QString& sourceId);
     void propertiesRequested(const QString& sourceId);
+    void interactRequested(const QString& sourceId);
 
 private:
     void rebuild();

@@ -14,6 +14,7 @@
 #include "ui/widgets/GoLiveDialog.h"
 #include "ui/widgets/ObsStatusBarWidget.h"
 #include "ui/widgets/AdvAudioDialog.h"
+#include "ui/widgets/ProjectorWindow.h"
 #include "core/EngineController.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
@@ -143,6 +144,13 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     connect(m_top, &TopMenuBar::openAdvAudio, this, [this] {
         AdvAudioDialog dlg(m_engine, this);
         dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::openProjector, this, [this](bool program, bool fullscreen) {
+        const auto kind = program ? ProjectorKind::Program : ProjectorKind::Preview;
+        if (fullscreen)
+            ProjectorWindow::openFullscreen(m_engine, kind, this);
+        else
+            ProjectorWindow::openWindowed(m_engine, kind, this);
     });
     connect(m_engine, &EngineController::errorOccurred, this, [this](const QString& msg) {
         Q_UNUSED(msg);

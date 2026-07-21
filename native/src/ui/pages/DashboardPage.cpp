@@ -14,6 +14,8 @@
 #include "ui/widgets/SourceContextToolbar.h"
 #include "ui/widgets/FiltersDialog.h"
 #include "ui/widgets/TransformDialog.h"
+#include "ui/widgets/InteractDialog.h"
+#include "ui/widgets/ProjectorWindow.h"
 #include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
@@ -453,6 +455,21 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     connect(m_contextBar, &SourceContextToolbar::transformRequested, this, [this](const QString& id) {
         if (id.isEmpty()) return;
         TransformDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+    connect(m_contextBar, &SourceContextToolbar::interactRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        InteractDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+    connect(m_preview, &PreviewWidget::interactRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        InteractDialog dlg(m_engine, id, this);
+        dlg.exec();
+    });
+    connect(m_preview, &PreviewWidget::configureSourceRequested, this, [this](const QString& id) {
+        if (id.isEmpty()) return;
+        SourcePropertiesDialog dlg(m_engine, id, this);
         dlg.exec();
     });
 
