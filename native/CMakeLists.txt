@@ -424,6 +424,7 @@ if(RAILSHOT_WEBVIEW2_FOUND)
         "${RAILSHOT_WEBVIEW2_ROOT}/x64/WebView2LoaderStatic.lib"
         version
         shlwapi
+        ole32
     )
 else()
     target_compile_definitions(railshot_browser_helper PRIVATE RAILSHOT_HAS_WEBVIEW2=0)

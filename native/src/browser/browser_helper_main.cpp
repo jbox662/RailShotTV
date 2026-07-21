@@ -18,6 +18,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <atomic>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -132,15 +133,14 @@ QImage renderHtml(const QString& html, int w, int h)
     QTextBrowser browser;
     browser.setFixedSize(w, h);
     browser.setFrameShape(QFrame::NoFrame);
-    browser.setStyleSheet(QStringLiteral("background: transparent; color: white;"));
-    browser.setAttribute(Qt::WA_TranslucentBackground, true);
+    browser.setStyleSheet(QStringLiteral("background:#101420; color:#F8F8FF;"));
     browser.document()->setDocumentMargin(12);
     browser.setHtml(html);
     browser.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     browser.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     QImage img(w, h, QImage::Format_ARGB32);
-    img.fill(Qt::transparent);
+    img.fill(QColor(16, 20, 32));
     QPainter p(&img);
     browser.render(&p);
     p.end();
@@ -159,37 +159,69 @@ QString wrapPage(const QString& bodyHtml, const QString& note)
 }
 
 #if defined(_WIN32) && defined(RAILSHOT_HAS_WEBVIEW2) && RAILSHOT_HAS_WEBVIEW2
-QImage captureHwnd(HWND hwnd, int w, int h)
+/// WebView2 is GPU-composited (WS_EX_NOREDIRECTIONBITMAP) — GDI BitBlt always
+/// returns black. CapturePreview is the supported screenshot API.
+QImage captureWebViewPreview(ICoreWebView2* webview, int w, int h)
 {
-    QImage img(w, h, QImage::Format_ARGB32);
-    img.fill(Qt::transparent);
-    if (!hwnd) return img;
+    QImage fallback(w, h, QImage::Format_ARGB32);
+    fallback.fill(QColor(16, 20, 32));
+    if (!webview) return fallback;
 
-    HDC hdcWindow = GetDC(hwnd);
-    if (!hdcWindow) return img;
-    HDC hdcMem = CreateCompatibleDC(hdcWindow);
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = w;
-    bmi.bmiHeader.biHeight = -h; // top-down
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-    void* bits = nullptr;
-    HBITMAP hbm = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!hbm || !bits) {
-        if (hbm) DeleteObject(hbm);
-        DeleteDC(hdcMem);
-        ReleaseDC(hwnd, hdcWindow);
-        return img;
+    IStream* stream = nullptr;
+    if (FAILED(CreateStreamOnHGlobal(nullptr, TRUE, &stream)) || !stream)
+        return fallback;
+
+    std::atomic<bool> done{false};
+    HRESULT captureHr = E_FAIL;
+    const HRESULT startHr = webview->CapturePreview(
+        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
+        stream,
+        Callback<ICoreWebView2CapturePreviewCompletedHandler>(
+            [&](HRESULT errorCode) -> HRESULT {
+                captureHr = errorCode;
+                done.store(true);
+                return S_OK;
+            })
+            .Get());
+
+    if (FAILED(startHr)) {
+        stream->Release();
+        return fallback;
     }
-    HGDIOBJ old = SelectObject(hdcMem, hbm);
-    BitBlt(hdcMem, 0, 0, w, h, hdcWindow, 0, 0, SRCCOPY);
-    std::memcpy(img.bits(), bits, size_t(w) * size_t(h) * 4);
-    SelectObject(hdcMem, old);
-    DeleteObject(hbm);
-    DeleteDC(hdcMem);
-    ReleaseDC(hwnd, hdcWindow);
+
+    const DWORD startTick = GetTickCount();
+    while (!done.load() && (GetTickCount() - startTick) < 2000) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 8);
+        Sleep(1);
+    }
+
+    QImage img = fallback;
+    if (done.load() && SUCCEEDED(captureHr)) {
+        STATSTG stat{};
+        if (SUCCEEDED(stream->Stat(&stat, STATFLAG_NONAME)) && stat.cbSize.QuadPart > 0) {
+            LARGE_INTEGER zero{};
+            stream->Seek(zero, STREAM_SEEK_SET, nullptr);
+            QByteArray bytes;
+            bytes.resize(int(stat.cbSize.QuadPart));
+            ULONG read = 0;
+            if (SUCCEEDED(stream->Read(bytes.data(), ULONG(bytes.size()), &read)) && read > 0) {
+                QImage decoded;
+                if (decoded.loadFromData(bytes) && !decoded.isNull()) {
+                    if (decoded.format() != QImage::Format_ARGB32)
+                        decoded = decoded.convertToFormat(QImage::Format_ARGB32);
+                    if (decoded.width() != w || decoded.height() != h)
+                        decoded = decoded.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                    img = decoded;
+                }
+            }
+        }
+    }
+    stream->Release();
     return img;
 }
 
@@ -198,7 +230,9 @@ struct WebViewHost {
     ComPtr<ICoreWebView2Controller> controller;
     ComPtr<ICoreWebView2> webview;
     bool ready = false;
+    bool contentReady = false;
     QString lastError;
+    QImage lastFrame;
 
     static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
     {
@@ -214,12 +248,15 @@ struct WebViewHost {
         wc.hInstance = GetModuleHandleW(nullptr);
         wc.lpszClassName = L"RailShotBrowserHelperWV2";
         RegisterClassExW(&wc);
+        // CapturePreview requires a visible HWND. Park it off-screen so it does not steal focus.
         hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                                L"RailShotBrowserHelperWV2",
                                L"RailShot Browser Helper",
-                               WS_POPUP,
+                               WS_POPUP | WS_VISIBLE,
                                -32000, -32000, w, h,
                                nullptr, nullptr, wc.hInstance, nullptr);
+        if (hwnd)
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         return hwnd != nullptr;
     }
 
@@ -229,6 +266,14 @@ struct WebViewHost {
             if (error) *error = QStringLiteral("CreateWindow failed");
             return false;
         }
+
+        lastFrame = QImage(w, h, QImage::Format_ARGB32);
+        lastFrame.fill(QColor(16, 20, 32));
+        QPainter p(&lastFrame);
+        p.setPen(QColor(200, 210, 230));
+        p.setFont(QFont(QStringLiteral("Segoe UI"), 18, QFont::Bold));
+        p.drawText(lastFrame.rect(), Qt::AlignCenter, QStringLiteral("Loading browser…\n%1").arg(url));
+        p.end();
 
         HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
             nullptr, nullptr, nullptr,
@@ -254,7 +299,8 @@ struct WebViewHost {
                                 controller->put_Bounds(bounds);
                                 if (ComPtr<ICoreWebView2Controller2> c2;
                                     SUCCEEDED(controller.As(&c2))) {
-                                    COREWEBVIEW2_COLOR bg{0, 0, 0, 0};
+                                    // Opaque dark background (A,R,G,B) — avoid fully transparent pages.
+                                    COREWEBVIEW2_COLOR bg{255, 16, 20, 32};
                                     c2->put_DefaultBackgroundColor(bg);
                                 }
                                 controller->get_CoreWebView2(&webview);
@@ -262,6 +308,22 @@ struct WebViewHost {
                                     lastError = QStringLiteral("get_CoreWebView2 returned null");
                                     return E_FAIL;
                                 }
+                                webview->add_ContentLoading(
+                                    Callback<ICoreWebView2ContentLoadingEventHandler>(
+                                        [this](ICoreWebView2*, ICoreWebView2ContentLoadingEventArgs*) -> HRESULT {
+                                            contentReady = true;
+                                            return S_OK;
+                                        })
+                                        .Get(),
+                                    nullptr);
+                                webview->add_NavigationCompleted(
+                                    Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                        [this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
+                                            contentReady = true;
+                                            return S_OK;
+                                        })
+                                        .Get(),
+                                    nullptr);
                                 const std::wstring nav = url.toStdWString();
                                 webview->Navigate(nav.c_str());
                                 ready = true;
@@ -295,9 +357,17 @@ struct WebViewHost {
         return true;
     }
 
-    QImage grab(int w, int h) const
+    QImage grab(int w, int h)
     {
-        return captureHwnd(hwnd, w, h);
+        if (!webview)
+            return lastFrame.isNull() ? QImage(w, h, QImage::Format_ARGB32) : lastFrame;
+        // CapturePreview fails before first ContentLoading — keep loading placeholder.
+        if (!contentReady)
+            return lastFrame;
+        QImage img = captureWebViewPreview(webview.Get(), w, h);
+        if (!img.isNull())
+            lastFrame = img;
+        return lastFrame;
     }
 
     void shutdown()
@@ -312,6 +382,7 @@ struct WebViewHost {
             hwnd = nullptr;
         }
         ready = false;
+        contentReady = false;
     }
 };
 #endif

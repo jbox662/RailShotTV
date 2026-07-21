@@ -1149,16 +1149,20 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     if (engine) {
         connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this, sceneName, clearBtn] {
             const auto p = m_engine->projectSnapshot();
-            const QString id = m_program ? p.programSceneId : p.previewSceneId;
+            const QString id = m_program
+                                   ? p.programSceneId
+                                   : (p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
             const auto* sc = p.findScene(id);
             sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
-            clearBtn->setVisible(!id.isEmpty());
+            clearBtn->setVisible(!m_program && !p.previewSceneId.isEmpty());
         });
         const auto p = engine->projectSnapshot();
-        const QString id = program ? p.programSceneId : p.previewSceneId;
+        const QString id = program
+                               ? p.programSceneId
+                               : (p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
         const auto* sc = p.findScene(id);
         sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
-        clearBtn->setVisible(!id.isEmpty());
+        clearBtn->setVisible(!program && !p.previewSceneId.isEmpty());
     }
 
     if (!program) {
