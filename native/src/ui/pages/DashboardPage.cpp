@@ -455,7 +455,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     // OBS: dock can grow; content enforces tick-label minimum via minimumSizeHint()
     m_mixer->setMinimumWidth(m_mixer->minimumSizeHint().width());
     m_scoreboardControls = new ScoreboardControlsWidget(engine, nullptr);
-    m_scoreboardControls->setMinimumWidth(200);
+    m_scoreboardControls->setMinimumWidth(280);
 
     m_scenesDock = makeDock(QStringLiteral("Scenes"), QStringLiteral("scenesDock"),
                             scenesCol, QStringLiteral("#4F9EFF"));
@@ -465,6 +465,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
                            m_mixer, QStringLiteral("#A855F7"));
     m_scoreboardDock = makeDock(QStringLiteral("Scoreboard"), QStringLiteral("scoreboardDock"),
                                 m_scoreboardControls, QStringLiteral("#22C55E"));
+    m_scoreboardDock->setMinimumWidth(280);
     m_statsWidget = new ObsStatsDock(engine, nullptr);
     m_statsDock = makeDock(QStringLiteral("Stats"), QStringLiteral("statsDock"),
                            m_statsWidget, QStringLiteral("#38BDF8"));
@@ -688,7 +689,7 @@ void DashboardPage::applyDefaultDockLayout()
 
     // Scenes | Sources | Mixer | Scoreboard
     m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock, m_scoreboardDock},
-                            {200, 280, 420, 220}, Qt::Horizontal);
+                            {180, 260, 380, 320}, Qt::Horizontal);
 }
 
 void DashboardPage::scheduleSaveDockState()
@@ -701,10 +702,11 @@ void DashboardPage::saveDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     auto ui = m_engine->settings()->uiState();
-    ui.insert(QStringLiteral("dashboardDockStateV3"),
+    ui.insert(QStringLiteral("dashboardDockStateV4"),
               QString::fromLatin1(m_dockHost->saveState().toBase64()));
     ui.remove(QStringLiteral("dashboardDockState"));
     ui.remove(QStringLiteral("dashboardDockStateV2"));
+    ui.remove(QStringLiteral("dashboardDockStateV3"));
     m_engine->settings()->setUiState(ui);
     m_engine->settings()->sync();
 }
@@ -713,7 +715,7 @@ void DashboardPage::restoreDockState()
 {
     if (!m_dockHost || !m_engine || !m_engine->settings()) return;
     const auto ui = m_engine->settings()->uiState();
-    const QString b64 = ui.value(QStringLiteral("dashboardDockStateV3")).toString();
+    const QString b64 = ui.value(QStringLiteral("dashboardDockStateV4")).toString();
     if (b64.isEmpty()) return;
     const QByteArray state = QByteArray::fromBase64(b64.toLatin1());
     if (!state.isEmpty())
@@ -730,6 +732,7 @@ void DashboardPage::resetDockLayout()
         ui.remove(QStringLiteral("dashboardDockState"));
         ui.remove(QStringLiteral("dashboardDockStateV2"));
         ui.remove(QStringLiteral("dashboardDockStateV3"));
+        ui.remove(QStringLiteral("dashboardDockStateV4"));
         m_engine->settings()->setUiState(ui);
         m_engine->settings()->sync();
     }

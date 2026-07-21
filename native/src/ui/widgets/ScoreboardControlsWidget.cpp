@@ -62,7 +62,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("scoreboardControls"));
-    setMinimumWidth(180);
+    setMinimumWidth(280);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     setStyleSheet(QStringLiteral(
         "QWidget#scoreboardControls {"
