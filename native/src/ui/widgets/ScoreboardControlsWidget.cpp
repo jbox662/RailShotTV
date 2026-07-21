@@ -97,7 +97,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* settingsBtn = new QPushButton(QStringLiteral("Settings"), host);
     settingsBtn->setCursor(Qt::PointingHandCursor);
     settingsBtn->setFixedHeight(22);
-    settingsBtn->setToolTip(QStringLiteral("Sport, layout, theme…"));
+    settingsBtn->setToolTip(QStringLiteral("Presets, colors, layout…"));
     settingsBtn->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
         "font-weight:700;font-size:9px;border-radius:3px;padding:1px 8px;}"

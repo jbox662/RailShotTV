@@ -17,6 +17,9 @@ struct ScoreboardState {
     QString theme = QStringLiteral("railshot");
     QString colorA = QStringLiteral("#FF5A2C");
     QString colorB = QStringLiteral("#4F9EFF");
+    /// Optional overrides (empty = use theme defaults).
+    QString textColor;
+    QString bgColor;
     bool clockRunning = false;
     int clockSeconds = 0;
 

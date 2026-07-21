@@ -10,12 +10,36 @@ QColor themeBg(const QString& theme)
     if (theme == QLatin1String("classic")) return QColor(245, 245, 248, 230);
     if (theme == QLatin1String("broadcast")) return QColor(8, 20, 40, 230);
     if (theme == QLatin1String("neon")) return QColor(8, 4, 20, 235);
+    if (theme == QLatin1String("carbon")) return QColor(18, 18, 20, 235);
+    if (theme == QLatin1String("gold")) return QColor(28, 22, 10, 235);
     return QColor(10, 12, 16, 220); // railshot / dark
 }
 QColor themeFg(const QString& theme)
 {
     if (theme == QLatin1String("classic")) return QColor(20, 22, 28);
+    if (theme == QLatin1String("gold")) return QColor(255, 236, 179);
     return QColor(255, 255, 255);
+}
+QColor resolveBg(const QJsonObject& state, const QString& theme)
+{
+    const QString custom = state.value(QStringLiteral("bgColor")).toString();
+    if (!custom.isEmpty()) {
+        QColor c(custom);
+        if (c.isValid()) {
+            if (c.alpha() == 255) c.setAlpha(230);
+            return c;
+        }
+    }
+    return themeBg(theme);
+}
+QColor resolveFg(const QJsonObject& state, const QString& theme)
+{
+    const QString custom = state.value(QStringLiteral("textColor")).toString();
+    if (!custom.isEmpty()) {
+        QColor c(custom);
+        if (c.isValid()) return c;
+    }
+    return themeFg(theme);
 }
 } // namespace
 
@@ -43,9 +67,11 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
     const QString clockText = QStringLiteral("%1:%2")
                                   .arg(clock / 60, 2, 10, QChar('0'))
                                   .arg(clock % 60, 2, 10, QChar('0'));
-    const QColor bg = themeBg(theme);
-    const QColor fg = themeFg(theme);
+    const QColor bg = resolveBg(state, theme);
+    const QColor fg = resolveFg(state, theme);
     const bool neon = theme == QLatin1String("neon");
+    const QColor accentA = colA.isValid() ? colA : QColor(QStringLiteral("#FF5A2C"));
+    const QColor accentB = colB.isValid() ? colB : QColor(QStringLiteral("#4F9EFF"));
 
     auto drawTeamBlock = [&](const QRect& r, const QString& name, int score, const QColor& accent, bool right) {
         p.fillRect(r, bg);
@@ -69,19 +95,48 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
         const int boxH = 56;
         const QRect ra(16, 16, boxW, boxH);
         const QRect rb(width - boxW - 16, 16, boxW, boxH);
-        drawTeamBlock(ra, a, sa, colA.isValid() ? colA : QColor("#FF5A2C"), false);
-        drawTeamBlock(rb, b, sb, colB.isValid() ? colB : QColor("#4F9EFF"), true);
+        drawTeamBlock(ra, a, sa, accentA, false);
+        drawTeamBlock(rb, b, sb, accentB, true);
         p.setPen(fg);
         p.setFont(QFont(QStringLiteral("JetBrains Mono"), 14, QFont::Bold));
         p.drawText(QRect(0, 20, width, 40), Qt::AlignHCenter | Qt::AlignVCenter, clockText);
+    } else if (layout == QLatin1String("center")) {
+        // Mid-screen broadcast banner
+        const int h = 96;
+        const int y = (height - h) / 2;
+        const int x = int(width * 0.12);
+        const int w = int(width * 0.76);
+        p.setBrush(bg);
+        p.setPen(Qt::NoPen);
+        p.drawRoundedRect(x, y, w, h, 8, 8);
+        p.fillRect(x, y, 6, h, accentA);
+        p.fillRect(x + w - 6, y, 6, h, accentB);
+        QLinearGradient g(x, y, x + w, y);
+        g.setColorAt(0.0, QColor(accentA.red(), accentA.green(), accentA.blue(), 50));
+        g.setColorAt(0.5, Qt::transparent);
+        g.setColorAt(1.0, QColor(accentB.red(), accentB.green(), accentB.blue(), 50));
+        p.fillRect(x, y, w, h, g);
+        if (neon) {
+            p.setPen(QPen(accentA, 2));
+            p.drawRoundedRect(x + 1, y + 1, w - 2, h - 2, 8, 8);
+        }
+        p.setPen(fg);
+        p.setFont(QFont(QStringLiteral("Bebas Neue"), 36, QFont::Bold));
+        p.drawText(QRect(x + 24, y, w / 2 - 40, h), Qt::AlignVCenter | Qt::AlignLeft,
+                   QStringLiteral("%1  %2").arg(a).arg(sa));
+        p.drawText(QRect(x + w / 2 + 16, y, w / 2 - 40, h), Qt::AlignVCenter | Qt::AlignRight,
+                   QStringLiteral("%1  %2").arg(sb).arg(b));
+        p.setFont(QFont(QStringLiteral("JetBrains Mono"), 16, QFont::Bold));
+        p.setPen(accentA);
+        p.drawText(QRect(x, y, w, h), Qt::AlignCenter, clockText);
     } else if (layout == QLatin1String("wide")) {
         const int h = 72;
         const int y = height - h;
         p.fillRect(0, y, width, h, bg);
-        p.fillRect(0, y, width / 2, h, QColor(colA.red(), colA.green(), colA.blue(), 40));
-        p.fillRect(width / 2, y, width / 2, h, QColor(colB.red(), colB.green(), colB.blue(), 40));
-        p.fillRect(0, y, 6, h, colA);
-        p.fillRect(width - 6, y, 6, h, colB);
+        p.fillRect(0, y, width / 2, h, QColor(accentA.red(), accentA.green(), accentA.blue(), 40));
+        p.fillRect(width / 2, y, width / 2, h, QColor(accentB.red(), accentB.green(), accentB.blue(), 40));
+        p.fillRect(0, y, 6, h, accentA);
+        p.fillRect(width - 6, y, 6, h, accentB);
         p.setPen(fg);
         p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
         p.drawText(QRect(24, y, width / 2 - 40, h), Qt::AlignVCenter | Qt::AlignLeft,
@@ -95,12 +150,12 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
         const int h = 80;
         const int y = height - h;
         p.fillRect(0, y, width, h, bg);
-        p.fillRect(0, y, 4, h, colA);
-        p.fillRect(width - 4, y, 4, h, colB);
+        p.fillRect(0, y, 4, h, accentA);
+        p.fillRect(width - 4, y, 4, h, accentB);
         QLinearGradient g(0, y, width, y);
-        g.setColorAt(0.0, QColor(colA.red(), colA.green(), colA.blue(), 55));
+        g.setColorAt(0.0, QColor(accentA.red(), accentA.green(), accentA.blue(), 55));
         g.setColorAt(0.5, Qt::transparent);
-        g.setColorAt(1.0, QColor(colB.red(), colB.green(), colB.blue(), 55));
+        g.setColorAt(1.0, QColor(accentB.red(), accentB.green(), accentB.blue(), 55));
         p.fillRect(0, y, width, h, g);
         p.setPen(fg);
         p.setFont(QFont(QStringLiteral("Segoe UI"), 22, QFont::Bold));
@@ -109,7 +164,7 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
         p.drawText(QRect(width / 2, y, width / 2 - 20, h), Qt::AlignVCenter | Qt::AlignRight,
                    QStringLiteral("%1  %2").arg(sb).arg(b));
         p.setFont(QFont(QStringLiteral("JetBrains Mono"), 14, QFont::Bold));
-        p.setPen(colA);
+        p.setPen(accentA);
         p.drawText(QRect(0, y, width, h), Qt::AlignCenter, clockText);
     }
     return img;
