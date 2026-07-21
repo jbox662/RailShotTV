@@ -164,7 +164,13 @@ QVector<AudioChannelState> AudioGraph::channels() const
 
 void AudioGraph::ensureChannel(const QString& id, const QString& name)
 {
-    bool added = false;
+    (void)ensureChannelEx(id, name);
+}
+
+bool AudioGraph::ensureChannelEx(const QString& id, const QString& name)
+{
+    bool created = false;
+    bool renamed = false;
     {
         std::lock_guard lock(m_mutex);
         auto it = m_channels.find(id);
@@ -173,14 +179,15 @@ void AudioGraph::ensureChannel(const QString& id, const QString& name)
             ch.id = id;
             ch.name = name;
             m_channels.insert(id, ch);
-            added = true;
+            created = true;
         } else if (!name.isEmpty() && it->name != name) {
             it->name = name;
-            added = true;
+            renamed = true;
         }
     }
-    if (added)
+    if (created || renamed)
         emit channelsChanged();
+    return created;
 }
 
 void AudioGraph::removeChannel(const QString& id)

@@ -16,6 +16,7 @@
 #include <QDir>
 #include <QTimer>
 #include <QJsonArray>
+#include <algorithm>
 
 namespace railshot {
 
@@ -87,7 +88,14 @@ bool EngineController::initialize(QString* error)
 
     m_capture->setSourceAudioCallback([this](const QString& id, const QString& name, const AudioBuffer& buf) {
         if (!m_audio) return;
-        m_audio->ensureChannel(id, name);
+        const bool created = m_audio->ensureChannelEx(id, name);
+        if (created) {
+            const auto snap = m_sceneGraph->snapshot();
+            if (const auto* s = snap.findSourceAnywhere(id))
+                syncSourceAudioToGraph(id, s->name, s->settings);
+            else
+                m_audio->ensureChannel(id, name);
+        }
         m_audio->inject(id, buf);
     });
     connect(m_capture.get(), &CaptureManager::sourceStopped, this, [this](const QString& id) {
@@ -426,8 +434,30 @@ void EngineController::updateSourceSettings(const QString& sourceId, const QJson
             found = true;
         }
     });
-    if (found)
+    if (found) {
         m_capture->updateSource(updated);
+        syncSourceAudioToGraph(sourceId, updated.name, settings);
+    }
+}
+
+void EngineController::syncSourceAudioToGraph(const QString& sourceId, const QString& name, const QJsonObject& settings)
+{
+    if (!m_audio || sourceId.isEmpty())
+        return;
+    if (!settings.contains(QStringLiteral("audioVolume")) && !settings.contains(QStringLiteral("audioMute")))
+        return;
+    m_audio->ensureChannel(sourceId, name);
+    auto state = m_audio->channelState(sourceId);
+    state.id = sourceId;
+    if (!name.isEmpty())
+        state.name = name;
+    if (settings.contains(QStringLiteral("audioVolume"))) {
+        const float pct = float(settings.value(QStringLiteral("audioVolume")).toInt(100));
+        state.volume = std::clamp(pct / 100.f, 0.f, 20.f);
+    }
+    if (settings.contains(QStringLiteral("audioMute")))
+        state.muted = settings.value(QStringLiteral("audioMute")).toBool(false);
+    m_audio->setChannelState(sourceId, state);
 }
 
 void EngineController::onScoreboardChanged()

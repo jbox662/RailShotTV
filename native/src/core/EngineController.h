@@ -106,6 +106,7 @@ private:
     void rebuildSourcesForActiveScenes();
     void updateEngineState();
     void tickIsoRecorders(qint64 ptsUs);
+    void syncSourceAudioToGraph(const QString& sourceId, const QString& name, const QJsonObject& settings);
 
     std::unique_ptr<SceneGraph> m_sceneGraph;
     std::unique_ptr<SettingsStore> m_settings;

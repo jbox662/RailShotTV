@@ -2,6 +2,7 @@
 #include "ui/widgets/properties/SourcePropertiesPanel.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
+#include "audio/AudioGraph.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -15,6 +16,8 @@
 #include <QScrollArea>
 #include <QColorDialog>
 #include <QStackedWidget>
+#include <cmath>
+#include <algorithm>
 
 namespace railshot {
 
@@ -431,6 +434,14 @@ void SourcePropertiesWidget::rebuild()
             m_blur->setValue(src->settings.value(QStringLiteral("blur")).toInt(0));
         m_volume->setValue(src->settings.value(QStringLiteral("audioVolume")).toInt(100));
         m_audioMute->setChecked(src->settings.value(QStringLiteral("audioMute")).toBool());
+        // Prefer live mixer state when this source already has a graph channel
+        if (m_engine && m_engine->audio()) {
+            const auto live = m_engine->audio()->channelState(src->id);
+            if (live.id == src->id) {
+                m_volume->setValue(int(std::lround(std::clamp(live.volume, 0.f, 20.f) * 100.f)));
+                m_audioMute->setChecked(live.muted);
+            }
+        }
 
         if (!m_sourcePanel || m_panelType != src->type) {
             if (m_sourcePanel) {

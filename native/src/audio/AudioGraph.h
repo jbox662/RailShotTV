@@ -35,6 +35,8 @@ public:
     QVector<AudioChannelState> channels() const;
 
     void ensureChannel(const QString& id, const QString& name);
+    /// Returns true if the channel was newly created.
+    bool ensureChannelEx(const QString& id, const QString& name);
     void removeChannel(const QString& id);
     /// Inject a decoded media/NDI (or other) buffer into the mix.
     void inject(const QString& channelId, const AudioBuffer& buffer);
