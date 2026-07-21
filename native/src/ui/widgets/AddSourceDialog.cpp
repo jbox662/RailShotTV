@@ -1,383 +1,280 @@
 #include "ui/widgets/AddSourceDialog.h"
 #include "core/EngineController.h"
-#include "capture/MediaFoundationCamera.h"
-#include "capture/NdiSource.h"
+#include "core/Project.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include <QComboBox>
-#include <QStackedWidget>
 #include <QLineEdit>
-#include <QPlainTextEdit>
 #include <QPushButton>
-#include <QFileDialog>
 #include <QLabel>
 #include <QListWidget>
+#include <QRadioButton>
+#include <QButtonGroup>
+#include <QMenu>
+#include <QSet>
+#include <QWidgetAction>
 #include <QFrame>
-#include <QColor>
-
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <dxgi.h>
-#pragma comment(lib, "dxgi.lib")
-#endif
 
 namespace railshot {
 
 namespace {
-QVector<QPair<int, QString>> enumerateMonitors()
-{
-    QVector<QPair<int, QString>> out;
-#ifdef _WIN32
-    IDXGIFactory1* factory = nullptr;
-    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))) || !factory)
-        return out;
-    IDXGIAdapter1* adapter = nullptr;
-    int globalIndex = 0;
-    for (UINT ai = 0; factory->EnumAdapters1(ai, &adapter) != DXGI_ERROR_NOT_FOUND; ++ai) {
-        IDXGIOutput* output = nullptr;
-        for (UINT oi = 0; adapter->EnumOutputs(oi, &output) != DXGI_ERROR_NOT_FOUND; ++oi) {
-            DXGI_OUTPUT_DESC desc{};
-            output->GetDesc(&desc);
-            out.append({globalIndex, QStringLiteral("Monitor %1 (%2)")
-                                         .arg(globalIndex)
-                                         .arg(QString::fromWCharArray(desc.DeviceName))});
-            ++globalIndex;
-            output->Release();
-        }
-        adapter->Release();
-    }
-    factory->Release();
-#endif
-    if (out.isEmpty())
-        out.append({0, QStringLiteral("Monitor 0")});
-    return out;
-}
 
-struct InputTypeEntry {
-    const char* label;
-    const char* color;
+struct TypeEntry {
     SourceType type;
-    bool available;
+    const char* label;
 };
 
-const InputTypeEntry kInputTypes[] = {
-    {"Camera", "#22C55E", SourceType::Camera, true},
-    {"Display Capture", "#4F9EFF", SourceType::Display, true},
-    {"Window Capture", "#38BDF8", SourceType::Window, true},
-    {"Game Capture", "#A3E635", SourceType::Game, true},
-    {"Audio Input", "#F472B6", SourceType::AudioInput, true},
-    {"Audio Output (Desktop)", "#FB7185", SourceType::AudioOutput, true},
-    {"Image", "#FBBF24", SourceType::Image, true},
-    {"Title / Text", "#EC4899", SourceType::Text, true},
-    {"Web Browser", "#3B82F6", SourceType::Browser, true},
-    {"Scoreboard", "#A855F7", SourceType::Scoreboard, true},
-    {"Lower Third", "#F472B6", SourceType::LowerThird, true},
-    {"Colour", "#EF4444", SourceType::Color, true},
-    {"Media / Video", "#FB923C", SourceType::Media, true},
-    {"NDI / OMT", "#06B6D4", SourceType::Ndi, true},
-    {"Alert / Stinger", "#F59E0B", SourceType::Alert, true},
+const TypeEntry kMenuTypes[] = {
+    {SourceType::Camera, "Video Capture Device"},
+    {SourceType::Display, "Display Capture"},
+    {SourceType::Window, "Window Capture"},
+    {SourceType::Game, "Game Capture"},
+    {SourceType::AudioInput, "Audio Input Capture"},
+    {SourceType::AudioOutput, "Audio Output Capture"},
+    {SourceType::Image, "Image"},
+    {SourceType::Media, "Media Source"},
+    {SourceType::Text, "Text (GDI+)"},
+    {SourceType::Browser, "Browser"},
+    {SourceType::Color, "Color Source"},
+    {SourceType::Scoreboard, "Scoreboard"},
+    {SourceType::LowerThird, "Lower Third"},
+    {SourceType::Ndi, "NDI Source"},
+    {SourceType::Alert, "Alert / Stinger"},
 };
-} // namespace
 
-AddSourceDialog::AddSourceDialog(EngineController* engine, QWidget* parent)
-    : QDialog(parent), m_engine(engine)
+QJsonObject defaultSettingsFor(SourceType type)
 {
-    setWindowTitle(QStringLiteral("Add Source"));
-    setObjectName(QStringLiteral("addSourceDialog"));
-    resize(780, 520);
-    setMaximumHeight(int(0.88 * 900));
-    setStyleSheet(QStringLiteral(
-        "QDialog#addSourceDialog{background:#0F1114;border:2px solid #4A4D55;}"
-        "QListWidget{background:#0A0C0F;border:none;border-right:2px solid #3A3D45;outline:none;color:#E0E2E8;}"
-        "QListWidget::item{padding:10px 14px;border-left:4px solid transparent;border-bottom:1px solid #1A1D24;}"
-        "QListWidget::item:selected{background:#102438;}"
-        "QListWidget::item:hover{background:#14181F;}"
-        "QLineEdit,QPlainTextEdit,QComboBox{background:#0A0C10;border:1px solid #4A4D55;"
-        "  color:#E0E2E8;border-radius:3px;padding:7px;}"
-        "QLineEdit:focus,QComboBox:focus{border:2px solid #4F9EFF;}"
-        "QLabel{color:#E0E2E8;background:transparent;}"));
-
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
-
-    auto* header = new QLabel(QStringLiteral("  ADD SOURCE"), this);
-    header->setFixedHeight(40);
-    header->setStyleSheet(QStringLiteral(
-        "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 rgba(79,158,255,0.28),stop:0.5 transparent);"
-        "border-bottom:2px solid #3A3D45; border-left:3px solid #4F9EFF;"
-        "font-weight:900; font-size:12px; letter-spacing:2px; color:#4F9EFF; padding-left:12px;"));
-    root->addWidget(header);
-
-    auto* body = new QHBoxLayout();
-    body->setContentsMargins(0, 0, 0, 0);
-    body->setSpacing(0);
-
-    m_typeList = new QListWidget(this);
-    m_typeList->setFixedWidth(210);
-    for (const auto& e : kInputTypes) {
-        auto* item = new QListWidgetItem(QString::fromLatin1(e.label), m_typeList);
-        item->setData(Qt::UserRole, int(e.type));
-        item->setData(Qt::UserRole + 1, e.available);
-        item->setData(Qt::UserRole + 2, QString::fromLatin1(e.color));
-        item->setForeground(QColor(e.available ? QStringLiteral("#C8CAD0") : QStringLiteral("#505860")));
-        if (!e.available)
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-    }
-    connect(m_typeList, &QListWidget::currentRowChanged, this, &AddSourceDialog::selectType);
-    body->addWidget(m_typeList);
-
-    auto* right = new QWidget(this);
-    right->setStyleSheet(QStringLiteral("background:#141618;"));
-    auto* rightLay = new QVBoxLayout(right);
-    rightLay->setContentsMargins(20, 16, 20, 12);
-    m_typeTitle = new QLabel(QStringLiteral("Camera"), right);
-    m_typeTitle->setStyleSheet(QStringLiteral("font-size:16px; font-weight:800; color:#22C55E;"));
-    rightLay->addWidget(m_typeTitle);
-
-    auto* nameForm = new QFormLayout();
-    m_name = new QLineEdit(right);
-    nameForm->addRow(QStringLiteral("Name"), m_name);
-    rightLay->addLayout(nameForm);
-
-    m_stack = new QStackedWidget(right);
-
-    auto* camPage = new QWidget(m_stack);
-    auto* camForm = new QFormLayout(camPage);
-    m_camera = new QComboBox(camPage);
-    try {
-        for (const auto& d : MediaFoundationCamera::enumerateDevices())
-            m_camera->addItem(d.second, d.first);
-    } catch (...) {
-        m_camera->clear();
-    }
-    if (m_camera->count() == 0)
-        m_camera->addItem(QStringLiteral("(No cameras found)"), QString());
-    camForm->addRow(QStringLiteral("Device"), m_camera);
-    m_stack->addWidget(camPage);
-
-    auto* monPage = new QWidget(m_stack);
-    auto* monForm = new QFormLayout(monPage);
-    m_monitor = new QComboBox(monPage);
-    try {
-        for (const auto& m : enumerateMonitors())
-            m_monitor->addItem(m.second, m.first);
-    } catch (...) {
-        m_monitor->clear();
-    }
-    if (m_monitor->count() == 0)
-        m_monitor->addItem(QStringLiteral("Monitor 0"), 0);
-    monForm->addRow(QStringLiteral("Monitor"), m_monitor);
-    m_stack->addWidget(monPage);
-
-    m_stack->addWidget(new QLabel(QStringLiteral("Pick a window in Properties after Create."), m_stack)); // Window
-    m_stack->addWidget(new QLabel(QStringLiteral("Pick a game window in Properties (WGC/BitBlt — no anti-cheat hooks)."), m_stack)); // Game
-    m_stack->addWidget(new QLabel(QStringLiteral("Microphone / capture device — configure in Properties."), m_stack)); // AudioIn
-    m_stack->addWidget(new QLabel(QStringLiteral("Desktop audio loopback — configure in Properties."), m_stack)); // AudioOut
-
-    auto* imgPage = new QWidget(m_stack);
-    auto* imgForm = new QFormLayout(imgPage);
-    m_imagePath = new QLineEdit(imgPage);
-    auto* browse = new QPushButton(QStringLiteral("Browse…"), imgPage);
-    connect(browse, &QPushButton::clicked, this, [this] {
-        const auto path = QFileDialog::getOpenFileName(this, QStringLiteral("Image"),
-                                                       {}, QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
-        if (!path.isEmpty()) m_imagePath->setText(path);
-    });
-    imgForm->addRow(QStringLiteral("Path"), m_imagePath);
-    imgForm->addRow(browse);
-    m_stack->addWidget(imgPage);
-
-    auto* textPage = new QWidget(m_stack);
-    auto* textForm = new QVBoxLayout(textPage);
-    m_text = new QPlainTextEdit(textPage);
-    m_text->setPlainText(QStringLiteral("RailShotTV"));
-    textForm->addWidget(new QLabel(QStringLiteral("Text content"), textPage));
-    textForm->addWidget(m_text);
-    m_stack->addWidget(textPage);
-
-    auto* brPage = new QWidget(m_stack);
-    auto* brForm = new QFormLayout(brPage);
-    m_browserUrl = new QLineEdit(QStringLiteral("https://example.com"), brPage);
-    brForm->addRow(QStringLiteral("URL"), m_browserUrl);
-    m_stack->addWidget(brPage);
-
-    m_stack->addWidget(new QLabel(QStringLiteral("Uses the live Scoreboard model."), m_stack));
-    m_stack->addWidget(new QLabel(QStringLiteral("Lower-third overlay source."), m_stack));
-
-    auto* colorPage = new QWidget(m_stack);
-    auto* colorForm = new QFormLayout(colorPage);
-    m_colorHex = new QLineEdit(QStringLiteral("#1A1A1A"), colorPage);
-    colorForm->addRow(QStringLiteral("Colour"), m_colorHex);
-    m_stack->addWidget(colorPage);
-
-    auto* mediaPage = new QWidget(m_stack);
-    auto* mediaForm = new QFormLayout(mediaPage);
-    m_mediaPath = new QLineEdit(mediaPage);
-    auto* mediaBrowse = new QPushButton(QStringLiteral("Browse…"), mediaPage);
-    connect(mediaBrowse, &QPushButton::clicked, this, [this] {
-        const auto path = QFileDialog::getOpenFileName(
-            this, QStringLiteral("Media File"), {},
-            QStringLiteral("Media (*.mp4 *.mov *.mkv *.webm *.avi *.png *.jpg *.jpeg *.bmp *.webp)"));
-        if (!path.isEmpty()) m_mediaPath->setText(path);
-    });
-    mediaForm->addRow(QStringLiteral("Path"), m_mediaPath);
-    mediaForm->addRow(mediaBrowse);
-    m_stack->addWidget(mediaPage);
-
-    auto* ndiPage = new QWidget(m_stack);
-    auto* ndiLay = new QVBoxLayout(ndiPage);
-    m_ndiList = new QListWidget(ndiPage);
-    auto* ndiRefresh = new QPushButton(QStringLiteral("Refresh NDI Sources"), ndiPage);
-    auto refreshNdi = [this] {
-        m_ndiList->clear();
-        const auto found = NdiSource::discoverSources(1200);
-        if (found.isEmpty()) {
-            m_ndiList->addItem(QStringLiteral("(No NDI sources — install NDI Runtime if needed)"));
-            return;
-        }
-        for (const auto& n : found)
-            m_ndiList->addItem(n);
-        m_ndiList->setCurrentRow(0);
-    };
-    connect(ndiRefresh, &QPushButton::clicked, this, refreshNdi);
-    ndiLay->addWidget(new QLabel(QStringLiteral("Available NDI sources"), ndiPage));
-    ndiLay->addWidget(m_ndiList, 1);
-    ndiLay->addWidget(ndiRefresh);
-    m_stack->addWidget(ndiPage);
-    refreshNdi();
-
-    m_stack->addWidget(new QLabel(QStringLiteral("Alert / stinger overlay source."), m_stack));
-
-    rightLay->addWidget(m_stack, 1);
-    body->addWidget(right, 1);
-    root->addLayout(body, 1);
-
-    auto* footer = new QFrame(this);
-    footer->setFixedHeight(52);
-    footer->setStyleSheet(QStringLiteral(
-        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #16181E,stop:1 #0F1114);"
-        "border-top:2px solid #3A3D45;"));
-    auto* foot = new QHBoxLayout(footer);
-    foot->setContentsMargins(16, 8, 16, 8);
-    auto* cancel = new QPushButton(QStringLiteral("Cancel"), footer);
-    cancel->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    auto* ok = new QPushButton(QStringLiteral("Create"), footer);
-    ok->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1050CC);"
-        "color:white;font-weight:900;border:2px solid #5A8AFF;border-radius:4px;padding:7px 24px;}"
-        "QPushButton:hover{border-color:#8AB4FF;background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #5A8AFF,stop:1 #3A6AFF);}"));
-    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    connect(ok, &QPushButton::clicked, this, &AddSourceDialog::acceptConfigured);
-    foot->addStretch();
-    foot->addWidget(cancel);
-    foot->addWidget(ok);
-    root->addWidget(footer);
-
-    m_typeList->setCurrentRow(0);
-    rebuildFields();
-    // Avoid QGraphicsOpacityEffect on this dialog — native HWND + effect has caused hard exits.
-}
-
-void AddSourceDialog::selectType(int index)
-{
-    if (index < 0 || index >= int(sizeof(kInputTypes) / sizeof(kInputTypes[0]))) return;
-    const auto& e = kInputTypes[index];
-    if (!e.available) return;
-    m_selectedType = e.type;
-    m_typeTitle->setText(QString::fromLatin1(e.label));
-    m_typeTitle->setStyleSheet(QStringLiteral("font-size:16px; font-weight:800; color:%1;")
-                                   .arg(QString::fromLatin1(e.color)));
-    if (auto* item = m_typeList->item(index)) {
-        item->setData(Qt::DecorationRole, QColor(QString::fromLatin1(e.color)));
-    }
-    // Left accent via stylesheet per selection — update item foreground color
-    for (int i = 0; i < m_typeList->count(); ++i) {
-        auto* it = m_typeList->item(i);
-        const QString col = it->data(Qt::UserRole + 2).toString();
-        if (i == index)
-            it->setForeground(QColor(col));
-        else if (it->flags() & Qt::ItemIsEnabled)
-            it->setForeground(QColor(QStringLiteral("#C8CAD0")));
-    }
-    rebuildFields();
-}
-
-void AddSourceDialog::rebuildFields()
-{
-    if (m_name->text().isEmpty() || m_name->text() == m_typeTitle->text())
-        m_name->setText(m_typeTitle->text());
-    switch (m_selectedType) {
-    case SourceType::Camera: m_stack->setCurrentIndex(0); break;
-    case SourceType::Display: m_stack->setCurrentIndex(1); break;
-    case SourceType::Window: m_stack->setCurrentIndex(2); break;
-    case SourceType::Game: m_stack->setCurrentIndex(3); break;
-    case SourceType::AudioInput: m_stack->setCurrentIndex(4); break;
-    case SourceType::AudioOutput: m_stack->setCurrentIndex(5); break;
-    case SourceType::Image: m_stack->setCurrentIndex(6); break;
-    case SourceType::Text: m_stack->setCurrentIndex(7); break;
-    case SourceType::Browser: m_stack->setCurrentIndex(8); break;
-    case SourceType::Scoreboard: m_stack->setCurrentIndex(9); break;
-    case SourceType::LowerThird: m_stack->setCurrentIndex(10); break;
-    case SourceType::Color: m_stack->setCurrentIndex(11); break;
-    case SourceType::Media: m_stack->setCurrentIndex(12); break;
-    case SourceType::Ndi: m_stack->setCurrentIndex(13); break;
-    case SourceType::Alert: m_stack->setCurrentIndex(14); break;
-    default: m_stack->setCurrentIndex(0); break;
-    }
-}
-
-void AddSourceDialog::acceptConfigured()
-{
-    if (m_selectedType == SourceType::Unknown) return;
-    m_result.type = m_selectedType;
-    m_result.name = m_name->text().trimmed();
-    if (m_result.name.isEmpty())
-        m_result.name = m_typeTitle->text();
-    m_result.settings = {};
-    switch (m_result.type) {
+    QJsonObject s;
+    switch (type) {
     case SourceType::Camera:
-        m_result.settings.insert(QStringLiteral("deviceId"), m_camera->currentData().toString());
+        s.insert(QStringLiteral("deviceId"), QString());
         break;
     case SourceType::Display:
-        m_result.settings.insert(QStringLiteral("monitorIndex"), m_monitor->currentData().toInt());
-        break;
-    case SourceType::Image:
-        if (m_imagePath->text().trimmed().isEmpty()) return;
-        m_result.settings.insert(QStringLiteral("path"), m_imagePath->text().trimmed());
-        break;
-    case SourceType::Text:
-        m_result.settings.insert(QStringLiteral("text"), m_text->toPlainText());
+        s.insert(QStringLiteral("monitor"), 0);
         break;
     case SourceType::Browser:
-        m_result.settings.insert(QStringLiteral("url"), m_browserUrl->text().trimmed());
-        m_result.settings.insert(QStringLiteral("width"), 1280);
-        m_result.settings.insert(QStringLiteral("height"), 720);
-        m_result.settings.insert(QStringLiteral("fps"), 15);
+        s.insert(QStringLiteral("url"), QStringLiteral("https://obsproject.com"));
+        s.insert(QStringLiteral("width"), 1280);
+        s.insert(QStringLiteral("height"), 720);
+        s.insert(QStringLiteral("fps"), 30);
+        break;
+    case SourceType::Text:
+        s.insert(QStringLiteral("text"), QStringLiteral("Text"));
         break;
     case SourceType::Color:
-        m_result.settings.insert(QStringLiteral("color"), m_colorHex->text().trimmed());
+        s.insert(QStringLiteral("color"), QStringLiteral("#4F9EFF"));
         break;
     case SourceType::Media:
-        if (!m_mediaPath || m_mediaPath->text().trimmed().isEmpty()) return;
-        m_result.settings.insert(QStringLiteral("path"), m_mediaPath->text().trimmed());
-        m_result.settings.insert(QStringLiteral("loop"), true);
+        s.insert(QStringLiteral("loop"), true);
         break;
-    case SourceType::Ndi: {
-        QString name;
-        if (m_ndiList && m_ndiList->currentItem())
-            name = m_ndiList->currentItem()->text();
-        if (name.isEmpty() || name.startsWith(QLatin1Char('('))) return;
-        m_result.settings.insert(QStringLiteral("ndiName"), name);
-        break;
-    }
     default:
         break;
     }
+    return s;
+}
+
+QString uniqueName(EngineController* engine, const QString& base)
+{
+    if (!engine) return base;
+    const auto p = engine->projectSnapshot();
+    auto used = [&](const QString& n) {
+        for (const auto& sc : p.scenes)
+            for (const auto& src : sc.sources)
+                if (src.name.compare(n, Qt::CaseInsensitive) == 0)
+                    return true;
+        return false;
+    };
+    if (!used(base)) return base;
+    for (int i = 2; i < 1000; ++i) {
+        const QString n = QStringLiteral("%1 %2").arg(base).arg(i);
+        if (!used(n)) return n;
+    }
+    return base + QStringLiteral(" 2");
+}
+
+} // namespace
+
+QString AddSourceDialog::defaultNameForType(SourceType type)
+{
+    for (const auto& e : kMenuTypes) {
+        if (e.type == type)
+            return QString::fromUtf8(e.label);
+    }
+    return sourceTypeToString(type);
+}
+
+SourceType showAddSourceTypeMenu(QWidget* parent, const QPoint& globalPos)
+{
+    QMenu menu(parent);
+    menu.setStyleSheet(QStringLiteral(
+        "QMenu{background:#1A1D24; border:1px solid #4A4D55; color:#E0E2E8; padding:4px 0;}"
+        "QMenu::item{padding:8px 28px 8px 16px;}"
+        "QMenu::item:selected{background:#102438; color:#FFFFFF;}"
+        "QMenu::separator{height:1px; background:#2A2D35; margin:4px 8px;}"));
+
+    auto* title = new QLabel(QStringLiteral("Add Source"), &menu);
+    title->setStyleSheet(QStringLiteral(
+        "color:#8892A4; font-size:10px; font-weight:800; letter-spacing:1px; padding:6px 16px 4px;"));
+    auto* titleAct = new QWidgetAction(&menu);
+    titleAct->setDefaultWidget(title);
+    menu.addAction(titleAct);
+    menu.addSeparator();
+
+    SourceType chosen = SourceType::Unknown;
+    for (const auto& e : kMenuTypes) {
+        QAction* act = menu.addAction(QString::fromUtf8(e.label));
+        act->setData(static_cast<int>(e.type));
+    }
+    if (QAction* picked = menu.exec(globalPos)) {
+        if (picked->data().isValid())
+            chosen = static_cast<SourceType>(picked->data().toInt());
+    }
+    return chosen;
+}
+
+AddSourceDialog::AddSourceDialog(EngineController* engine, SourceType type, QWidget* parent)
+    : QDialog(parent), m_engine(engine), m_type(type)
+{
+    m_result.type = type;
+    const QString typeLabel = defaultNameForType(type);
+    setWindowTitle(QStringLiteral("Create/Select Source"));
+    setObjectName(QStringLiteral("addSourceDialog"));
+    setModal(true);
+    setFixedWidth(420);
+    setStyleSheet(QStringLiteral(
+        "QDialog#addSourceDialog{background:#1A1D24; border:1px solid #4A4D55;}"
+        "QLabel{color:#D0D2D8; background:transparent;}"
+        "QLineEdit{background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8;"
+        "  border-radius:3px; padding:6px;}"
+        "QListWidget{background:#0A0C10; border:1px solid #4A4D55; color:#E0E2E8; outline:none;}"
+        "QListWidget::item{padding:6px 10px;}"
+        "QListWidget::item:selected{background:#102438;}"
+        "QRadioButton{color:#E0E2E8; spacing:8px;}"
+        "QPushButton{min-width:88px; padding:6px 14px; border-radius:3px;}"
+        "QPushButton#okBtn{background:#3A6AFF; color:white; border:1px solid #5A8AFF; font-weight:700;}"
+        "QPushButton#cancelBtn{background:transparent; color:#A0A8B8; border:1px solid #4A4D55;}"));
+
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 14, 16, 14);
+    root->setSpacing(10);
+
+    auto* heading = new QLabel(typeLabel, this);
+    heading->setStyleSheet(QStringLiteral(
+        "font-size:15px; font-weight:800; color:#F0F0F0; letter-spacing:0.5px;"));
+    root->addWidget(heading);
+
+    m_createNew = new QRadioButton(QStringLiteral("Create new"), this);
+    m_addExisting = new QRadioButton(QStringLiteral("Add Existing"), this);
+    m_createNew->setChecked(true);
+    auto* group = new QButtonGroup(this);
+    group->addButton(m_createNew);
+    group->addButton(m_addExisting);
+    root->addWidget(m_createNew);
+
+    auto* nameRow = new QHBoxLayout();
+    nameRow->addSpacing(22);
+    m_name = new QLineEdit(uniqueName(engine, typeLabel), this);
+    m_name->setPlaceholderText(QStringLiteral("Source name"));
+    nameRow->addWidget(m_name, 1);
+    root->addLayout(nameRow);
+
+    root->addWidget(m_addExisting);
+    m_existing = new QListWidget(this);
+    m_existing->setMinimumHeight(140);
+    m_existing->setEnabled(false);
+    root->addWidget(m_existing, 1);
+
+    m_hint = new QLabel(
+        QStringLiteral("Properties open after create so you can pick a device, file, or URL."),
+        this);
+    m_hint->setWordWrap(true);
+    m_hint->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
+    root->addWidget(m_hint);
+
+    auto* buttons = new QHBoxLayout();
+    buttons->addStretch();
+    auto* cancel = new QPushButton(QStringLiteral("Cancel"), this);
+    cancel->setObjectName(QStringLiteral("cancelBtn"));
+    auto* ok = new QPushButton(QStringLiteral("OK"), this);
+    ok->setObjectName(QStringLiteral("okBtn"));
+    ok->setDefault(true);
+    buttons->addWidget(cancel);
+    buttons->addWidget(ok);
+    root->addLayout(buttons);
+
+    connect(m_createNew, &QRadioButton::toggled, this, &AddSourceDialog::syncModeUi);
+    connect(m_addExisting, &QRadioButton::toggled, this, &AddSourceDialog::syncModeUi);
+    connect(m_existing, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) {
+        if (m_addExisting->isChecked())
+            acceptChoice();
+    });
+    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+    connect(ok, &QPushButton::clicked, this, &AddSourceDialog::acceptChoice);
+
+    refreshExisting();
+    syncModeUi();
+    m_name->selectAll();
+    m_name->setFocus();
+}
+
+void AddSourceDialog::refreshExisting()
+{
+    m_existing->clear();
+    if (!m_engine) return;
+    const auto p = m_engine->projectSnapshot();
+    QSet<QString> seen;
+    for (const auto& sc : p.scenes) {
+        for (const auto& src : sc.sources) {
+            if (src.type != m_type) continue;
+            if (seen.contains(src.id)) continue;
+            seen.insert(src.id);
+            auto* item = new QListWidgetItem(src.name, m_existing);
+            item->setData(Qt::UserRole, src.id);
+            item->setData(Qt::UserRole + 1, src.settings);
+            item->setToolTip(QStringLiteral("From scene: %1").arg(sc.name));
+        }
+    }
+    if (m_existing->count() == 0) {
+        m_addExisting->setEnabled(false);
+        m_addExisting->setToolTip(QStringLiteral("No existing sources of this type yet"));
+    }
+}
+
+void AddSourceDialog::syncModeUi()
+{
+    const bool create = m_createNew->isChecked();
+    m_name->setEnabled(create);
+    m_existing->setEnabled(!create);
+    if (!create && m_existing->count() > 0 && !m_existing->currentItem())
+        m_existing->setCurrentRow(0);
+}
+
+void AddSourceDialog::acceptChoice()
+{
+    m_result = {};
+    m_result.type = m_type;
+    m_result.openProperties = true;
+
+    if (m_createNew->isChecked()) {
+        QString name = m_name->text().trimmed();
+        if (name.isEmpty())
+            name = uniqueName(m_engine, defaultNameForType(m_type));
+        m_result.name = name;
+        m_result.settings = defaultSettingsFor(m_type);
+        m_result.accepted = true;
+        accept();
+        return;
+    }
+
+    auto* item = m_existing->currentItem();
+    if (!item) {
+        m_hint->setText(QStringLiteral("Select an existing source, or switch to Create new."));
+        m_hint->setStyleSheet(QStringLiteral("color:#F87171; font-size:10px;"));
+        return;
+    }
+    m_result.name = item->text();
+    m_result.settings = item->data(Qt::UserRole + 1).toJsonObject();
+    m_result.openProperties = false; // already configured
     m_result.accepted = true;
     accept();
 }

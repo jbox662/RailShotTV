@@ -48,6 +48,7 @@
 #include <QFrame>
 #include <QByteArray>
 #include <QMouseEvent>
+#include <QCursor>
 
 namespace railshot {
 
@@ -490,20 +491,26 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         dlg.exec();
     });
 
-    connect(m_tiles, &InputTilesWidget::addSourceRequested, this, [this] {
-        AddSourceDialog dlg(m_engine, this);
+    connect(m_tiles, &InputTilesWidget::addSourceTypeRequested, this, [this](SourceType type) {
+        if (type == SourceType::Unknown) return;
+        AddSourceDialog dlg(m_engine, type, this);
         if (dlg.exec() != QDialog::Accepted) return;
         const auto r = dlg.result();
         if (!r.accepted) return;
         const QString id = m_engine->addSource(r.type, r.name, r.settings);
         if (r.type == SourceType::Scoreboard)
             m_engine->pushScoreboardToProgram();
-        // OBS: create adds a Sources list bar; Properties opens from gear / double-click.
         m_engine->setSelectedSourceId(id);
+        if (r.openProperties && !id.isEmpty()) {
+            SourcePropertiesDialog props(m_engine, id, this);
+            props.exec();
+        }
     });
 
     connect(m_toolbar, &BottomToolbar::addInputRequested, this, [this] {
-        AddSourceDialog dlg(m_engine, this);
+        const SourceType type = showAddSourceTypeMenu(this, QCursor::pos());
+        if (type == SourceType::Unknown) return;
+        AddSourceDialog dlg(m_engine, type, this);
         if (dlg.exec() != QDialog::Accepted) return;
         const auto r = dlg.result();
         if (!r.accepted) return;
@@ -511,6 +518,10 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         if (r.type == SourceType::Scoreboard)
             m_engine->pushScoreboardToProgram();
         m_engine->setSelectedSourceId(id);
+        if (r.openProperties && !id.isEmpty()) {
+            SourcePropertiesDialog props(m_engine, id, this);
+            props.exec();
+        }
     });
 
     connect(m_toolbar, &BottomToolbar::goLiveRequested, this, [this] {

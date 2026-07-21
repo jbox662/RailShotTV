@@ -43,7 +43,7 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 
 | OBS | Status | RailShot |
 |-----|--------|----------|
-| OBSBasicSourceSelect | partial | `AddSourceDialog` |
+| OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` |
 | OBSBasicFilters | partial | `FiltersDialog` |
 | OBSBasicTransform | partial | `TransformDialog` |

@@ -1,4 +1,5 @@
 #include "ui/widgets/InputTilesWidget.h"
+#include "ui/widgets/AddSourceDialog.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "core/Types.h"
@@ -11,6 +12,7 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QCursor>
 #include <QStyle>
 #include <functional>
 
@@ -134,12 +136,13 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     toolsLay->setSpacing(2);
 
     auto* addBtn = makeToolBtn(QStringLiteral("+"), QStringLiteral("Add Source"), tools);
+    m_addBtn = addBtn;
     auto* remBtn = makeToolBtn(QStringLiteral("🗑"), QStringLiteral("Remove Source"), tools);
     auto* propsBtn = makeToolBtn(QStringLiteral("⚙"), QStringLiteral("Properties"), tools);
     auto* upBtn = makeToolBtn(QStringLiteral("▲"), QStringLiteral("Move Up"), tools);
     auto* downBtn = makeToolBtn(QStringLiteral("▼"), QStringLiteral("Move Down"), tools);
 
-    connect(addBtn, &QToolButton::clicked, this, &InputTilesWidget::addSourceRequested);
+    connect(addBtn, &QToolButton::clicked, this, &InputTilesWidget::onAddClicked);
     connect(remBtn, &QToolButton::clicked, this, &InputTilesWidget::onRemove);
     connect(propsBtn, &QToolButton::clicked, this, &InputTilesWidget::onProperties);
     connect(upBtn, &QToolButton::clicked, this, &InputTilesWidget::onMoveUp);
@@ -158,6 +161,16 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, &InputTilesWidget::refresh);
     connect(m_engine, &EngineController::selectedSourceChanged, this, [this](const QString&) { refresh(); });
     refresh();
+}
+
+void InputTilesWidget::onAddClicked()
+{
+    QPoint pos = QCursor::pos();
+    if (m_addBtn)
+        pos = m_addBtn->mapToGlobal(QPoint(0, m_addBtn->height()));
+    const SourceType type = showAddSourceTypeMenu(this, pos);
+    if (type != SourceType::Unknown)
+        emit addSourceTypeRequested(type);
 }
 
 void InputTilesWidget::onRemove()

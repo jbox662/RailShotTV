@@ -1,4 +1,5 @@
 #pragma once
+#include "core/Types.h"
 #include <QWidget>
 
 class QVBoxLayout;
@@ -16,10 +17,12 @@ public:
     void refresh();
 
 signals:
-    void addSourceRequested();
+    /// Fired after the OBS-style source-type popup; Unknown if cancelled.
+    void addSourceTypeRequested(railshot::SourceType type);
     void configureSourceRequested(const QString& sourceId);
 
 private:
+    void onAddClicked();
     void onRemove();
     void onProperties();
     void onMoveUp();
@@ -29,6 +32,7 @@ private:
     QScrollArea* m_scroll = nullptr;
     QWidget* m_listHost = nullptr;
     QVBoxLayout* m_listLay = nullptr;
+    QToolButton* m_addBtn = nullptr;
 };
 
 } // namespace railshot

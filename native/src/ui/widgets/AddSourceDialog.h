@@ -3,11 +3,9 @@
 #include <QDialog>
 #include <QJsonObject>
 
-class QListWidget;
-class QStackedWidget;
 class QLineEdit;
-class QPlainTextEdit;
-class QComboBox;
+class QListWidget;
+class QRadioButton;
 class QLabel;
 
 namespace railshot {
@@ -18,34 +16,34 @@ struct AddSourceResult {
     QString name;
     QJsonObject settings;
     bool accepted = false;
+    bool openProperties = true;
 };
 
+/// OBS-style source type popup (Sources dock + button).
+SourceType showAddSourceTypeMenu(QWidget* parent, const QPoint& globalPos);
+
+/// OBS Create/Select Source dialog for a chosen type (Create New vs Add Existing).
 class AddSourceDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit AddSourceDialog(EngineController* engine, QWidget* parent = nullptr);
+    AddSourceDialog(EngineController* engine, SourceType type, QWidget* parent = nullptr);
     AddSourceResult result() const { return m_result; }
 
+    static QString defaultNameForType(SourceType type);
+
 private:
-    void rebuildFields();
-    void acceptConfigured();
-    void selectType(int index);
+    void refreshExisting();
+    void acceptChoice();
+    void syncModeUi();
 
     EngineController* m_engine = nullptr;
+    SourceType m_type = SourceType::Unknown;
     AddSourceResult m_result;
-    QListWidget* m_typeList = nullptr;
-    QStackedWidget* m_stack = nullptr;
-    QLabel* m_typeTitle = nullptr;
-    QComboBox* m_camera = nullptr;
-    QComboBox* m_monitor = nullptr;
-    QLineEdit* m_imagePath = nullptr;
-    QPlainTextEdit* m_text = nullptr;
-    QLineEdit* m_browserUrl = nullptr;
+    QRadioButton* m_createNew = nullptr;
+    QRadioButton* m_addExisting = nullptr;
     QLineEdit* m_name = nullptr;
-    QLineEdit* m_colorHex = nullptr;
-    QLineEdit* m_mediaPath = nullptr;
-    QListWidget* m_ndiList = nullptr;
-    SourceType m_selectedType = SourceType::Camera;
+    QListWidget* m_existing = nullptr;
+    QLabel* m_hint = nullptr;
 };
 
 } // namespace railshot
