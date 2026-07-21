@@ -5,6 +5,8 @@
 #include <QString>
 
 class QDoubleSpinBox;
+class QLabel;
+class QPushButton;
 
 namespace railshot {
 class EngineController;
@@ -24,10 +26,14 @@ public:
 private:
     void loadFromSource();
     void applyToSource();
+    void setLockedUi(bool locked);
     QDoubleSpinBox* addSpin(double min, double max, double step, int decimals);
 
     EngineController* m_engine = nullptr;
     QString m_sourceId;
+    QLabel* m_lockHint = nullptr;
+    QPushButton* m_pasteBtn = nullptr;
+    QPushButton* m_resetBtn = nullptr;
     QDoubleSpinBox* m_x = nullptr;
     QDoubleSpinBox* m_y = nullptr;
     QDoubleSpinBox* m_w = nullptr;
