@@ -62,10 +62,15 @@ public:
 
     QString addSource(SourceType type, const QString& name = {}, const QJsonObject& settings = {});
     void removeSource(const QString& sourceId);
+    /// OBS Duplicate Source — returns new id (empty on failure).
+    QString duplicateSource(const QString& sourceId);
     void setSourceVisible(const QString& sourceId, bool visible);
     void setSourceName(const QString& sourceId, const QString& name);
     void setSourceLocked(const QString& sourceId, bool locked);
+    void setSourceColor(const QString& sourceId, const QString& colorHex);
     void moveSourceZOrder(const QString& sourceId, int delta);
+    /// toTop=true moves to top of stack (drawn last).
+    void moveSourceZOrderExtreme(const QString& sourceId, bool toTop);
     void updateSourceTransform(const QString& sourceId, const Transform& t, bool notify = true);
     void updateSourceSettings(const QString& sourceId, const QJsonObject& settings);
 

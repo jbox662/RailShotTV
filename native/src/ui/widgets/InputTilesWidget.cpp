@@ -1,5 +1,8 @@
 #include "ui/widgets/InputTilesWidget.h"
 #include "ui/widgets/AddSourceDialog.h"
+#include "ui/widgets/FiltersDialog.h"
+#include "ui/widgets/TransformDialog.h"
+#include "ui/widgets/InteractDialog.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "core/Types.h"
@@ -11,9 +14,16 @@
 #include <QToolButton>
 #include <QPushButton>
 #include <QMenu>
+#include <QAction>
 #include <QMouseEvent>
 #include <QCursor>
 #include <QStyle>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QColor>
+#include <QPixmap>
+#include <QIcon>
+#include <QJsonArray>
 #include <functional>
 
 namespace railshot {
@@ -40,6 +50,35 @@ QString typeIconGlyph(SourceType t)
     case SourceType::Alert: return QStringLiteral("⚠");
     default: return QStringLiteral("◇");
     }
+}
+
+const QStringList& obsColorTags()
+{
+    static const QStringList k = {
+        QStringLiteral("#1A1A1A"), QStringLiteral("#EF4444"), QStringLiteral("#22C55E"),
+        QStringLiteral("#FBBF24"), QStringLiteral("#EC4899"), QStringLiteral("#3B82F6"),
+        QStringLiteral("#A855F7"), QStringLiteral("#22D3EE"),
+    };
+    return k;
+}
+
+QString sourceBarStyle(const QString& colorHex, bool /*selected*/)
+{
+    QColor c(colorHex.isEmpty() ? QStringLiteral("#4F9EFF") : colorHex);
+    if (!c.isValid())
+        c = QColor(QStringLiteral("#4F9EFF"));
+    const QString accent = c.name();
+    const QString tint = QStringLiteral("rgba(%1,%2,%3,38)").arg(c.red()).arg(c.green()).arg(c.blue());
+    const QString tintSel = QStringLiteral("rgba(%1,%2,%3,72)").arg(c.red()).arg(c.green()).arg(c.blue());
+    return QStringLiteral(
+               "QFrame#sourceBar{"
+               "  background:%1; border:1px solid transparent; border-left:3px solid %2; border-radius:2px;"
+               "}"
+               "QFrame#sourceBar[selected=\"true\"]{"
+               "  background:%3; border:1px solid #4F9EFF; border-left:3px solid %2;"
+               "}"
+               "QFrame#sourceBar:hover{background:%3;}")
+        .arg(tint, accent, tintSel);
 }
 
 /// OBS SourceTreeItem-style row: [icon] name ………… [eye] [lock]
@@ -99,13 +138,6 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
         "QWidget#inputTiles{background:#1A1E24;border:none;}"
         "QScrollArea{background:transparent;border:none;}"
         "QWidget#sourcesListHost{background:#1A1E24;border:none;}"
-        "QFrame#sourceBar{"
-        "  background:#1A1E24; border:1px solid transparent; border-radius:2px;"
-        "}"
-        "QFrame#sourceBar[selected=\"true\"]{"
-        "  background:#243044; border:1px solid #4F9EFF;"
-        "}"
-        "QFrame#sourceBar:hover{background:#222830;}"
         "QLabel{background:transparent;border:none;}"));
 
     auto* root = new QVBoxLayout(this);
@@ -126,7 +158,6 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
     m_scroll->setWidget(m_listHost);
     root->addWidget(m_scroll, 1);
 
-    // OBS sourcesToolbar: +  remove  |  properties  |  up  down
     auto* tools = new QWidget(this);
     tools->setFixedHeight(36);
     tools->setStyleSheet(QStringLiteral(
@@ -225,14 +256,13 @@ void InputTilesWidget::refresh()
         return;
     }
 
-    // OBS draws bottom→top for z-order; list shows top of stack at top of list
-    // (last in vector is drawn last / on top). Show reverse so top layer is first.
     for (int i = scene->sources.size() - 1; i >= 0; --i) {
         const auto& src = scene->sources[i];
         auto* bar = new SourceBar(m_listHost);
         bar->sourceId = src.id;
         const bool isSel = src.id == selected;
         bar->setProperty("selected", isSel);
+        bar->setStyleSheet(sourceBarStyle(src.colorHex, isSel));
         bar->style()->unpolish(bar);
         bar->style()->polish(bar);
 
@@ -292,19 +322,125 @@ void InputTilesWidget::refresh()
 
         bar->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(bar, &QWidget::customContextMenuRequested, this,
-                [this, bar, id = src.id, visible = src.visible, locked = src.locked](const QPoint& pos) {
-            QMenu menu;
+                [this, bar, src](const QPoint& pos) {
+            const QString id = src.id;
+            m_engine->setSelectedSourceId(id);
+
+            QMenu menu(this);
+            menu.setStyleSheet(QStringLiteral(
+                "QMenu{background:#1A1E26;color:#E8ECF4;border:1px solid #2A3140;}"
+                "QMenu::item:selected{background:#2A3140;}"));
+
+            menu.addAction(QStringLiteral("Rename"), this, [this, id, name = src.name] {
+                bool ok = false;
+                const QString n = QInputDialog::getText(
+                    this, QStringLiteral("Rename Source"), QStringLiteral("Name:"),
+                    QLineEdit::Normal, name, &ok);
+                if (ok && !n.trimmed().isEmpty())
+                    m_engine->setSourceName(id, n.trimmed());
+            });
             menu.addAction(QStringLiteral("Properties"), this, [this, id] {
-                m_engine->setSelectedSourceId(id);
                 emit configureSourceRequested(id);
             });
-            menu.addAction(visible ? QStringLiteral("Hide") : QStringLiteral("Show"), this,
-                           [this, id, visible] { m_engine->setSourceVisible(id, !visible); });
-            menu.addAction(locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"), this,
-                           [this, id, locked] { m_engine->setSourceLocked(id, !locked); });
+            menu.addAction(QStringLiteral("Filters"), this, [this, id] {
+                FiltersDialog dlg(m_engine, id, window());
+                dlg.exec();
+            });
+            menu.addAction(QStringLiteral("Interact…"), this, [this, id] {
+                InteractDialog dlg(m_engine, id, window());
+                dlg.exec();
+            });
+
+            auto* transform = menu.addMenu(QStringLiteral("Transform"));
+            transform->addAction(QStringLiteral("Edit Transform…"), this, [this, id] {
+                TransformDialog dlg(m_engine, id, window());
+                dlg.exec();
+            });
+            transform->addAction(QStringLiteral("Copy Transform"), this, [this, id] {
+                if (const auto* s = m_engine->projectSnapshot().findSourceAnywhere(id))
+                    TransformDialog::copyTransform(s->transform);
+            });
+            auto* pasteX = transform->addAction(QStringLiteral("Paste Transform"));
+            pasteX->setEnabled(TransformDialog::hasClipboard());
+            connect(pasteX, &QAction::triggered, this, [this, id] {
+                TransformDialog::pasteOnto(m_engine, id);
+            });
+            transform->addSeparator();
+            transform->addAction(QStringLiteral("Reset Transform"), this, [this, id] {
+                TransformDialog::resetTransform(m_engine, id);
+            });
+            transform->setEnabled(!src.locked);
+
+            menu.addSeparator();
+            auto* order = menu.addMenu(QStringLiteral("Order"));
+            order->addAction(QStringLiteral("Move Up"), this, [this, id] {
+                m_engine->moveSourceZOrder(id, 1);
+            });
+            order->addAction(QStringLiteral("Move Down"), this, [this, id] {
+                m_engine->moveSourceZOrder(id, -1);
+            });
+            order->addAction(QStringLiteral("Move to Top"), this, [this, id] {
+                m_engine->moveSourceZOrderExtreme(id, true);
+            });
+            order->addAction(QStringLiteral("Move to Bottom"), this, [this, id] {
+                m_engine->moveSourceZOrderExtreme(id, false);
+            });
+
+            menu.addSeparator();
+            menu.addAction(src.visible ? QStringLiteral("Hide") : QStringLiteral("Show"), this,
+                           [this, id, v = src.visible] { m_engine->setSourceVisible(id, !v); });
+            menu.addAction(src.locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"), this,
+                           [this, id, l = src.locked] { m_engine->setSourceLocked(id, !l); });
+
+            menu.addSeparator();
+            menu.addAction(QStringLiteral("Duplicate"), this, [this, id] {
+                m_engine->duplicateSource(id);
+            });
+            menu.addAction(QStringLiteral("Copy Filters"), this, [this, id] {
+                if (const auto* s = m_engine->projectSnapshot().findSourceAnywhere(id))
+                    FiltersDialog::copyFilters(s->settings.value(QStringLiteral("filters")).toArray());
+            });
+            auto* pasteF = menu.addAction(QStringLiteral("Paste Filters"));
+            pasteF->setEnabled(FiltersDialog::hasFilterClipboard());
+            connect(pasteF, &QAction::triggered, this, [this, id] {
+                FiltersDialog::pasteOnto(m_engine, id);
+            });
+
+            menu.addSeparator();
+            auto* colorMenu = menu.addMenu(QStringLiteral("Set Color"));
+            for (const QString& hex : obsColorTags()) {
+                auto* act = colorMenu->addAction(hex);
+                QPixmap px(14, 14);
+                px.fill(QColor(hex));
+                act->setIcon(QIcon(px));
+                connect(act, &QAction::triggered, this, [this, id, hex] {
+                    m_engine->setSourceColor(id, hex);
+                });
+            }
+            colorMenu->addSeparator();
+            colorMenu->addAction(QStringLiteral("Reset (type default)"), this, [this, id, t = src.type] {
+                QString hex = QStringLiteral("#4F9EFF");
+                switch (t) {
+                case SourceType::Camera: hex = QStringLiteral("#22C55E"); break;
+                case SourceType::Display: hex = QStringLiteral("#4F9EFF"); break;
+                case SourceType::Window: hex = QStringLiteral("#38BDF8"); break;
+                case SourceType::Game: hex = QStringLiteral("#A3E635"); break;
+                case SourceType::AudioInput: hex = QStringLiteral("#F472B6"); break;
+                case SourceType::AudioOutput: hex = QStringLiteral("#FB7185"); break;
+                case SourceType::Browser: hex = QStringLiteral("#22D3EE"); break;
+                case SourceType::Text: hex = QStringLiteral("#A855F7"); break;
+                case SourceType::Image: hex = QStringLiteral("#FBBF24"); break;
+                case SourceType::Alert:
+                case SourceType::Scoreboard: hex = QStringLiteral("#FF5A2C"); break;
+                default: break;
+                }
+                m_engine->setSourceColor(id, hex);
+            });
+
             menu.addSeparator();
             auto* rem = menu.addAction(QStringLiteral("Remove"));
             connect(rem, &QAction::triggered, this, [this, id] { m_engine->removeSource(id); });
+
             menu.exec(bar->mapToGlobal(pos));
         });
 

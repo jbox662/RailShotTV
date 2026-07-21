@@ -331,4 +331,56 @@ bool Project::moveSource(const QString& sceneId, const QString& sourceId, int de
     return true;
 }
 
+QString Project::duplicateSource(const QString& sceneId, const QString& sourceId)
+{
+    auto* sc = findScene(sceneId);
+    if (!sc) return {};
+    int idx = -1;
+    for (int i = 0; i < sc->sources.size(); ++i) {
+        if (sc->sources[i].id == sourceId) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) return {};
+    SourceItem copy = sc->sources[idx];
+    copy.id = newId(QStringLiteral("src"));
+    copy.name = copy.name + QStringLiteral(" (copy)");
+    // Independent filter ids (OBS paste/duplicate behavior)
+    const auto filters = copy.settings.value(QStringLiteral("filters")).toArray();
+    if (!filters.isEmpty()) {
+        QJsonArray next;
+        for (const auto& v : filters) {
+            QJsonObject o = v.toObject();
+            o.insert(QStringLiteral("id"), newId(QStringLiteral("flt")));
+            next.append(o);
+        }
+        copy.settings.insert(QStringLiteral("filters"), next);
+    }
+    sc->sources.insert(idx + 1, copy);
+    return copy.id;
+}
+
+bool Project::moveSourceToExtreme(const QString& sceneId, const QString& sourceId, bool toTop)
+{
+    auto* sc = findScene(sceneId);
+    if (!sc) return false;
+    int idx = -1;
+    for (int i = 0; i < sc->sources.size(); ++i) {
+        if (sc->sources[i].id == sourceId) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) return false;
+    if (toTop && idx == sc->sources.size() - 1) return true;
+    if (!toTop && idx == 0) return true;
+    SourceItem item = sc->sources.takeAt(idx);
+    if (toTop)
+        sc->sources.append(item);
+    else
+        sc->sources.prepend(item);
+    return true;
+}
+
 } // namespace railshot

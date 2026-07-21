@@ -404,6 +404,27 @@ void EngineController::removeSource(const QString& sourceId)
     syncMixerChannelsFromProject();
 }
 
+QString EngineController::duplicateSource(const QString& sourceId)
+{
+    QString newIdOut;
+    m_sceneGraph->mutate([&](Project& p) {
+        for (const auto& sc : p.scenes) {
+            for (const auto& src : sc.sources) {
+                if (src.id == sourceId) {
+                    newIdOut = p.duplicateSource(sc.id, sourceId);
+                    return;
+                }
+            }
+        }
+    });
+    if (!newIdOut.isEmpty()) {
+        rebuildSourcesForActiveScenes();
+        syncMixerChannelsFromProject();
+        setSelectedSourceId(newIdOut);
+    }
+    return newIdOut;
+}
+
 void EngineController::setSourceVisible(const QString& sourceId, bool visible)
 {
     m_sceneGraph->mutate([&](Project& p) {
@@ -429,6 +450,15 @@ void EngineController::setSourceLocked(const QString& sourceId, bool locked)
     });
 }
 
+void EngineController::setSourceColor(const QString& sourceId, const QString& colorHex)
+{
+    if (sourceId.isEmpty() || colorHex.isEmpty()) return;
+    m_sceneGraph->mutate([&](Project& p) {
+        if (auto* s = p.findSourceAnywhere(sourceId))
+            s->colorHex = colorHex;
+    });
+}
+
 void EngineController::moveSourceZOrder(const QString& sourceId, int delta)
 {
     m_sceneGraph->mutate([&](Project& p) {
@@ -437,6 +467,20 @@ void EngineController::moveSourceZOrder(const QString& sourceId, int delta)
             for (const auto& src : sc.sources) {
                 if (src.id == sourceId) {
                     p.moveSource(sc.id, sourceId, delta);
+                    return;
+                }
+            }
+        }
+    });
+}
+
+void EngineController::moveSourceZOrderExtreme(const QString& sourceId, bool toTop)
+{
+    m_sceneGraph->mutate([&](Project& p) {
+        for (const auto& sc : p.scenes) {
+            for (const auto& src : sc.sources) {
+                if (src.id == sourceId) {
+                    p.moveSourceToExtreme(sc.id, sourceId, toTop);
                     return;
                 }
             }

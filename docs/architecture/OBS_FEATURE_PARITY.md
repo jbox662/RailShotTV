@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
+Last updated: Wave 8 (Sources menu, Filters stack, color tags, duplicate).
 
 ## Design rules
 
@@ -22,8 +22,8 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 | OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + scale/lock/projectors |
 | OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
-| OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` |
-| AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio |
+| OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
+| AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
 | OBSBasic_Transitions | Transitions | partial | `TransitionPanel` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
@@ -34,10 +34,10 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 | OBSBasic_Projectors | Projector windows | partial | `ProjectorWindow` + View menu |
 | OBSBasic_Docks | Dock layout | partial | Nested QMainWindow docks |
 | OBSBasic_Profiles / _SceneCollections | Profiles/collections | partial | `ProfilesDialog` / `SceneCollectionsDialog` |
-| OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard |
+| OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard + Filters clipboard |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
-| ColorSelect | Color tags | partial | Properties swatches |
+| ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 
 ## Dialogs
 
@@ -45,7 +45,7 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma, Blur; enable; ↑↓ reorder; copy/paste) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` |
@@ -63,3 +63,5 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 - [x] Wave 5 — Output/service polish (Settings Stream/Output/Advanced, rate control, reconnect, delay, auto-remux, filename tokens)
 - [x] Wave 6 — Extra browsers, dropfiles, hotkey UI, stats dock
 - [x] Wave 7 — Screenshots, Missing Files, VCam config, Multiview
+- [x] Wave 8 — Sources context menu, duplicate, color tags, Filters stack (Color Correction + reorder + copy/paste)
+- [ ] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, transition option depth

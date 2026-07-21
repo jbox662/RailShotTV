@@ -49,6 +49,10 @@ public:
     bool removeSource(const QString& sceneId, const QString& sourceId);
     bool updateSource(const QString& sceneId, const SourceItem& source);
     bool moveSource(const QString& sceneId, const QString& sourceId, int delta);
+    /// Clone source in-place (new id); returns new source id.
+    QString duplicateSource(const QString& sceneId, const QString& sourceId);
+    /// toTop=true → end of stack (drawn on top); false → bottom of stack.
+    bool moveSourceToExtreme(const QString& sceneId, const QString& sourceId, bool toTop);
 
     void ensureDefaults();
 };
