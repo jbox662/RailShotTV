@@ -166,6 +166,37 @@ QString wrapPage(const QString& bodyHtml, const QString& note)
 }
 
 #if defined(_WIN32) && defined(RAILSHOT_HAS_WEBVIEW2) && RAILSHOT_HAS_WEBVIEW2
+/// Sampled opaque-pixel count — used to reject blank CapturePreview frames after reload.
+/// OBS CEF only calls OnPaint when the page actually paints; CapturePreview does not,
+/// so we must gate uploads ourselves or overlays blink transparent on Refresh.
+int countOpaqueSampled(const QImage& src)
+{
+    if (src.isNull() || src.width() <= 0 || src.height() <= 0)
+        return 0;
+    QImage img = src;
+    if (img.format() != QImage::Format_ARGB32)
+        img = img.convertToFormat(QImage::Format_ARGB32);
+    int n = 0;
+    const int w = img.width();
+    const int h = img.height();
+    for (int y = 0; y < h; y += 2) {
+        const auto* line = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+        for (int x = 0; x < w; x += 2) {
+            if (qAlpha(line[x]) > 16)
+                ++n;
+        }
+    }
+    return n;
+}
+
+bool frameLooksPainted(const QImage& img, int baselineOpaque)
+{
+    const int o = countOpaqueSampled(img);
+    if (baselineOpaque >= 80)
+        return o >= qMax(40, (baselineOpaque * 2) / 5); // ≥40% of prior content
+    return o >= 20;
+}
+
 /// WebView2 is GPU-composited (WS_EX_NOREDIRECTIONBITMAP) — GDI BitBlt always
 /// returns black. CapturePreview is the supported screenshot API.
 /// Returns a null QImage on failure (caller must keep the previous frame).
@@ -242,10 +273,14 @@ struct WebViewHost {
     bool ready = false;
     bool contentReady = false;
     bool capturing = false;
-    /// OBS Refresh: hold last painted frame until navigation + paint grace (no blank flash).
+    /// OBS Refresh: hold last painted frame until navigation + validated paint (no blank flash).
     bool suppressCapture = false;
-    /// 0 = waiting for NavigationCompleted; else GetTickCount64 deadline before accepting paints.
+    /// 0 = waiting for NavigationCompleted; else GetTickCount64 deadline before attempting capture.
     ULONGLONG suppressUntilTick = 0;
+    /// Absolute deadline — accept any frame after this so we never stick forever.
+    ULONGLONG suppressHardDeadline = 0;
+    /// Opaque sample count of last good frame before soft reload (blank-frame gate).
+    int baselineOpaque = 0;
     QString lastError;
     QImage lastFrame;
 
@@ -334,22 +369,16 @@ struct WebViewHost {
                                     Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(
                                         [](HRESULT, LPCWSTR) -> HRESULT { return S_OK; })
                                         .Get());
-                                webview->add_ContentLoading(
-                                    Callback<ICoreWebView2ContentLoadingEventHandler>(
-                                        [this](ICoreWebView2*, ICoreWebView2ContentLoadingEventArgs*) -> HRESULT {
-                                            contentReady = true;
-                                            return S_OK;
-                                        })
-                                        .Get(),
-                                    nullptr);
+                                // Do NOT treat ContentLoading as capture-ready — that fires at the
+                                // *start* of navigation and CapturePreview returns blank overlays.
+                                // Match OBS: only paint into the texture after the document settles.
                                 webview->add_NavigationCompleted(
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                         [this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
                                             contentReady = true;
-                                            // Keep publishing frozen until the page has a moment to paint.
-                                            // Clearing suppress here caused CapturePreview blank/partial frames.
+                                            // Hold CapturePreview until compositor has a chance to paint.
                                             if (suppressCapture)
-                                                suppressUntilTick = GetTickCount64() + 450;
+                                                suppressUntilTick = GetTickCount64() + 750;
                                             return S_OK;
                                         })
                                         .Get(),
@@ -392,9 +421,20 @@ struct WebViewHost {
     {
         if (!webview)
             return;
+        baselineOpaque = countOpaqueSampled(lastFrame);
         suppressCapture = true;
         suppressUntilTick = 0; // wait for NavigationCompleted before grace timer
-        webview->Reload();
+        suppressHardDeadline = GetTickCount64() + 2800;
+        contentReady = false; // wait for NavigationCompleted (not ContentLoading)
+        // Prefer CDP Page.reload ignoreCache — closest to CEF ReloadIgnoreCache.
+        const HRESULT cdpHr = webview->CallDevToolsProtocolMethod(
+            L"Page.reload",
+            L"{\"ignoreCache\":true}",
+            Callback<ICoreWebView2CallDevToolsProtocolMethodCompletedHandler>(
+                [](HRESULT, LPCWSTR) -> HRESULT { return S_OK; })
+                .Get());
+        if (FAILED(cdpHr))
+            webview->Reload();
     }
 
     /// Capture one frame into lastFrame. Returns true if lastFrame was updated.
@@ -421,9 +461,20 @@ struct WebViewHost {
             return false;
         if (img.isNull())
             return false;
+
+        // Reject blank/partial CapturePreview after reload (OBS never OnPaints these).
+        if (suppressCapture) {
+            const ULONGLONG now2 = GetTickCount64();
+            const bool pastHard = suppressHardDeadline != 0 && now2 >= suppressHardDeadline;
+            if (!pastHard && !frameLooksPainted(img, baselineOpaque))
+                return false;
+        }
+
         lastFrame = std::move(img);
         suppressCapture = false;
         suppressUntilTick = 0;
+        suppressHardDeadline = 0;
+        baselineOpaque = countOpaqueSampled(lastFrame);
         return true;
     }
 
@@ -443,6 +494,8 @@ struct WebViewHost {
         capturing = false;
         suppressCapture = false;
         suppressUntilTick = 0;
+        suppressHardDeadline = 0;
+        baselineOpaque = 0;
     }
 };
 #endif
@@ -494,10 +547,8 @@ int runFallback(QApplication& app, SharedState& shared, const QString& url, int 
         publishFrame(shared, renderHtml(currentHtml, shared.width, shared.height), ++frame, 0, {});
     });
     publishTimer.start(1000 / fps);
-
-    QTimer refreshTimer;
-    QObject::connect(&refreshTimer, &QTimer::timeout, &app, reload);
-    refreshTimer.start(15000);
+    // No periodic auto-reload — that caused continuous flicker when WebView2 is unavailable.
+    // Soft reload is driven by RailShotTV Refresh / Reload page (same as OBS).
 
     return app.exec();
 }

@@ -51,7 +51,7 @@ private:
     /// While true, keep showing the last D3D texture (ignore SHM frames mid-reload).
     bool m_textureFrozen = false;
     quint32 m_freezeMinAck = 0;
-    qint64 m_freezeUntilMs = 0;
+    qint64 m_freezeStartedMs = 0;
     QProcess m_helper;
 
 #ifdef _WIN32

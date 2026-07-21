@@ -174,25 +174,22 @@ bool BrowserSource::uploadLatest(QString* error)
     if (m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
 
-    // Soft-reload freeze: keep last GPU texture until helper acks + post-nav grace,
-    // consuming (skipping) any intermediate blank/partial SHM frames.
+    // Soft-reload freeze (OBS-style): keep last GPU texture until the helper
+    // publishes a validated status=0 frame after ack. Timer-based unfreeze was
+    // uploading CapturePreview blanks and causing the refresh flicker.
     if (m_textureFrozen) {
-        if (commandAck >= m_freezeMinAck) {
-            if (m_freezeUntilMs == 0)
-                m_freezeUntilMs = QDateTime::currentMSecsSinceEpoch() + 500;
-            const bool stillHolding = QDateTime::currentMSecsSinceEpoch() < m_freezeUntilMs
-                                      || status == 1 || status == 3
-                                      || pixels.empty();
-            if (stillHolding) {
-                if (!pixels.empty())
-                    m_lastFrameIndex = idx; // drop frame without uploading
-                return m_texture != nullptr;
-            }
+        if (m_freezeStartedMs == 0)
+            m_freezeStartedMs = QDateTime::currentMSecsSinceEpoch();
+        const bool helperOkFrame = commandAck >= m_freezeMinAck
+                                   && status == 0
+                                   && !pixels.empty();
+        if (helperOkFrame) {
             m_textureFrozen = false;
-            m_freezeUntilMs = 0;
+            m_freezeStartedMs = 0;
+            // fall through and upload this frame
         } else {
             if (!pixels.empty())
-                m_lastFrameIndex = idx;
+                m_lastFrameIndex = idx; // consume without uploading
             return m_texture != nullptr;
         }
     }
@@ -340,10 +337,10 @@ void BrowserSource::writeReloadCommand()
     if (hdr->magic == browser_ipc::kMagic || hdr->magic == 0) {
         hdr->magic = browser_ipc::kMagic;
         hdr->command = browser_ipc::kCmdReload;
-        // Freeze GPU texture until helper acks and post-nav grace elapses.
+        // Freeze GPU texture until helper publishes a validated post-reload frame.
         m_textureFrozen = true;
         m_freezeMinAck = hdr->commandAck + 1;
-        m_freezeUntilMs = 0;
+        m_freezeStartedMs = QDateTime::currentMSecsSinceEpoch();
         hdr->status = 3;
     }
     if (m_mutexHandle)
