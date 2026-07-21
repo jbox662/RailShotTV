@@ -12,6 +12,8 @@
 #include <QFrame>
 #include <QMessageBox>
 #include <QStyle>
+#include <QFont>
+#include <QFontMetrics>
 
 namespace railshot {
 
@@ -199,8 +201,16 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     row->addWidget(div1);
     row->addSpacing(4);
 
-    m_status = new QLabel(QStringLiteral("1080p29.97   EX FPS: 30   CPU: 3%"), this);
+    m_status = new QLabel(this);
     m_status->setObjectName(QStringLiteral("mono"));
+    m_status->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    {
+        const QFont mono(QStringLiteral("JetBrains Mono"), 9);
+        const QFontMetrics fm(mono);
+        const int sw = fm.horizontalAdvance(QStringLiteral("1080p59.94   EX FPS: 999   CPU: 100%")) + 8;
+        m_status->setFixedWidth(sw);
+    }
+    m_status->setText(QStringLiteral("1080p60     EX FPS:  —   CPU:   —%"));
     row->addWidget(m_status);
 
     auto* div2 = new QFrame(this);
@@ -267,11 +277,14 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
         const int w = profile.width > 0 ? profile.width : 1920;
         const int h = profile.height > 0 ? profile.height : 1080;
         const double fps = profile.fps > 0 ? profile.fps : 59.94;
+        const QString fpsStr = QString::number(fps, 'f', fps == int(fps) ? 0 : 2).leftJustified(5);
+        const int renderFps = int(s.fpsRender > 0 ? s.fpsRender : fps);
+        const int cpuShow = s.streaming ? qMax(cpu, 12) : qMax(cpu, 3);
         m_status->setText(QStringLiteral("%1p%2   EX FPS: %3   CPU: %4%")
-                              .arg(h)
-                              .arg(fps, 0, 'f', fps == int(fps) ? 0 : 2)
-                              .arg(int(s.fpsRender > 0 ? s.fpsRender : fps))
-                              .arg(s.streaming ? qMax(cpu, 12) : qMax(cpu, 3)));
+                              .arg(h, 4)
+                              .arg(fpsStr)
+                              .arg(qBound(0, 999, renderFps), 3)
+                              .arg(qBound(0, 100, cpuShow), 3));
         Q_UNUSED(w);
     });
 
