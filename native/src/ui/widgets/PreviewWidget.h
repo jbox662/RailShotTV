@@ -3,6 +3,9 @@
 #include <QKeyEvent>
 #include <QFocusEvent>
 #include <QWheelEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 
 class QEvent;
 class QLabel;
@@ -50,6 +53,9 @@ protected:
     void focusInEvent(QFocusEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     class CanvasOverlay;

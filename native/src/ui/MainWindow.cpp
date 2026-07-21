@@ -117,7 +117,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
         dlg.exec();
     });
     connect(m_top, &TopMenuBar::toggleShortcuts, this, [this] {
-        ShortcutsOverlay dlg(this);
+        ShortcutsOverlay dlg(m_engine, this);
         dlg.exec();
     });
     connect(m_top, &TopMenuBar::newProject, this, [this] {
@@ -303,7 +303,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     }
     if (event->modifiers() & Qt::ShiftModifier
         && (event->key() == Qt::Key_Question || event->key() == Qt::Key_Slash)) {
-        ShortcutsOverlay dlg(this);
+        ShortcutsOverlay dlg(m_engine, this);
         dlg.exec();
         return;
     }

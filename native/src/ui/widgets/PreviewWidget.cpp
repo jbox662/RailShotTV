@@ -2,6 +2,7 @@
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "compositor/D3D11Compositor.h"
+#include "ui/DropFiles.h"
 #include "ui/widgets/SourcePropertiesDialog.h"
 #include "ui/widgets/FiltersDialog.h"
 #include "ui/widgets/TransformDialog.h"
@@ -24,6 +25,9 @@
 #include <QMenu>
 #include <QCursor>
 #include <QSignalBlocker>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <cmath>
 #include <algorithm>
 
@@ -953,6 +957,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     const QString accent = program ? QStringLiteral("#FF5A2C") : QStringLiteral("#22C55E");
 
     setFocusPolicy(program ? Qt::NoFocus : Qt::StrongFocus);
+    setAcceptDrops(!program);
     setStyleSheet(QStringLiteral(
         "background: #0D0F12;"
         "border-right: 2px solid %1;")
@@ -1317,6 +1322,29 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     if (m_displayMode == PreviewDisplayMode::FitWindow)
         applyDisplayLayout();
+}
+
+void PreviewWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (m_program || !event || !event->mimeData()) return;
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+}
+
+void PreviewWidget::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (m_program || !event || !event->mimeData()) return;
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+}
+
+void PreviewWidget::dropEvent(QDropEvent* event)
+{
+    if (m_program || !event || !event->mimeData() || !m_engine) return;
+    if (!event->mimeData()->hasUrls()) return;
+    const int n = importDroppedUrls(m_engine, event->mimeData()->urls());
+    if (n > 0)
+        event->acceptProposedAction();
 }
 
 } // namespace railshot

@@ -17,6 +17,8 @@ public:
     bool handleKey(QKeyEvent* event);
 
     static QKeySequence sequenceFor(const QString& binding);
+    static QString labelForAction(const QString& action);
+    static QStringList orderedActions();
 
 private:
     void dispatch(const QString& action);

@@ -355,21 +355,13 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
     {
         auto* w = new QWidget;
         auto* f = new QFormLayout(w);
-        f->addRow(new QLabel(QStringLiteral("Click a field and press a key combination."), w));
-        const QStringList order = {
-            QStringLiteral("go"), QStringLiteral("streamToggle"), QStringLiteral("recordToggle"),
-            QStringLiteral("saveReplay"), QStringLiteral("muteMic"),
-            QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
-            QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
-            QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
-            QStringLiteral("scene1"), QStringLiteral("scene2"), QStringLiteral("scene3"),
-        };
+        f->addRow(new QLabel(QStringLiteral("Click a field and press a key combination. Duplicates are highlighted on Save."), w));
         auto edits = std::make_shared<QHash<QString, QKeySequenceEdit*>>();
         QJsonObject keys = engine->settings()->hotkeys();
-        for (const QString& action : order) {
+        for (const QString& action : HotkeyDispatcher::orderedActions()) {
             auto* edit = new QKeySequenceEdit(HotkeyDispatcher::sequenceFor(keys.value(action).toString()), w);
             edits->insert(action, edit);
-            f->addRow(action, edit);
+            f->addRow(HotkeyDispatcher::labelForAction(action), edit);
             connect(edit, &QKeySequenceEdit::keySequenceChanged, this, [markDirty](const QKeySequence&) { markDirty(); });
         }
         m_hotkeyEdits = edits;
@@ -540,9 +532,25 @@ SettingsPage::SettingsPage(EngineController* engine, QWidget* parent)
         m_engine->settings()->setUiState(ui);
         if (m_hotkeyEdits) {
             QJsonObject o;
+            QHash<QString, QString> seen; // portable seq -> action
+            QStringList conflicts;
             for (auto it = m_hotkeyEdits->begin(); it != m_hotkeyEdits->end(); ++it) {
                 const QKeySequence seq = it.value()->keySequence();
+                const QString portable = seq.toString(QKeySequence::PortableText);
                 o.insert(it.key(), seq.toString(QKeySequence::NativeText));
+                if (!portable.isEmpty()) {
+                    if (seen.contains(portable))
+                        conflicts << QStringLiteral("%1 and %2 share %3")
+                                         .arg(HotkeyDispatcher::labelForAction(seen.value(portable)),
+                                              HotkeyDispatcher::labelForAction(it.key()),
+                                              seq.toString(QKeySequence::NativeText));
+                    else
+                        seen.insert(portable, it.key());
+                }
+            }
+            if (!conflicts.isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("Hotkeys"),
+                                     QStringLiteral("Duplicate bindings:\n%1").arg(conflicts.join(QLatin1Char('\n'))));
             }
             m_engine->settings()->setHotkeys(o);
         }

@@ -1,4 +1,7 @@
 #include "ui/widgets/ShortcutsOverlay.h"
+#include "ui/HotkeyDispatcher.h"
+#include "core/EngineController.h"
+#include "core/SettingsStore.h"
 #include "ui/Motion.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -6,7 +9,7 @@
 #include <QFrame>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QKeyEvent>
+#include <QJsonObject>
 
 namespace railshot {
 
@@ -37,7 +40,7 @@ QWidget* section(const QString& title, const QVector<QPair<QString, QString>>& r
 }
 } // namespace
 
-ShortcutsOverlay::ShortcutsOverlay(QWidget* parent)
+ShortcutsOverlay::ShortcutsOverlay(EngineController* engine, QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle(QStringLiteral("Keyboard Shortcuts"));
@@ -75,20 +78,42 @@ ShortcutsOverlay::ShortcutsOverlay(QWidget* parent)
     lay->setContentsMargins(20, 16, 20, 16);
     lay->setSpacing(8);
 
-    lay->addWidget(section(QStringLiteral("TRANSITIONS"), {
-        {QStringLiteral("Space / Enter"), QStringLiteral("GO (Preview → Program)")},
-        {QStringLiteral("1 – 8"), QStringLiteral("Preview scene N")},
-    }, body));
-    lay->addWidget(section(QStringLiteral("STREAM"), {
-        {QStringLiteral("Ctrl+Shift+S"), QStringLiteral("Toggle Stream / Go Live")},
-        {QStringLiteral("Ctrl+Shift+R"), QStringLiteral("Toggle Record")},
-    }, body));
+    QJsonObject keys = engine && engine->settings() ? engine->settings()->hotkeys() : QJsonObject{};
+
+    auto rowsFor = [&](const QStringList& actions) {
+        QVector<QPair<QString, QString>> rows;
+        for (const QString& a : actions) {
+            const QString binding = keys.value(a).toString();
+            const QKeySequence seq = HotkeyDispatcher::sequenceFor(binding);
+            const QString keyText = seq.isEmpty()
+                ? QStringLiteral("—")
+                : seq.toString(QKeySequence::NativeText);
+            rows.push_back({keyText, HotkeyDispatcher::labelForAction(a)});
+        }
+        return rows;
+    };
+
+    lay->addWidget(section(QStringLiteral("TRANSITIONS / SCENES"), rowsFor({
+        QStringLiteral("go"), QStringLiteral("scene1"), QStringLiteral("scene2"),
+        QStringLiteral("scene3"), QStringLiteral("scene4"), QStringLiteral("scene5"),
+        QStringLiteral("scene6"), QStringLiteral("scene7"), QStringLiteral("scene8"),
+    }), body));
+    lay->addWidget(section(QStringLiteral("STREAM / RECORD"), rowsFor({
+        QStringLiteral("streamToggle"), QStringLiteral("recordToggle"), QStringLiteral("saveReplay"),
+    }), body));
+    lay->addWidget(section(QStringLiteral("AUDIO / SCOREBOARD"), rowsFor({
+        QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
+        QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
+        QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
+        QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
+    }), body));
     lay->addWidget(section(QStringLiteral("UI"), {
-        {QStringLiteral("F"), QStringLiteral("Fullscreen")},
         {QStringLiteral("Shift+?"), QStringLiteral("This shortcuts overlay")},
+        {keys.value(QStringLiteral("fullscreen")).toString(QStringLiteral("F")),
+         HotkeyDispatcher::labelForAction(QStringLiteral("fullscreen"))},
         {QStringLiteral("Ctrl+S"), QStringLiteral("Save project")},
         {QStringLiteral("Ctrl+O"), QStringLiteral("Open project")},
-        {QStringLiteral("Esc"), QStringLiteral("Close overlay / Scene Editor")},
+        {QStringLiteral("Esc"), QStringLiteral("Close overlay / dialogs")},
     }, body));
     lay->addStretch();
     scroll->setWidget(body);

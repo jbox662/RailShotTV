@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QFrame>
 #include <QByteArray>
+#include <QVector>
 
 class QResizeEvent;
 class QEvent;
@@ -23,6 +24,8 @@ class ScoreboardControlsWidget;
 class SceneListWidget;
 class SourceContextToolbar;
 class TransitionPanel;
+class ObsStatsDock;
+class ExtraBrowserPanel;
 
 class DashboardPage : public QWidget {
     Q_OBJECT
@@ -31,7 +34,7 @@ public:
     ~DashboardPage() override;
     void setBasicMode(bool on);
     void resetDockLayout();
-    /// OBS-style Docks menu: checkable Scenes / Sources / Mixer / Scoreboard + Reset.
+    /// OBS-style Docks menu: toggles + Add Browser Panel + Reset.
     void populateDocksMenu(QMenu* menu);
 
 signals:
@@ -57,6 +60,11 @@ private:
     void saveDockState();
     void restoreDockState();
     void scheduleSaveDockState();
+    void restoreExtraBrowserPanels();
+    void persistExtraBrowserPanels();
+    void addExtraBrowserPanel(const QString& title = {}, const QString& url = {});
+    QDockWidget* createExtraBrowserDock(const QString& panelId, const QString& title,
+                                        const QString& url);
 
     EngineController* m_engine = nullptr;
     PreviewWidget* m_preview = nullptr;
@@ -78,7 +86,10 @@ private:
     QDockWidget* m_sourcesDock = nullptr;
     QDockWidget* m_mixerDock = nullptr;
     QDockWidget* m_scoreboardDock = nullptr;
+    QDockWidget* m_statsDock = nullptr;
+    QVector<QDockWidget*> m_browserDocks;
     ScoreboardControlsWidget* m_scoreboardControls = nullptr;
+    ObsStatsDock* m_statsWidget = nullptr;
     QByteArray m_defaultDockState;
     bool m_dockStateReady = false;
 };

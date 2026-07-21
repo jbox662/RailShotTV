@@ -4,6 +4,7 @@
 #include "audio/AudioGraph.h"
 #include <QKeyEvent>
 #include <QJsonObject>
+#include <QHash>
 #include <utility>
 
 namespace railshot {
@@ -26,6 +27,49 @@ QKeySequence HotkeyDispatcher::sequenceFor(const QString& binding)
         || binding.compare(QStringLiteral("Enter"), Qt::CaseInsensitive) == 0)
         return QKeySequence(Qt::Key_Return);
     return QKeySequence(binding);
+}
+
+QString HotkeyDispatcher::labelForAction(const QString& action)
+{
+    static const QHash<QString, QString> kLabels = {
+        {QStringLiteral("go"), QStringLiteral("Transition GO")},
+        {QStringLiteral("streamToggle"), QStringLiteral("Start/Stop Streaming")},
+        {QStringLiteral("recordToggle"), QStringLiteral("Start/Stop Recording")},
+        {QStringLiteral("saveReplay"), QStringLiteral("Save Replay Buffer")},
+        {QStringLiteral("muteMic"), QStringLiteral("Mute/Unmute Mic")},
+        {QStringLiteral("muteDesktop"), QStringLiteral("Mute/Unmute Desktop Audio")},
+        {QStringLiteral("scoreAPlus"), QStringLiteral("Score A +1")},
+        {QStringLiteral("scoreAMinus"), QStringLiteral("Score A −1")},
+        {QStringLiteral("scoreBPlus"), QStringLiteral("Score B +1")},
+        {QStringLiteral("scoreBMinus"), QStringLiteral("Score B −1")},
+        {QStringLiteral("scoreReset"), QStringLiteral("Reset Scores")},
+        {QStringLiteral("scoreSwap"), QStringLiteral("Swap Scores")},
+        {QStringLiteral("scene1"), QStringLiteral("Preview Scene 1")},
+        {QStringLiteral("scene2"), QStringLiteral("Preview Scene 2")},
+        {QStringLiteral("scene3"), QStringLiteral("Preview Scene 3")},
+        {QStringLiteral("scene4"), QStringLiteral("Preview Scene 4")},
+        {QStringLiteral("scene5"), QStringLiteral("Preview Scene 5")},
+        {QStringLiteral("scene6"), QStringLiteral("Preview Scene 6")},
+        {QStringLiteral("scene7"), QStringLiteral("Preview Scene 7")},
+        {QStringLiteral("scene8"), QStringLiteral("Preview Scene 8")},
+        {QStringLiteral("fullscreen"), QStringLiteral("Toggle Fullscreen (UI)")},
+    };
+    return kLabels.value(action, action);
+}
+
+QStringList HotkeyDispatcher::orderedActions()
+{
+    return {
+        QStringLiteral("go"), QStringLiteral("streamToggle"), QStringLiteral("recordToggle"),
+        QStringLiteral("saveReplay"), QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
+        QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
+        QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
+        QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
+        QStringLiteral("scene1"), QStringLiteral("scene2"), QStringLiteral("scene3"),
+        QStringLiteral("scene4"), QStringLiteral("scene5"), QStringLiteral("scene6"),
+        QStringLiteral("scene7"), QStringLiteral("scene8"),
+        QStringLiteral("fullscreen"),
+    };
 }
 
 void HotkeyDispatcher::reload()
@@ -109,6 +153,26 @@ void HotkeyDispatcher::dispatch(const QString& action)
             for (const auto& c : chans) {
                 if (c.name.contains(QStringLiteral("Mic"), Qt::CaseInsensitive)
                     || c.id.contains(QStringLiteral("mic"), Qt::CaseInsensitive)) {
+                    st = c;
+                    break;
+                }
+            }
+        }
+        if (!st.id.isEmpty()) {
+            st.muted = !st.muted;
+            m_engine->audio()->setChannelState(st.id, st);
+        }
+        return;
+    }
+    if (action == QLatin1String("muteDesktop")) {
+        if (!m_engine->audio()) return;
+        auto st = m_engine->audio()->channelState(QStringLiteral("desktop"));
+        if (st.id.isEmpty()) {
+            const auto chans = m_engine->audio()->channels();
+            for (const auto& c : chans) {
+                if (c.name.contains(QStringLiteral("Desktop"), Qt::CaseInsensitive)
+                    || c.id.contains(QStringLiteral("desktop"), Qt::CaseInsensitive)
+                    || c.id.contains(QStringLiteral("loopback"), Qt::CaseInsensitive)) {
                     st = c;
                     break;
                 }

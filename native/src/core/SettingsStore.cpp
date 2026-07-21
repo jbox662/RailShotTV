@@ -78,6 +78,7 @@ QJsonObject SettingsStore::hotkeys() const
         {QStringLiteral("recordToggle"), QStringLiteral("F9")},
         {QStringLiteral("saveReplay"), QStringLiteral("F10")},
         {QStringLiteral("muteMic"), QStringLiteral("M")},
+        {QStringLiteral("muteDesktop"), QStringLiteral("Shift+M")},
         {QStringLiteral("scoreAPlus"), QStringLiteral("Q")},
         {QStringLiteral("scoreAMinus"), QStringLiteral("A")},
         {QStringLiteral("scoreBPlus"), QStringLiteral("E")},

@@ -365,6 +365,12 @@ add_library(railshot_ui STATIC
     src/ui/widgets/PlayListPanel.cpp
     src/ui/widgets/ShortcutsOverlay.h
     src/ui/widgets/ShortcutsOverlay.cpp
+    src/ui/widgets/ExtraBrowserPanel.h
+    src/ui/widgets/ExtraBrowserPanel.cpp
+    src/ui/widgets/ObsStatsDock.h
+    src/ui/widgets/ObsStatsDock.cpp
+    src/ui/DropFiles.h
+    src/ui/DropFiles.cpp
     src/ui/HotkeyDispatcher.h
     src/ui/HotkeyDispatcher.cpp
     src/ui/pages/DashboardPage.h

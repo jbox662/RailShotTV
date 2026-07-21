@@ -16,6 +16,8 @@
 #include "ui/widgets/TransformDialog.h"
 #include "ui/widgets/InteractDialog.h"
 #include "ui/widgets/ProjectorWindow.h"
+#include "ui/widgets/ObsStatsDock.h"
+#include "ui/widgets/ExtraBrowserPanel.h"
 #include "ui/Theme.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
@@ -31,6 +33,9 @@
 #include <QDir>
 #include <QUrl>
 #include <QJsonObject>
+#include <QJsonArray>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QStandardPaths>
 #include <QDialog>
 #include <QLabel>
@@ -38,9 +43,9 @@
 #include <QResizeEvent>
 #include <QHideEvent>
 #include <QEvent>
-#include <QFrame>
 #include <QMainWindow>
 #include <QDockWidget>
+#include <QFrame>
 #include <QByteArray>
 #include <QMouseEvent>
 
@@ -409,9 +414,13 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
                            m_mixer, QStringLiteral("#A855F7"));
     m_scoreboardDock = makeDock(QStringLiteral("Scoreboard"), QStringLiteral("scoreboardDock"),
                                 m_scoreboardControls, QStringLiteral("#22C55E"));
+    m_statsWidget = new ObsStatsDock(engine, nullptr);
+    m_statsDock = makeDock(QStringLiteral("Stats"), QStringLiteral("statsDock"),
+                           m_statsWidget, QStringLiteral("#38BDF8"));
 
     applyDefaultDockLayout();
     m_defaultDockState = m_dockHost->saveState();
+    restoreExtraBrowserPanels();
     restoreDockState();
     m_dockStateReady = true;
 
@@ -583,6 +592,8 @@ void DashboardPage::applyDefaultDockLayout()
     m_dockHost->removeDockWidget(m_sourcesDock);
     m_dockHost->removeDockWidget(m_mixerDock);
     m_dockHost->removeDockWidget(m_scoreboardDock);
+    if (m_statsDock)
+        m_dockHost->removeDockWidget(m_statsDock);
 
     m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_scenesDock);
     m_dockHost->addDockWidget(Qt::BottomDockWidgetArea, m_sourcesDock);
@@ -596,6 +607,11 @@ void DashboardPage::applyDefaultDockLayout()
     m_sourcesDock->show();
     m_mixerDock->show();
     m_scoreboardDock->show();
+
+    if (m_statsDock) {
+        m_dockHost->addDockWidget(Qt::RightDockWidgetArea, m_statsDock);
+        m_statsDock->hide();
+    }
 
     // Scenes | Sources | Mixer | Scoreboard
     m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock, m_scoreboardDock},
@@ -663,8 +679,104 @@ void DashboardPage::populateDocksMenu(QMenu* menu)
     addToggle(m_sourcesDock);
     addToggle(m_mixerDock);
     addToggle(m_scoreboardDock);
+    addToggle(m_statsDock);
+    if (!m_browserDocks.isEmpty()) {
+        menu->addSeparator();
+        for (auto* d : m_browserDocks)
+            addToggle(d);
+    }
     menu->addSeparator();
+    menu->addAction(QStringLiteral("Add Browser Panel…"), this, [this] { addExtraBrowserPanel(); });
     menu->addAction(QStringLiteral("Reset Desk Layout"), this, &DashboardPage::resetDockLayout);
+}
+
+QDockWidget* DashboardPage::createExtraBrowserDock(const QString& panelId, const QString& title,
+                                                   const QString& url)
+{
+    auto* panel = new ExtraBrowserPanel(m_engine, panelId, title, url, nullptr);
+    auto* dock = makeDock(title, QStringLiteral("browserDock_") + panelId, panel,
+                          QStringLiteral("#F59E0B"));
+    connect(panel, &ExtraBrowserPanel::urlChanged, this, [this](const QString&, const QString&) {
+        persistExtraBrowserPanels();
+    });
+    connect(panel, &ExtraBrowserPanel::removeRequested, this, [this, panelId] {
+        for (int i = 0; i < m_browserDocks.size(); ++i) {
+            auto* d = m_browserDocks[i];
+            if (!d) continue;
+            if (d->objectName() == QStringLiteral("browserDock_") + panelId) {
+                m_dockHost->removeDockWidget(d);
+                m_browserDocks.removeAt(i);
+                d->deleteLater();
+                persistExtraBrowserPanels();
+                scheduleSaveDockState();
+                break;
+            }
+        }
+    });
+    m_dockHost->addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->show();
+    m_browserDocks.push_back(dock);
+    return dock;
+}
+
+void DashboardPage::addExtraBrowserPanel(const QString& title, const QString& url)
+{
+    bool ok = false;
+    QString name = title;
+    if (name.isEmpty()) {
+        name = QInputDialog::getText(this, QStringLiteral("Browser Panel"),
+                                     QStringLiteral("Panel title:"), QLineEdit::Normal,
+                                     QStringLiteral("Browser"), &ok);
+        if (!ok || name.trimmed().isEmpty()) return;
+        name = name.trimmed();
+    }
+    QString u = url;
+    if (u.isEmpty()) {
+        u = QInputDialog::getText(this, QStringLiteral("Browser Panel"),
+                                  QStringLiteral("URL:"), QLineEdit::Normal,
+                                  QStringLiteral("https://"), &ok);
+        if (!ok) return;
+        u = u.trimmed();
+    }
+    const QString id = newId(QStringLiteral("browser"));
+    createExtraBrowserDock(id, name, u);
+    persistExtraBrowserPanels();
+    scheduleSaveDockState();
+}
+
+void DashboardPage::persistExtraBrowserPanels()
+{
+    if (!m_engine || !m_engine->settings()) return;
+    QJsonArray arr;
+    for (auto* dock : m_browserDocks) {
+        if (!dock) continue;
+        auto* panel = qobject_cast<ExtraBrowserPanel*>(dock->widget());
+        if (!panel) continue;
+        QJsonObject o;
+        o.insert(QStringLiteral("id"), panel->panelId());
+        o.insert(QStringLiteral("title"), dock->windowTitle());
+        o.insert(QStringLiteral("url"), panel->currentUrl());
+        arr.append(o);
+    }
+    auto ui = m_engine->settings()->uiState();
+    ui.insert(QStringLiteral("extraBrowserPanels"), arr);
+    m_engine->settings()->setUiState(ui);
+    m_engine->settings()->sync();
+}
+
+void DashboardPage::restoreExtraBrowserPanels()
+{
+    if (!m_engine || !m_engine->settings() || !m_dockHost) return;
+    const auto ui = m_engine->settings()->uiState();
+    const QJsonArray arr = ui.value(QStringLiteral("extraBrowserPanels")).toArray();
+    for (const auto& v : arr) {
+        const QJsonObject o = v.toObject();
+        const QString id = o.value(QStringLiteral("id")).toString();
+        if (id.isEmpty()) continue;
+        createExtraBrowserDock(id,
+                               o.value(QStringLiteral("title")).toString(QStringLiteral("Browser")),
+                               o.value(QStringLiteral("url")).toString());
+    }
 }
 
 void DashboardPage::hideEvent(QHideEvent* event)
