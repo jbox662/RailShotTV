@@ -21,6 +21,7 @@
 #include <QButtonGroup>
 #include <QVector>
 #include <QAbstractSpinBox>
+#include <QAbstractSpinBox>
 #include <QEvent>
 #include <utility>
 
@@ -71,12 +72,78 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "  color:#22C55E; font-size:8px; font-weight:900; letter-spacing:1px;"
         "  background:transparent; border:none;"
         "}"
-        "QWidget#scoreboardControls QLineEdit, QWidget#scoreboardControls QSpinBox {"
-        "  background:#12151A; border:1px solid #3A3D45; color:#E0E2E8;"
-        "  border-radius:3px; padding:2px 5px; font-size:10px; min-height:20px; max-height:22px;"
+        "QWidget#scoreboardControls QLabel#fieldLab {"
+        "  color:#8892A4; font-size:9px; font-weight:700;"
+        "  background:transparent; border:none;"
+        "  min-width:58px;"
         "}"
-        "QWidget#scoreboardControls QLineEdit:focus, QWidget#scoreboardControls QSpinBox:focus {"
+        "QWidget#scoreboardControls QLineEdit,"
+        "QWidget#scoreboardControls QSpinBox,"
+        "QWidget#scoreboardControls QComboBox {"
+        "  background:#12151A; border:1px solid #3A3D45; color:#E0E2E8;"
+        "  border-radius:3px; padding:3px 8px; font-size:10px; font-weight:600;"
+        "  min-height:24px; max-height:26px;"
+        "}"
+        "QWidget#scoreboardControls QLineEdit:focus,"
+        "QWidget#scoreboardControls QSpinBox:focus,"
+        "QWidget#scoreboardControls QComboBox:focus {"
         "  border-color:#22C55E;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox {"
+        "  padding-right:2px;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::up-button,"
+        "QWidget#scoreboardControls QSpinBox::down-button {"
+        "  subcontrol-origin: border;"
+        "  width:18px;"
+        "  background:#1A1D22;"
+        "  border:none;"
+        "  border-left:1px solid #3A3D45;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::up-button {"
+        "  subcontrol-position: top right;"
+        "  border-top-right-radius:2px;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::down-button {"
+        "  subcontrol-position: bottom right;"
+        "  border-bottom-right-radius:2px;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::up-button:hover,"
+        "QWidget#scoreboardControls QSpinBox::down-button:hover {"
+        "  background:#243028;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::up-arrow {"
+        "  width:0; height:0;"
+        "  border-left:4px solid transparent;"
+        "  border-right:4px solid transparent;"
+        "  border-bottom:5px solid #A0A8B8;"
+        "}"
+        "QWidget#scoreboardControls QSpinBox::down-arrow {"
+        "  width:0; height:0;"
+        "  border-left:4px solid transparent;"
+        "  border-right:4px solid transparent;"
+        "  border-top:5px solid #A0A8B8;"
+        "}"
+        "QWidget#scoreboardControls QComboBox::drop-down {"
+        "  subcontrol-origin: padding;"
+        "  subcontrol-position: top right;"
+        "  width:18px;"
+        "  border:none;"
+        "  border-left:1px solid #3A3D45;"
+        "  background:#1A1D22;"
+        "}"
+        "QWidget#scoreboardControls QComboBox::down-arrow {"
+        "  width:0; height:0;"
+        "  border-left:4px solid transparent;"
+        "  border-right:4px solid transparent;"
+        "  border-top:5px solid #A0A8B8;"
+        "  margin-right:5px;"
+        "}"
+        "QWidget#scoreboardControls QComboBox QAbstractItemView {"
+        "  background:#12151A; color:#E0E2E8;"
+        "  border:1px solid #3A3D45;"
+        "  selection-background-color:#1A3A28;"
+        "  outline:0;"
         "}"
         "QWidget#scoreboardControls QCheckBox {"
         "  color:#A0A8B8; font-size:9px; font-weight:700; spacing:3px;"
@@ -185,46 +252,52 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* poolBox = new QWidget(host);
     auto* poolLay = new QVBoxLayout(poolBox);
     poolLay->setContentsMargins(0, 0, 0, 0);
-    poolLay->setSpacing(3);
-    auto* raceRow = new QHBoxLayout();
-    auto* raceLab = new QLabel(QStringLiteral("Race to"), poolBox);
-    raceLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    poolLay->setSpacing(4);
+
+    auto makeFieldLab = [](const QString& text, QWidget* parent) {
+        auto* lab = new QLabel(text, parent);
+        lab->setObjectName(QStringLiteral("fieldLab"));
+        lab->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        return lab;
+    };
+
+    auto* poolFields = new QGridLayout();
+    poolFields->setContentsMargins(0, 0, 0, 0);
+    poolFields->setHorizontalSpacing(8);
+    poolFields->setVerticalSpacing(4);
+    poolFields->setColumnStretch(1, 1);
+
+    auto* raceLab = makeFieldLab(QStringLiteral("Race to"), poolBox);
     auto* raceTo = new QSpinBox(poolBox);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
-    raceTo->setFixedWidth(44);
-    raceRow->addWidget(raceLab);
-    raceRow->addWidget(raceTo);
-    raceRow->addStretch(1);
-    poolLay->addLayout(raceRow);
+    raceTo->setAlignment(Qt::AlignCenter);
+    raceTo->setMinimumWidth(72);
+    raceTo->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
+    poolFields->addWidget(raceLab, 0, 0);
+    poolFields->addWidget(raceTo, 0, 1);
 
-    auto* gameRow = new QHBoxLayout();
-    auto* gameLab = new QLabel(QStringLiteral("Game"), poolBox);
-    gameLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    auto* gameLab = makeFieldLab(QStringLiteral("Game"), poolBox);
     auto* gameCombo = new QComboBox(poolBox);
     gameCombo->addItems({QStringLiteral("8-Ball"), QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
                          QStringLiteral("Straight Pool"), QStringLiteral("One-Pocket")});
     gameCombo->setCurrentText(poolGameLabel(model->state().sport));
-    gameCombo->setMinimumWidth(110);
-    gameCombo->setStyleSheet(QStringLiteral(
-        "QComboBox{background:#12151A;border:1px solid #3A3D45;color:#E0E2E8;"
-        "border-radius:3px;padding:2px 6px;font-size:10px;min-height:20px;}"
-        "QComboBox::drop-down{border:none;width:16px;}"
-        "QComboBox QAbstractItemView{background:#12151A;color:#E0E2E8;selection-background-color:#1A3A28;}"));
-    gameRow->addWidget(gameLab);
-    gameRow->addWidget(gameCombo, 1);
-    poolLay->addLayout(gameRow);
+    gameCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    poolFields->addWidget(gameLab, 1, 0);
+    poolFields->addWidget(gameCombo, 1, 1);
+    poolLay->addLayout(poolFields);
+
     auto* turnRow = new QHBoxLayout();
-    auto* turnLab = new QLabel(QStringLiteral("At table"), poolBox);
-    turnLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    turnRow->setSpacing(8);
+    auto* turnLab = makeFieldLab(QStringLiteral("At table"), poolBox);
     auto* turnA = new QPushButton(QStringLiteral("A"), poolBox);
     auto* turnB = new QPushButton(QStringLiteral("B"), poolBox);
     for (auto* b : {turnA, turnB}) {
         b->setCheckable(true);
-        b->setFixedSize(28, 22);
+        b->setFixedSize(28, 26);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;font-weight:800;font-size:10px;}"
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;font-weight:800;font-size:10px;border-radius:3px;}"
             "QPushButton:checked{border-color:#22C55E;color:#86EFAC;background:#0F1A14;}"));
     }
     auto* turnGroup = new QButtonGroup(poolBox);
@@ -371,15 +444,16 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* hoopBox = new QWidget(host);
     auto* hoopLay = new QHBoxLayout(hoopBox);
     hoopLay->setContentsMargins(0, 0, 0, 0);
+    hoopLay->setSpacing(8);
     auto* periodLab = new QLabel(QStringLiteral("Quarter"), hoopBox);
-    periodLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:9px; background:transparent; border:none;"));
+    periodLab->setObjectName(QStringLiteral("fieldLab"));
     auto* periodSp = new QSpinBox(hoopBox);
     periodSp->setRange(1, 10);
     periodSp->setValue(model->state().period);
-    periodSp->setFixedWidth(44);
+    periodSp->setAlignment(Qt::AlignCenter);
+    periodSp->setMinimumWidth(72);
     hoopLay->addWidget(periodLab);
-    hoopLay->addWidget(periodSp);
-    hoopLay->addStretch(1);
+    hoopLay->addWidget(periodSp, 1);
     lay->addWidget(hoopBox);
 
     // ── Tennis sets (reuse balls/strikes) ──
