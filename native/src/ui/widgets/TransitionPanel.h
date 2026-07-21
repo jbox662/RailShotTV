@@ -1,9 +1,13 @@
 #pragma once
+
+#include "core/Types.h"
+
 #include <QWidget>
 #include <QPushButton>
 #include <QVector>
 #include <QLabel>
 #include <QSlider>
+#include <QString>
 
 namespace railshot {
 class EngineController;
@@ -14,19 +18,25 @@ public:
     explicit TransitionPanel(EngineController* engine, QWidget* parent = nullptr);
 
 private:
-    void restyleTypes();
     void refreshScenePad();
     void updateGoArmed();
-    void showTypeOptions(const QString& type);
     void syncSpeedFromProject();
+    void applyEffectToEngine();
+    void updateModeButton();
+    void updateEffectButton();
+    void showModeMenu();
+    void showEffectMenu();
+    TransitionType takeType() const;
 
     EngineController* m_engine = nullptr;
+    QPushButton* m_modeBtn = nullptr;
+    QPushButton* m_effectBtn = nullptr;
     QPushButton* m_go = nullptr;
-    QLabel* m_activeLabel = nullptr;
     QLabel* m_speedValue = nullptr;
     QSlider* m_speed = nullptr;
-    QString m_active = QStringLiteral("Cut");
-    QVector<QPushButton*> m_typeButtons;
+    /// "Cut" = instant take; "Smooth" = use selected effect.
+    QString m_mode = QStringLiteral("Cut");
+    QString m_effect = QStringLiteral("Cross Dissolve");
     QVector<QPushButton*> m_scenePad;
 };
 

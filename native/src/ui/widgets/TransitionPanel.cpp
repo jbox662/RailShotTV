@@ -1,6 +1,7 @@
 #include "ui/widgets/TransitionPanel.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
+#include "core/Types.h"
 #include "ui/Theme.h"
 #include "ui/Motion.h"
 #include <QVBoxLayout>
@@ -8,53 +9,117 @@
 #include <QSlider>
 #include <QLabel>
 #include <QGridLayout>
-#include <QButtonGroup>
 #include <QStyle>
-#include <QInputDialog>
 #include <QMenu>
 #include <QAction>
+#include <QActionGroup>
 #include <QCursor>
 #include <QSignalBlocker>
+#include <QFontMetrics>
 
 namespace railshot {
+
+namespace {
+
+struct TransEffect {
+    const char* name;
+    TransitionType type;
+    int wipeDir; // -1 = unused
+};
+
+/// Wirecast-style catalog. Many map to closest built-in engine type until dedicated shaders ship.
+constexpr TransEffect kEffects[] = {
+    {"Smooth", TransitionType::Fade, -1},
+    {"3D Plane", TransitionType::CubeZoom, -1},
+    {"Bands", TransitionType::Wipe, 0},
+    {"Clock Wipe", TransitionType::Wipe, 0},
+    {"Cross Blur", TransitionType::Fade, -1},
+    {"Cross Dissolve", TransitionType::Fade, -1},
+    {"Crosshair", TransitionType::Wipe, 2},
+    {"Radial Wipe", TransitionType::Wipe, 0},
+    {"Swap", TransitionType::Merge, -1},
+    {"Flip Over", TransitionType::CubeZoom, -1},
+    {"Grid Wipe", TransitionType::Wipe, 0},
+    {"Curtain Drop Wipe", TransitionType::Wipe, 2},
+    {"Fade to Black", TransitionType::FTB, -1},
+    {"Fade to White", TransitionType::FTB, -1},
+    {"Circle Wipe", TransitionType::Wipe, 0},
+    {"Vacuum", TransitionType::Merge, -1},
+    {"Wave Wipe", TransitionType::Wipe, 1},
+    {"Push", TransitionType::Wipe, 0},
+    {"Windshield Wipe", TransitionType::Wipe, 0},
+    {"Fly Over", TransitionType::CubeZoom, -1},
+    {"RGB Channels", TransitionType::Merge, -1},
+};
+
+constexpr int kEffectCount = int(sizeof(kEffects) / sizeof(kEffects[0]));
+
+const TransEffect* findEffect(const QString& name)
+{
+    for (int i = 0; i < kEffectCount; ++i) {
+        if (name == QLatin1String(kEffects[i].name))
+            return &kEffects[i];
+    }
+    return &kEffects[5]; // Cross Dissolve
+}
+
+QString wirecastMenuStyle()
+{
+    return QStringLiteral(
+        "QMenu {"
+        "  background:#1A1C20; color:#F0F0F0;"
+        "  border:1px solid #3A3D45; padding:4px 0;"
+        "  font-family:'DM Sans','Segoe UI',sans-serif; font-size:12px;"
+        "}"
+        "QMenu::item {"
+        "  padding:6px 28px 6px 28px; background:transparent;"
+        "}"
+        "QMenu::item:selected {"
+        "  background:#2E3238;"
+        "}"
+        "QMenu::indicator {"
+        "  width:14px; height:14px; margin-left:8px;"
+        "}"
+        "QMenu::separator {"
+        "  height:1px; background:#3A3D45; margin:4px 10px;"
+        "}");
+}
+
+} // namespace
 
 TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("transitionPanel"));
-    setFixedWidth(148);
-    // MUST scope to #transitionPanel — unscoped rules clipped scene-pad digits and opt buttons.
+    setFixedWidth(158);
     setStyleSheet(QStringLiteral(
         "QWidget#transitionPanel {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1A1D22, stop:1 #0D0F12);"
-        "  border-left: 2px solid #3A6AFF88;"
-        "  border-right: 2px solid #3A6AFF88;"
+        "  background:#141619;"
+        "  border-left:1px solid #2A2D35;"
+        "  border-right:1px solid #2A2D35;"
         "}"
         "QWidget#transitionPanel QLabel#sec {"
-        "  color:#7AB8FF; font-family:'DM Sans'; font-size:9px; font-weight:800;"
+        "  color:#8892A4; font-family:'DM Sans'; font-size:8px; font-weight:800;"
         "  letter-spacing:1px; background:transparent; border:none;"
         "}"
         "QWidget#transitionPanel QLabel#hint {"
         "  color:#6B7280; font-size:9px; background:transparent; border:none;"
         "}"
-        "QWidget#transitionPanel QPushButton#transTypeBtn {"
-        "  background:#12151A; border:1px solid #3A3D45; border-radius:3px;"
-        "  color:#D0D2D8; font-size:11px; font-weight:700; text-align:left;"
-        "  padding:5px 8px; min-height:24px;"
+        // Wirecast-like chrome dropdowns
+        "QWidget#transitionPanel QPushButton#wcDrop {"
+        "  background:#2A2C30; border:1px solid #5A5E66; border-radius:4px;"
+        "  color:#E8E8EC; font-size:11px; font-weight:600; text-align:left;"
+        "  padding:6px 22px 6px 10px; min-height:28px;"
         "}"
-        "QWidget#transitionPanel QPushButton#transTypeBtn:hover {"
-        "  border-color:#4F9EFF; color:#FFFFFF;"
+        "QWidget#transitionPanel QPushButton#wcDrop:hover {"
+        "  border-color:#8A8E96; color:#FFFFFF;"
         "}"
-        "QWidget#transitionPanel QPushButton#transTypeBtn:checked {"
-        "  background:#1A2A3A; border:1px solid #4F9EFF; color:#7AB8FF;"
+        "QWidget#transitionPanel QPushButton#wcDrop[wirecastActive=\"true\"] {"
+        "  background:#C9A227; border:1px solid #A6851A; color:#1A1608;"
+        "  font-weight:700;"
         "}"
-        "QWidget#transitionPanel QPushButton#transOptBtn {"
-        "  background:#1A1D22; border:1px solid #3A3D45; border-radius:3px;"
-        "  color:#A0A8B8; font-size:10px; font-weight:800;"
-        "  min-width:28px; max-width:28px; min-height:24px;"
-        "}"
-        "QWidget#transitionPanel QPushButton#transOptBtn:hover {"
-        "  border-color:#4F9EFF; color:#FFFFFF;"
+        "QWidget#transitionPanel QPushButton#wcDrop[wirecastActive=\"true\"]:hover {"
+        "  background:#D4AF37; border-color:#C9A227; color:#1A1608;"
         "}"
         "QWidget#transitionPanel QPushButton#scenePadBtn {"
         "  background:#12151A; border:1px solid #3A3D45; border-radius:3px;"
@@ -78,78 +143,49 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
         "  background:#1A1D22; height:6px; border:1px solid #3A3D45; border-radius:3px;"
         "}"
         "QWidget#transitionPanel QSlider#speedSlider::handle:horizontal {"
-        "  background:#C4B5FD; width:12px; height:14px; margin:-5px 0;"
-        "  border:1px solid #A855F7; border-radius:3px;"
+        "  background:#C9A227; width:12px; height:14px; margin:-5px 0;"
+        "  border:1px solid #E8C84A; border-radius:3px;"
         "}"));
 
     auto* col = new QVBoxLayout(this);
-    col->setContentsMargins(8, 8, 8, 8);
+    col->setContentsMargins(8, 10, 8, 8);
     col->setSpacing(6);
 
-    m_go = new QPushButton(QStringLiteral("GO"), this);
+    auto* takeLab = new QLabel(QStringLiteral("TAKE"), this);
+    takeLab->setObjectName(QStringLiteral("sec"));
+    col->addWidget(takeLab);
+
+    // Wirecast row (stacked in our vertical strip): mode → effect → go
+    m_modeBtn = new QPushButton(this);
+    m_modeBtn->setObjectName(QStringLiteral("wcDrop"));
+    m_modeBtn->setCursor(Qt::PointingHandCursor);
+    m_modeBtn->setToolTip(QStringLiteral("Cut = instant · Smooth = selected effect"));
+    connect(m_modeBtn, &QPushButton::clicked, this, &TransitionPanel::showModeMenu);
+    col->addWidget(m_modeBtn);
+
+    m_effectBtn = new QPushButton(this);
+    m_effectBtn->setObjectName(QStringLiteral("wcDrop"));
+    m_effectBtn->setCursor(Qt::PointingHandCursor);
+    m_effectBtn->setToolTip(QStringLiteral("Transition effect (used when mode is Smooth)"));
+    connect(m_effectBtn, &QPushButton::clicked, this, &TransitionPanel::showEffectMenu);
+    col->addWidget(m_effectBtn);
+
+    m_go = new QPushButton(QStringLiteral("▶  ○"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
-    m_go->setMinimumHeight(36);
+    m_go->setMinimumHeight(34);
     m_go->setCursor(Qt::PointingHandCursor);
     m_go->setToolTip(QStringLiteral("Take Preview → Program (Space)"));
     connect(m_go, &QPushButton::clicked, this, [this] {
-        if (!m_engine->projectSnapshot().previewSceneId.isEmpty())
-            m_engine->go(transitionTypeFromString(m_active));
+        if (m_engine->projectSnapshot().previewSceneId.isEmpty())
+            return;
+        applyEffectToEngine();
+        m_engine->go(takeType());
     });
     col->addWidget(m_go);
 
-    m_activeLabel = new QLabel(QStringLiteral("CUT"), this);
-    m_activeLabel->setObjectName(QStringLiteral("sec"));
-    m_activeLabel->setAlignment(Qt::AlignCenter);
-    col->addWidget(m_activeLabel);
-
-    auto* typeLab = new QLabel(QStringLiteral("TRANSITION"), this);
-    typeLab->setObjectName(QStringLiteral("sec"));
-    col->addWidget(typeLab);
-
-    const QStringList types = {QStringLiteral("Cut"), QStringLiteral("Fade"), QStringLiteral("Merge"),
-                               QStringLiteral("Wipe"), QStringLiteral("CubeZoom"), QStringLiteral("FTB")};
-    auto* group = new QButtonGroup(this);
-    group->setExclusive(true);
-    for (const auto& t : types) {
-        auto* row = new QHBoxLayout();
-        row->setContentsMargins(0, 0, 0, 0);
-        row->setSpacing(4);
-
-        auto* b = new QPushButton(t, this);
-        b->setObjectName(QStringLiteral("transTypeBtn"));
-        b->setCheckable(true);
-        b->setChecked(t == QLatin1String("Cut"));
-        b->setCursor(Qt::PointingHandCursor);
-        if (t == QLatin1String("CubeZoom"))
-            b->setToolTip(QStringLiteral("Placeholder — uses Fade until true 3D cube ships"));
-        else if (t == QLatin1String("FTB"))
-            b->setToolTip(QStringLiteral("Fade to Black"));
-        else if (t == QLatin1String("Merge"))
-            b->setToolTip(QStringLiteral("Quadratic dissolve (different curve than Fade)"));
-        group->addButton(b);
-        m_typeButtons.push_back(b);
-        connect(b, &QPushButton::clicked, this, [this, t] {
-            m_active = t;
-            m_activeLabel->setText(t.toUpper());
-            m_engine->setTransition(transitionTypeFromString(t),
-                                    m_engine->projectSnapshot().transitionMs);
-            restyleTypes();
-        });
-
-        // Explicit "…" label — was a clipped ▾ that looked like a blank side strip.
-        auto* opt = new QPushButton(QStringLiteral("…"), this);
-        opt->setObjectName(QStringLiteral("transOptBtn"));
-        opt->setCursor(Qt::PointingHandCursor);
-        opt->setToolTip(QStringLiteral("%1 options (duration%2)")
-                            .arg(t, t == QLatin1String("Wipe") ? QStringLiteral(", wipe direction")
-                                                               : QString()));
-        connect(opt, &QPushButton::clicked, this, [this, t] { showTypeOptions(t); });
-
-        row->addWidget(b, 1);
-        row->addWidget(opt);
-        col->addLayout(row);
-    }
-    restyleTypes();
+    updateModeButton();
+    updateEffectButton();
+    applyEffectToEngine();
 
     auto* padLab = new QLabel(QStringLiteral("PREVIEW SCENES"), this);
     padLab->setObjectName(QStringLiteral("sec"));
@@ -201,7 +237,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     m_speed->setToolTip(QStringLiteral("Transition duration (ms)"));
     connect(m_speed, &QSlider::valueChanged, this, [this](int v) {
         m_speedValue->setText(QStringLiteral("%1 ms").arg(v));
-        m_engine->setTransition(transitionTypeFromString(m_active), v);
+        applyEffectToEngine();
     });
     m_speedValue->setText(QStringLiteral("%1 ms").arg(m_speed->value()));
     col->addWidget(m_speed);
@@ -220,59 +256,113 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     motion::installPressScale(m_go);
 }
 
-void TransitionPanel::showTypeOptions(const QString& t)
+TransitionType TransitionPanel::takeType() const
+{
+    if (m_mode == QLatin1String("Cut"))
+        return TransitionType::Cut;
+    return findEffect(m_effect)->type;
+}
+
+void TransitionPanel::applyEffectToEngine()
+{
+    const auto* fx = findEffect(m_effect);
+    if (fx->wipeDir >= 0)
+        m_engine->setWipeDirection(fx->wipeDir);
+    const int ms = m_speed ? m_speed->value() : m_engine->projectSnapshot().transitionMs;
+    // Keep engine configured for Smooth takes; Cut is applied at go() time.
+    m_engine->setTransition(fx->type, ms);
+}
+
+void TransitionPanel::updateModeButton()
+{
+    if (!m_modeBtn) return;
+    m_modeBtn->setText(QStringLiteral("%1   ▾").arg(m_mode));
+    m_modeBtn->setProperty("wirecastActive", m_mode != QLatin1String("Cut"));
+    m_modeBtn->style()->unpolish(m_modeBtn);
+    m_modeBtn->style()->polish(m_modeBtn);
+}
+
+void TransitionPanel::updateEffectButton()
+{
+    if (!m_effectBtn) return;
+    // Elide long names to fit strip width
+    const QFontMetrics fm(m_effectBtn->font());
+    const QString shown = fm.elidedText(m_effect, Qt::ElideRight, 110);
+    m_effectBtn->setText(QStringLiteral("%1   ▾").arg(shown));
+    m_effectBtn->setProperty("wirecastActive", true); // amber like Wirecast selected effect
+    m_effectBtn->style()->unpolish(m_effectBtn);
+    m_effectBtn->style()->polish(m_effectBtn);
+}
+
+void TransitionPanel::showModeMenu()
 {
     QMenu menu(this);
-    menu.addAction(QStringLiteral("Duration…"), this, [this, t] {
-        bool ok = false;
-        const int ms = QInputDialog::getInt(this, QStringLiteral("%1 Duration").arg(t),
-                                            QStringLiteral("Duration (ms)"),
-                                            m_engine->projectSnapshot().transitionMs,
-                                            0, 5000, 50, &ok);
-        if (!ok) return;
-        m_active = t;
-        m_activeLabel->setText(t.toUpper());
-        m_engine->setTransition(transitionTypeFromString(t), ms);
-        if (m_speed) {
-            QSignalBlocker b(m_speed);
-            m_speed->setValue(ms);
-        }
-        if (m_speedValue)
-            m_speedValue->setText(QStringLiteral("%1 ms").arg(ms));
-        restyleTypes();
-    });
-    if (t == QLatin1String("Wipe")) {
-        menu.addSeparator();
-        auto* dir = menu.addMenu(QStringLiteral("Wipe Direction"));
-        const int cur = m_engine->wipeDirection();
-        auto addDir = [&](const QString& label, int d) {
-            auto* a = dir->addAction(label);
-            a->setCheckable(true);
-            a->setChecked(cur == d);
-            connect(a, &QAction::triggered, this, [this, t, d] {
-                m_engine->setWipeDirection(d);
-                m_active = t;
-                m_activeLabel->setText(t.toUpper());
-                m_engine->setTransition(TransitionType::Wipe,
-                                        m_engine->projectSnapshot().transitionMs);
-                restyleTypes();
-            });
-        };
-        addDir(QStringLiteral("Right →"), 0);
-        addDir(QStringLiteral("← Left"), 1);
-        addDir(QStringLiteral("Down ↓"), 2);
-        addDir(QStringLiteral("Up ↑"), 3);
-    } else if (t == QLatin1String("Merge")) {
-        menu.addSeparator();
-        menu.addAction(QStringLiteral("Merge uses a quadratic dissolve (≠ Fade)"))->setEnabled(false);
-    } else if (t == QLatin1String("CubeZoom")) {
-        menu.addSeparator();
-        menu.addAction(QStringLiteral("True 3D cube deferred — uses Fade for now"))->setEnabled(false);
-    } else if (t == QLatin1String("FTB")) {
-        menu.addSeparator();
-        menu.addAction(QStringLiteral("Fade to Black: out → swap → in"))->setEnabled(false);
+    menu.setStyleSheet(wirecastMenuStyle());
+    auto* group = new QActionGroup(&menu);
+    group->setExclusive(true);
+    auto addMode = [&](const QString& name) {
+        auto* a = menu.addAction(name);
+        a->setCheckable(true);
+        a->setChecked(m_mode == name);
+        group->addAction(a);
+        connect(a, &QAction::triggered, this, [this, name] {
+            m_mode = name;
+            updateModeButton();
+            applyEffectToEngine();
+        });
+    };
+    addMode(QStringLiteral("Cut"));
+    addMode(QStringLiteral("Smooth"));
+    menu.exec(m_modeBtn->mapToGlobal(QPoint(0, m_modeBtn->height())));
+}
+
+void TransitionPanel::showEffectMenu()
+{
+    QMenu menu(this);
+    menu.setStyleSheet(wirecastMenuStyle());
+    auto* group = new QActionGroup(&menu);
+    group->setExclusive(true);
+
+    // Mirror Wirecast: Cut + Smooth at top, then full effect list
+    auto addItem = [&](const QString& name, bool isEffect) {
+        auto* a = menu.addAction(name);
+        a->setCheckable(true);
+        if (isEffect)
+            a->setChecked(m_effect == name);
+        else
+            a->setChecked(false);
+        group->addAction(a);
+        connect(a, &QAction::triggered, this, [this, name, isEffect] {
+            if (name == QLatin1String("Cut")) {
+                m_mode = QStringLiteral("Cut");
+                updateModeButton();
+                return;
+            }
+            if (name == QLatin1String("Smooth")) {
+                m_mode = QStringLiteral("Smooth");
+                updateModeButton();
+                applyEffectToEngine();
+                return;
+            }
+            if (isEffect) {
+                m_effect = name;
+                m_mode = QStringLiteral("Smooth");
+                updateModeButton();
+                updateEffectButton();
+                applyEffectToEngine();
+            }
+        });
+    };
+
+    addItem(QStringLiteral("Cut"), false);
+    addItem(QStringLiteral("Smooth"), false);
+    menu.addSeparator();
+    for (int i = 0; i < kEffectCount; ++i) {
+        if (QLatin1String(kEffects[i].name) == QLatin1String("Smooth"))
+            continue; // already above separator
+        addItem(QString::fromUtf8(kEffects[i].name), true);
     }
-    menu.exec(QCursor::pos());
+    menu.exec(m_effectBtn->mapToGlobal(QPoint(0, m_effectBtn->height())));
 }
 
 void TransitionPanel::syncSpeedFromProject()
@@ -283,12 +373,6 @@ void TransitionPanel::syncSpeedFromProject()
     m_speed->setValue(ms);
     if (m_speedValue)
         m_speedValue->setText(QStringLiteral("%1 ms").arg(ms));
-}
-
-void TransitionPanel::restyleTypes()
-{
-    for (auto* b : m_typeButtons)
-        b->setChecked(b->text() == m_active);
 }
 
 void TransitionPanel::refreshScenePad()
@@ -327,22 +411,23 @@ void TransitionPanel::updateGoArmed()
 {
     const bool armed = !m_engine->projectSnapshot().previewSceneId.isEmpty();
     m_go->setEnabled(armed);
+    // Wirecast-like dark chrome take button (not giant green slab)
     m_go->setStyleSheet(armed
                             ? QStringLiteral(
                                   "QPushButton#goButton {"
-                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
-                                  "  border:2px solid #86EFAC; border-radius:4px; color:#04140A;"
-                                  "  font-weight:900; font-size:14px; letter-spacing:2px; padding:8px;"
+                                  "  background:#2A2C30; border:1px solid #5A5E66; border-radius:4px;"
+                                  "  color:#F0F0F0; font-weight:700; font-size:14px; padding:8px;"
                                   "}"
                                   "QPushButton#goButton:hover {"
-                                  "  background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #86EFAC,stop:1 #22C55E);"
-                                  "  border:2px solid #BBF7D0;"
+                                  "  background:#34363C; border-color:#8A8E96; color:#FFFFFF;"
                                   "}"
-                                  "QPushButton#goButton:disabled { background:#1A1D22; color:#505860; border-color:#2A2D35; }")
+                                  "QPushButton#goButton:pressed {"
+                                  "  background:#1E2024;"
+                                  "}")
                             : QStringLiteral(
                                   "QPushButton#goButton {"
-                                  "  background:#1A1D22; border:1px solid #3A3D45; border-radius:4px;"
-                                  "  color:#505860; font-weight:900; font-size:14px; letter-spacing:2px; padding:8px;"
+                                  "  background:#1A1C20; border:1px solid #2A2D35; border-radius:4px;"
+                                  "  color:#505860; font-weight:700; font-size:14px; padding:8px;"
                                   "}"));
     m_go->style()->unpolish(m_go);
     m_go->style()->polish(m_go);
