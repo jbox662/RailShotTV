@@ -1,5 +1,6 @@
 #include "core/EngineController.h"
 #include "capture/CaptureManager.h"
+#include "capture/OverlaySource.h"
 #include "compositor/D3D11Device.h"
 #include "compositor/D3D11Compositor.h"
 #include "compositor/TransitionEngine.h"
@@ -645,17 +646,34 @@ void EngineController::pushScoreboardToProgram()
 {
     if (!m_scoreboard) return;
     const QJsonObject json = m_scoreboard->state().toJson();
+    const auto snap = m_sceneGraph->snapshot();
+    const int cw = snap.output.width > 0 ? snap.output.width : 1920;
+    const int ch = snap.output.height > 0 ? snap.output.height : 1080;
     m_sceneGraph->mutate([&](Project& p) {
         for (auto& scene : p.scenes) {
             for (auto& src : scene.sources) {
-                if (src.type == SourceType::Scoreboard)
-                    src.settings = json;
+                if (src.type != SourceType::Scoreboard)
+                    continue;
+                src.settings = json;
+                // Lock aspect so the compact bug texture isn't squashed into a wide strip
+                Transform t = src.transform;
+                const double w = t.w > 0.01 ? t.w : 0.85;
+                const double h = scoreboardNormHeight(w, cw, ch);
+                if (qAbs(t.h - h) > 0.002 || qAbs(t.w - w) > 0.002) {
+                    const double bottom = t.y + t.h;
+                    t.w = w;
+                    t.h = h;
+                    // Keep bottom edge if it was a lower-third placement
+                    if (bottom > 0.7)
+                        t.y = qMax(0.0, bottom - h);
+                    src.transform = t;
+                }
             }
         }
     });
     // Refresh live textures
-    const auto snap = m_sceneGraph->snapshot();
-    for (const auto& scene : snap.scenes) {
+    const auto after = m_sceneGraph->snapshot();
+    for (const auto& scene : after.scenes) {
         for (const auto& src : scene.sources) {
             if (src.type == SourceType::Scoreboard)
                 m_capture->updateSource(src);

@@ -8,6 +8,19 @@
 
 namespace railshot {
 
+/// Native pixel size of scoreboard overlay textures (not full canvas).
+inline constexpr int kScoreboardTexWidth = 1600;
+inline constexpr int kScoreboardTexHeight = 220;
+
+/// Normalized scene height that preserves scoreboard texture aspect on a canvas.
+inline double scoreboardNormHeight(double normW, int canvasW = 1920, int canvasH = 1080)
+{
+    if (normW <= 0.0 || canvasW <= 0 || canvasH <= 0)
+        return 0.0;
+    return normW * (double(canvasW) / double(canvasH))
+         * (double(kScoreboardTexHeight) / double(kScoreboardTexWidth));
+}
+
 /// CPU-rendered overlay uploaded as a transparent D3D11 BGRA texture.
 class OverlaySource : public IVideoSource {
 public:

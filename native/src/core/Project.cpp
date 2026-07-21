@@ -1,5 +1,6 @@
 #include "core/Project.h"
 #include "core/Logger.h"
+#include "capture/OverlaySource.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -286,6 +287,13 @@ QString Project::addSource(const QString& sceneId, SourceType type, const QStrin
     case SourceType::Browser: src.transform = {0.1, 0.1, 0.8, 0.8}; break;
     case SourceType::Text: src.transform = {0.1, 0.7, 0.5, 0.12}; break;
     case SourceType::LowerThird: src.transform = {0.0, 0.72, 1.0, 0.2}; break;
+    case SourceType::Scoreboard: {
+        const double w = 0.85;
+        const double h = scoreboardNormHeight(w, output.width > 0 ? output.width : 1920,
+                                             output.height > 0 ? output.height : 1080);
+        src.transform = {0.075, 1.0 - h - 0.02, w, h};
+        break;
+    }
     case SourceType::AudioInput:
     case SourceType::AudioOutput:
         src.transform = {0.35, 0.35, 0.3, 0.3};

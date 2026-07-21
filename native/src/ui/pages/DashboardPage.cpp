@@ -23,6 +23,7 @@
 #include "core/SceneGraph.h"
 #include "core/SettingsStore.h"
 #include "core/Types.h"
+#include "capture/OverlaySource.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
@@ -103,11 +104,19 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
     QObject::connect(openEd, &QAction::triggered, page, &DashboardPage::openSceneEditorRequested);
     menu->addSeparator();
     menu->addAction(QStringLiteral("Billiards Scoreboard"), page, [engine] {
-        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Billiards Scoreboard"), 0.05, 0.78, 0.9, 0.18);
+        const double w = 0.85;
+        const auto proj = engine->projectSnapshot();
+        const double h = scoreboardNormHeight(w, proj.output.width, proj.output.height);
+        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Billiards Scoreboard"),
+                        0.075, 1.0 - h - 0.02, w, h);
         engine->pushScoreboardToProgram();
     });
     menu->addAction(QStringLiteral("Basketball Board"), page, [engine] {
-        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Basketball Board"), 0.15, 0.05, 0.7, 0.12);
+        const double w = 0.7;
+        const auto proj = engine->projectSnapshot();
+        const double h = scoreboardNormHeight(w, proj.output.width, proj.output.height);
+        addTypedOverlay(engine, SourceType::Scoreboard, QStringLiteral("Basketball Board"),
+                        (1.0 - w) / 2.0, 0.04, w, h);
         engine->pushScoreboardToProgram();
     });
     menu->addAction(QStringLiteral("Player Lower Third"), page, [engine] {

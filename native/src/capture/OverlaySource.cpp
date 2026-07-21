@@ -21,6 +21,10 @@ OverlaySource::OverlaySource(QString id, QString name, SourceType type, QJsonObj
     , m_type(type)
     , m_settings(std::move(settings))
 {
+    if (m_type == SourceType::Scoreboard) {
+        m_width = kScoreboardTexWidth;
+        m_height = kScoreboardTexHeight;
+    }
 }
 
 OverlaySource::~OverlaySource()
@@ -31,8 +35,15 @@ OverlaySource::~OverlaySource()
 void OverlaySource::setCanvasSize(int width, int height)
 {
     std::lock_guard lock(m_mutex);
-    if (width > 0) m_width = width;
-    if (height > 0) m_height = height;
+    // Scoreboard is a compact bug texture — never stretch it to full canvas
+    // (that caused circles/text to squash when the source was placed as a strip).
+    if (m_type == SourceType::Scoreboard) {
+        m_width = kScoreboardTexWidth;
+        m_height = kScoreboardTexHeight;
+    } else {
+        if (width > 0) m_width = width;
+        if (height > 0) m_height = height;
+    }
     if (m_running.load())
         rebuildTexture(nullptr);
 }
