@@ -452,7 +452,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     m_tiles = new InputTilesWidget(engine, nullptr);
     m_tiles->setMinimumWidth(220);
     m_mixer = new AudioMixerWidget(engine, nullptr);
-    m_mixer->setMinimumWidth(220);
+    // OBS: dock can grow; content enforces tick-label minimum via minimumSizeHint()
+    m_mixer->setMinimumWidth(m_mixer->minimumSizeHint().width());
     m_scoreboardControls = new ScoreboardControlsWidget(engine, nullptr);
     m_scoreboardControls->setMinimumWidth(200);
 

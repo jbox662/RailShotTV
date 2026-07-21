@@ -7,11 +7,15 @@ class QPushButton;
 namespace railshot {
 class EngineController;
 
-/// OBS-style bottom mixer: horizontal channel rows (no fat vertical strips).
+/// OBS-style Audio Mixer: horizontal channel strips that grow with the dock
+/// but refuse to shrink below the meter tick-label width.
 class AudioMixerWidget : public QWidget {
     Q_OBJECT
 public:
     explicit AudioMixerWidget(EngineController* engine, QWidget* parent = nullptr);
+
+    QSize minimumSizeHint() const override;
+    QSize sizeHint() const override;
 
 signals:
     void openAdvAudioRequested();
