@@ -10,7 +10,6 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QButtonGroup>
-#include <QAbstractButton>
 #include <QDialogButtonBox>
 #include <QColorDialog>
 #include <QFrame>
@@ -18,7 +17,9 @@
 #include <QJsonObject>
 #include <QShowEvent>
 #include <QResizeEvent>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 
 namespace railshot {
 
@@ -63,6 +64,8 @@ const BoardPreset kPresets[] = {
     {"gold", "Championship Gold", "Premium gold on deep bronze",
      "center", "gold", "#F59E0B", "#D97706", "#FFECB3", "#1C160A", "tennis"},
 };
+
+constexpr int kPresetCount = int(sizeof(kPresets) / sizeof(kPresets[0]));
 
 QString mapSportUiToModel(const QString& ui)
 {
@@ -120,8 +123,7 @@ QString colorCss(const QColor& c)
     return c.name(QColor::HexRgb);
 }
 
-/// Crop transparent margins so thumbnails fill the card.
-QImage cropOpaque(const QImage& src, int pad = 8)
+QImage cropOpaque(const QImage& src, int pad = 10)
 {
     if (src.isNull())
         return src;
@@ -154,20 +156,84 @@ QLabel* sectionLabel(const QString& text, QWidget* parent)
     return lab;
 }
 
+QWidget* makeColorRow(QWidget* parent, const QString& name, QPushButton*& swatch, QLabel*& hexLab)
+{
+    auto* row = new QWidget(parent);
+    auto* lay = new QHBoxLayout(row);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(8);
+
+    auto* nameLab = new QLabel(name, row);
+    nameLab->setObjectName(QStringLiteral("body"));
+    nameLab->setFixedWidth(82);
+
+    swatch = new QPushButton(row);
+    swatch->setFixedSize(36, 28);
+    swatch->setCursor(Qt::PointingHandCursor);
+    swatch->setFocusPolicy(Qt::NoFocus);
+
+    hexLab = new QLabel(row);
+    hexLab->setObjectName(QStringLiteral("hex"));
+    hexLab->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    lay->addWidget(nameLab);
+    lay->addWidget(swatch);
+    lay->addWidget(hexLab, 1);
+    return row;
+}
+
+QPixmap makePresetThumb(const BoardPreset& pr, int width)
+{
+    width = qMax(200, width);
+    QJsonObject thumbSt;
+    thumbSt.insert(QStringLiteral("playerA"), QStringLiteral("HOME"));
+    thumbSt.insert(QStringLiteral("playerB"), QStringLiteral("AWAY"));
+    thumbSt.insert(QStringLiteral("scoreA"), 3);
+    thumbSt.insert(QStringLiteral("scoreB"), 2);
+    thumbSt.insert(QStringLiteral("clockSeconds"), 125);
+    thumbSt.insert(QStringLiteral("layout"), QString::fromUtf8(pr.layout));
+    thumbSt.insert(QStringLiteral("theme"), QString::fromUtf8(pr.theme));
+    thumbSt.insert(QStringLiteral("colorA"), QString::fromUtf8(pr.colorA));
+    thumbSt.insert(QStringLiteral("colorB"), QString::fromUtf8(pr.colorB));
+    if (pr.textColor[0] != '\0')
+        thumbSt.insert(QStringLiteral("textColor"), QString::fromUtf8(pr.textColor));
+    if (pr.bgColor[0] != '\0')
+        thumbSt.insert(QStringLiteral("bgColor"), QString::fromUtf8(pr.bgColor));
+
+    OverlayRenderer renderer;
+    const QImage raw = renderer.renderScoreboard(thumbSt, 960, 540);
+    const QImage cropped = cropOpaque(raw, 16);
+
+    const int h = qBound(48, int(width * 0.28), 96);
+    QImage plate(width, h, QImage::Format_ARGB32);
+    plate.fill(QColor(8, 10, 13));
+    QPainter pp(&plate);
+    pp.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QImage scaled = cropped.scaled(width - 8, h - 8, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    pp.drawImage((width - scaled.width()) / 2, (h - scaled.height()) / 2, scaled);
+    pp.setPen(QPen(QColor(42, 45, 53), 1));
+    pp.drawRect(0, 0, width - 1, h - 1);
+    return QPixmap::fromImage(plate);
+}
+
 } // namespace
 
-void ScoreboardSettingsDialog::applyColorButton(QPushButton* btn, const QColor& c, const QString& label)
+void ScoreboardSettingsDialog::styleSwatch(QPushButton* btn, const QColor& c)
 {
-    const QString hex = colorCss(c);
-    const QColor contrast = (c.lightness() > 140) ? QColor(20, 22, 28) : QColor(240, 242, 246);
-    btn->setText(QStringLiteral("%1\n%2").arg(label, hex.toUpper()));
     btn->setStyleSheet(QStringLiteral(
-        "QPushButton{"
-        "  background:%1; border:1px solid #5A6478; border-radius:4px;"
-        "  color:%2; font-family:'DM Sans'; font-size:10px; font-weight:800;"
-        "  padding:10px 8px; min-height:44px; text-align:center;}"
+        "QPushButton{background:%1; border:1px solid #6A7384; border-radius:3px;}"
         "QPushButton:hover{border-color:#8AB4FF;}")
-                           .arg(hex, contrast.name()));
+                           .arg(colorCss(c)));
+}
+
+void ScoreboardSettingsDialog::syncHexLabels()
+{
+    m_colorAHex->setText(colorCss(m_colorA).toUpper());
+    m_colorBHex->setText(colorCss(m_colorB).toUpper());
+    m_textHex->setText(m_useCustomText ? colorCss(m_textColor).toUpper()
+                                      : QStringLiteral("Theme default"));
+    m_bgHex->setText(m_useCustomBg ? colorCss(m_bgColor).toUpper()
+                                   : QStringLiteral("Theme default"));
 }
 
 QColor ScoreboardSettingsDialog::pickColor(const QColor& current, const QString& title)
@@ -198,38 +264,124 @@ QJsonObject ScoreboardSettingsDialog::previewState() const
     return st;
 }
 
+void ScoreboardSettingsDialog::paintPreviewLabel()
+{
+    if (!m_preview || m_previewImg.isNull())
+        return;
+    const QImage cropped = cropOpaque(m_previewImg, 12);
+    QSize box = m_preview->size();
+    if (box.width() < 20 || box.height() < 20)
+        box = QSize(320, 106);
+
+    QImage plate(box, QImage::Format_ARGB32);
+    plate.fill(QColor(8, 10, 13));
+    QPainter p(&plate);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QImage scaled = cropped.scaled(box.width() - 6, box.height() - 6, Qt::KeepAspectRatio,
+                                         Qt::SmoothTransformation);
+    p.drawImage((box.width() - scaled.width()) / 2, (box.height() - scaled.height()) / 2, scaled);
+    m_preview->setPixmap(QPixmap::fromImage(plate));
+}
+
 void ScoreboardSettingsDialog::refreshPreview()
 {
     if (!m_preview || !m_engine || !m_layoutBox || !m_themeBox)
         return;
-
     OverlayRenderer renderer;
     m_previewImg = renderer.renderScoreboard(previewState(), 960, 540);
+    paintPreviewLabel();
+}
 
-    QSize box = m_preview->size();
-    if (box.width() < 40 || box.height() < 40)
-        box = QSize(520, 200);
-    const QPixmap pm = QPixmap::fromImage(m_previewImg).scaled(box, Qt::KeepAspectRatio,
-                                                               Qt::SmoothTransformation);
-    m_preview->setPixmap(pm);
+void ScoreboardSettingsDialog::rescalePresetThumbs()
+{
+    if (!m_presetScroll)
+        return;
+    const int w = qMax(220, m_presetScroll->viewport()->width() - 4);
+    for (int i = 0; i < m_presetThumbs.size() && i < kPresetCount; ++i) {
+        const QPixmap pm = makePresetThumb(kPresets[i], w);
+        m_presetThumbs[i]->setPixmap(pm);
+        m_presetThumbs[i]->setFixedHeight(pm.height());
+    }
+}
+
+void ScoreboardSettingsDialog::setSelectedPreset(int index)
+{
+    if (index < 0 || index >= kPresetCount)
+        return;
+    m_selectedPreset = index;
+    for (int i = 0; i < m_presetCards.size(); ++i) {
+        const bool on = (i == index);
+        m_presetCards[i]->setProperty("selected", on);
+        m_presetCards[i]->setStyleSheet(QStringLiteral(
+            "QFrame#presetCard{"
+            "  background:%1; border:%2;}")
+                                            .arg(on ? QStringLiteral("#101820") : QStringLiteral("#0E1116"),
+                                                 on ? QStringLiteral("2px solid #4F9EFF")
+                                                    : QStringLiteral("1px solid #3A3D45")));
+    }
+
+    const auto& pr = kPresets[index];
+    m_layoutBox->blockSignals(true);
+    m_themeBox->blockSignals(true);
+    m_layoutBox->setCurrentText(mapLayoutModelToUi(QString::fromUtf8(pr.layout)));
+    m_themeBox->setCurrentText(mapThemeModelToUi(QString::fromUtf8(pr.theme)));
+    m_layoutBox->blockSignals(false);
+    m_themeBox->blockSignals(false);
+
+    m_colorA = QColor(QString::fromUtf8(pr.colorA));
+    m_colorB = QColor(QString::fromUtf8(pr.colorB));
+    styleSwatch(m_colorABtn, m_colorA);
+    styleSwatch(m_colorBBtn, m_colorB);
+    m_useCustomText = pr.textColor[0] != '\0';
+    m_useCustomBg = pr.bgColor[0] != '\0';
+    if (m_useCustomText) {
+        m_textColor = QColor(QString::fromUtf8(pr.textColor));
+        styleSwatch(m_textColorBtn, m_textColor);
+    }
+    if (m_useCustomBg) {
+        m_bgColor = QColor(QString::fromUtf8(pr.bgColor));
+        styleSwatch(m_bgColorBtn, m_bgColor);
+    }
+    syncHexLabels();
+
+    const QString sportUi = mapSportModelToUi(QString::fromUtf8(pr.sport));
+    for (auto* b : m_sportGroup->buttons()) {
+        if (b->text() == sportUi) {
+            b->setChecked(true);
+            break;
+        }
+    }
+    refreshPreview();
+}
+
+bool ScoreboardSettingsDialog::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease) {
+        auto* frame = qobject_cast<QFrame*>(watched);
+        if (frame && frame->objectName() == QLatin1String("presetCard")) {
+            const int idx = frame->property("presetIndex").toInt();
+            setSelectedPreset(idx);
+            return true;
+        }
+    }
+    return QDialog::eventFilter(watched, event);
 }
 
 void ScoreboardSettingsDialog::showEvent(QShowEvent* event)
 {
     QDialog::showEvent(event);
-    refreshPreview();
+    QTimer::singleShot(0, this, [this] {
+        rescalePresetThumbs();
+        refreshPreview();
+    });
 }
 
 void ScoreboardSettingsDialog::resizeEvent(QResizeEvent* event)
 {
     QDialog::resizeEvent(event);
-    if (!m_previewImg.isNull() && m_preview) {
-        QSize box = m_preview->size();
-        if (box.width() >= 40 && box.height() >= 40) {
-            m_preview->setPixmap(QPixmap::fromImage(m_previewImg)
-                                     .scaled(box, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        }
-    }
+    paintPreviewLabel();
+    if (m_presetScroll)
+        QTimer::singleShot(0, this, [this] { rescalePresetThumbs(); });
 }
 
 ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWidget* parent)
@@ -239,8 +391,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     setWindowTitle(QStringLiteral("Scoreboard Settings"));
     setModal(true);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
-    resize(920, 640);
-    setMinimumSize(820, 560);
+    resize(980, 700);
+    setMinimumSize(900, 620);
 
     setStyleSheet(QStringLiteral(
         "QDialog#scoreboardSettingsDialog { background:#0A0C0F; }"
@@ -249,22 +401,21 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         "QDialog#scoreboardSettingsDialog QFrame#previewCard {"
         "  background:#0A0C10; border:1px solid #3A3D45; }"
         "QDialog#scoreboardSettingsDialog QFrame#panelCard {"
-        "  background:#0E1116; border:1px solid #2A2E36; border-radius:0px; }"
+        "  background:#0E1116; border:1px solid #2A2E36; }"
         "QLabel#sec {"
         "  color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px;"
         "  font-family:'DM Sans'; background:transparent; border:none; }"
         "QLabel#hint { color:#6A7384; font-size:10px; font-family:'DM Sans'; }"
         "QLabel#body { color:#C8CCD4; font-size:11px; font-family:'DM Sans'; }"
+        "QLabel#hex { color:#A0A8B8; font-size:11px; font-family:'JetBrains Mono'; }"
         "QComboBox {"
         "  background:#0A0C10; border:1px solid #3A3D45; border-radius:3px;"
         "  color:#E0E2E8; padding:5px 10px; min-height:26px; font-family:'DM Sans'; }"
         "QComboBox:focus { border-color:#4F9EFF; }"
         "QComboBox::drop-down { border:none; width:22px; }"
         "QScrollArea { border:none; background:transparent; }"
-        "QScrollBar:vertical {"
-        "  background:#0A0C10; width:10px; margin:0; }"
-        "QScrollBar::handle:vertical {"
-        "  background:#3A3D45; border-radius:4px; min-height:28px; }"
+        "QScrollBar:vertical { background:#0A0C10; width:10px; margin:2px; }"
+        "QScrollBar::handle:vertical { background:#3A3D45; border-radius:4px; min-height:28px; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
         "QDialogButtonBox QPushButton {"
         "  min-width:88px; min-height:28px; padding:4px 14px;"
@@ -303,13 +454,12 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         "stop:0 #4F9EFF, stop:0.5 #A855F7, stop:1 #FF5A2C); border:none;"));
     shellLay->addWidget(accent);
 
-    // Header strip
     auto* header = new QWidget(shell);
     header->setStyleSheet(QStringLiteral(
         "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #161A22,stop:1 #12151A);"
         "border-bottom:1px solid #2A2D35;"));
     auto* headerLay = new QVBoxLayout(header);
-    headerLay->setContentsMargins(16, 12, 16, 12);
+    headerLay->setContentsMargins(16, 10, 16, 10);
     headerLay->setSpacing(2);
     auto* title = new QLabel(QStringLiteral("Scoreboard"), header);
     title->setStyleSheet(QStringLiteral(
@@ -320,100 +470,73 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     headerLay->addWidget(sub);
     shellLay->addWidget(header);
 
-    // Main split: left controls + preview, right presets
     auto* main = new QWidget(shell);
     auto* mainLay = new QHBoxLayout(main);
-    mainLay->setContentsMargins(14, 14, 14, 12);
-    mainLay->setSpacing(14);
+    mainLay->setContentsMargins(14, 12, 14, 10);
+    mainLay->setSpacing(16);
 
-    // ── LEFT column ──────────────────────────────────────────────
+    // LEFT — fixed width
     auto* left = new QWidget(main);
+    left->setFixedWidth(340);
     auto* leftLay = new QVBoxLayout(left);
     leftLay->setContentsMargins(0, 0, 0, 0);
-    leftLay->setSpacing(10);
+    leftLay->setSpacing(8);
 
     leftLay->addWidget(sectionLabel(QStringLiteral("PREVIEW"), left));
-
-    auto* previewHost = new QWidget(left);
-    previewHost->setStyleSheet(QStringLiteral(
-        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #12151A,stop:1 #0A0C10);"));
-    auto* previewHostLay = new QVBoxLayout(previewHost);
-    previewHostLay->setContentsMargins(0, 0, 0, 0);
-
-    m_previewCard = new QFrame(previewHost);
-    m_previewCard->setObjectName(QStringLiteral("previewCard"));
-    auto* cardLay = new QVBoxLayout(m_previewCard);
+    auto* previewCard = new QFrame(left);
+    previewCard->setObjectName(QStringLiteral("previewCard"));
+    auto* cardLay = new QVBoxLayout(previewCard);
     cardLay->setContentsMargins(3, 3, 3, 3);
-    cardLay->setSpacing(0);
-    m_preview = new QLabel(m_previewCard);
-    m_preview->setMinimumHeight(168);
-    m_preview->setMaximumHeight(200);
+    m_preview = new QLabel(previewCard);
+    m_preview->setFixedHeight(112);
     m_preview->setAlignment(Qt::AlignCenter);
-    m_preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_preview->setStyleSheet(QStringLiteral(
-        "background:#080A0C; border:none;"));
+    m_preview->setStyleSheet(QStringLiteral("background:#080A0C; border:none;"));
     cardLay->addWidget(m_preview);
-    previewHostLay->addWidget(m_previewCard);
-    leftLay->addWidget(previewHost);
+    leftLay->addWidget(previewCard);
 
-    // Colors — 2×2 compact tiles
     auto* colorPanel = new QFrame(left);
     colorPanel->setObjectName(QStringLiteral("panelCard"));
     auto* colorPanelLay = new QVBoxLayout(colorPanel);
-    colorPanelLay->setContentsMargins(10, 10, 10, 10);
-    colorPanelLay->setSpacing(8);
+    colorPanelLay->setContentsMargins(10, 8, 10, 8);
+    colorPanelLay->setSpacing(6);
     colorPanelLay->addWidget(sectionLabel(QStringLiteral("COLORS"), colorPanel));
-
-    auto* colorGrid = new QGridLayout();
-    colorGrid->setHorizontalSpacing(8);
-    colorGrid->setVerticalSpacing(8);
-    m_colorABtn = new QPushButton(colorPanel);
-    m_colorBBtn = new QPushButton(colorPanel);
-    m_textColorBtn = new QPushButton(colorPanel);
-    m_bgColorBtn = new QPushButton(colorPanel);
-    for (auto* b : {m_colorABtn, m_colorBBtn, m_textColorBtn, m_bgColorBtn})
-        b->setCursor(Qt::PointingHandCursor);
-    applyColorButton(m_colorABtn, m_colorA, QStringLiteral("Team A"));
-    applyColorButton(m_colorBBtn, m_colorB, QStringLiteral("Team B"));
-    applyColorButton(m_textColorBtn, m_textColor, QStringLiteral("Text"));
-    applyColorButton(m_bgColorBtn, m_bgColor, QStringLiteral("Background"));
-    colorGrid->addWidget(m_colorABtn, 0, 0);
-    colorGrid->addWidget(m_colorBBtn, 0, 1);
-    colorGrid->addWidget(m_textColorBtn, 1, 0);
-    colorGrid->addWidget(m_bgColorBtn, 1, 1);
-    colorPanelLay->addLayout(colorGrid);
+    colorPanelLay->addWidget(makeColorRow(colorPanel, QStringLiteral("Team A"), m_colorABtn, m_colorAHex));
+    colorPanelLay->addWidget(makeColorRow(colorPanel, QStringLiteral("Team B"), m_colorBBtn, m_colorBHex));
+    colorPanelLay->addWidget(makeColorRow(colorPanel, QStringLiteral("Text"), m_textColorBtn, m_textHex));
+    colorPanelLay->addWidget(makeColorRow(colorPanel, QStringLiteral("Background"), m_bgColorBtn, m_bgHex));
+    styleSwatch(m_colorABtn, m_colorA);
+    styleSwatch(m_colorBBtn, m_colorB);
+    styleSwatch(m_textColorBtn, m_textColor);
+    styleSwatch(m_bgColorBtn, m_bgColor);
+    syncHexLabels();
 
     auto* resetRow = new QHBoxLayout();
-    resetRow->setSpacing(8);
+    resetRow->setSpacing(6);
     auto* resetText = new QPushButton(QStringLiteral("Reset text"), colorPanel);
     auto* resetBg = new QPushButton(QStringLiteral("Reset background"), colorPanel);
     for (auto* b : {resetText, resetBg}) {
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#1A1D22; border:1px solid #3A3D45; border-radius:3px;"
-            "  color:#A0A8B8; font-size:10px; font-weight:700; padding:5px 10px;}"
+            "  color:#A0A8B8; font-size:10px; font-weight:700; padding:4px 8px;}"
             "QPushButton:hover{border-color:#4F9EFF; color:#E0E2E8;}"));
     }
-    resetText->setToolTip(QStringLiteral("Use theme default text color"));
-    resetBg->setToolTip(QStringLiteral("Use theme default background"));
     resetRow->addWidget(resetText);
     resetRow->addWidget(resetBg);
     resetRow->addStretch(1);
     colorPanelLay->addLayout(resetRow);
     leftLay->addWidget(colorPanel);
 
-    // Layout + theme
     auto* finePanel = new QFrame(left);
     finePanel->setObjectName(QStringLiteral("panelCard"));
     auto* finePanelLay = new QVBoxLayout(finePanel);
-    finePanelLay->setContentsMargins(10, 10, 10, 10);
-    finePanelLay->setSpacing(8);
+    finePanelLay->setContentsMargins(10, 8, 10, 8);
+    finePanelLay->setSpacing(6);
     finePanelLay->addWidget(sectionLabel(QStringLiteral("LAYOUT & THEME"), finePanel));
-
     auto* fineRow = new QHBoxLayout();
-    fineRow->setSpacing(10);
+    fineRow->setSpacing(8);
     auto* layoutCol = new QVBoxLayout();
-    layoutCol->setSpacing(4);
+    layoutCol->setSpacing(3);
     auto* layoutLab = new QLabel(QStringLiteral("Layout"), finePanel);
     layoutLab->setObjectName(QStringLiteral("body"));
     layoutCol->addWidget(layoutLab);
@@ -422,9 +545,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
                            QStringLiteral("Corner"), QStringLiteral("Full")});
     m_layoutBox->setCurrentText(mapLayoutModelToUi(st0.layout));
     layoutCol->addWidget(m_layoutBox);
-
     auto* themeCol = new QVBoxLayout();
-    themeCol->setSpacing(4);
+    themeCol->setSpacing(3);
     auto* themeLab = new QLabel(QStringLiteral("Theme base"), finePanel);
     themeLab->setObjectName(QStringLiteral("body"));
     themeCol->addWidget(themeLab);
@@ -438,16 +560,14 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     finePanelLay->addLayout(fineRow);
     leftLay->addWidget(finePanel);
 
-    // Sport chips
     auto* sportPanel = new QFrame(left);
     sportPanel->setObjectName(QStringLiteral("panelCard"));
     auto* sportPanelLay = new QVBoxLayout(sportPanel);
-    sportPanelLay->setContentsMargins(10, 10, 10, 10);
-    sportPanelLay->setSpacing(8);
+    sportPanelLay->setContentsMargins(10, 8, 10, 8);
+    sportPanelLay->setSpacing(6);
     sportPanelLay->addWidget(sectionLabel(QStringLiteral("SPORT"), sportPanel));
-
     auto* sportGrid = new QGridLayout();
-    sportGrid->setSpacing(6);
+    sportGrid->setSpacing(5);
     const QStringList sports = {QStringLiteral("Generic"), QStringLiteral("Pool"),
                                 QStringLiteral("Basketball"), QStringLiteral("Soccer"),
                                 QStringLiteral("Tennis"), QStringLiteral("Custom")};
@@ -461,7 +581,7 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
             "QPushButton{background:#151820;border:1px solid #3A3D45;color:#A0A8B8;"
-            "font-size:10px;font-weight:700;padding:7px 4px;border-radius:3px;}"
+            "font-size:10px;font-weight:700;padding:6px 2px;border-radius:3px;}"
             "QPushButton:hover{border-color:#4F9EFF;color:#E0E2E8;}"
             "QPushButton:checked{border:1px solid #F59E0B;color:#FBBF24;background:#241A0A;}"));
         if (sp == sportUi)
@@ -476,11 +596,11 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     leftLay->addWidget(sportPanel);
     leftLay->addStretch(1);
 
-    // ── RIGHT column: presets ────────────────────────────────────
+    // RIGHT — single-column full-width cards
     auto* right = new QWidget(main);
     auto* rightLay = new QVBoxLayout(right);
     rightLay->setContentsMargins(0, 0, 0, 0);
-    rightLay->setSpacing(8);
+    rightLay->setSpacing(6);
 
     auto* presetHead = new QHBoxLayout();
     presetHead->addWidget(sectionLabel(QStringLiteral("PRESETS"), right));
@@ -490,81 +610,66 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     presetHead->addWidget(presetHint);
     rightLay->addLayout(presetHead);
 
-    auto* presetScroll = new QScrollArea(right);
-    presetScroll->setWidgetResizable(true);
-    presetScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    presetScroll->setFrameShape(QFrame::NoFrame);
-    auto* presetBody = new QWidget(presetScroll);
-    presetBody->setStyleSheet(QStringLiteral("background:transparent;"));
-    auto* presetGrid = new QGridLayout(presetBody);
-    presetGrid->setContentsMargins(0, 0, 4, 0);
-    presetGrid->setSpacing(8);
-    presetScroll->setWidget(presetBody);
+    m_presetScroll = new QScrollArea(right);
+    m_presetScroll->setWidgetResizable(true);
+    m_presetScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_presetScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_presetScroll->setFrameShape(QFrame::NoFrame);
+    auto* presetBody = new QWidget();
+    auto* presetList = new QVBoxLayout(presetBody);
+    presetList->setContentsMargins(0, 0, 14, 0); // gutter for scrollbar
+    presetList->setSpacing(8);
+    m_presetScroll->setWidget(presetBody);
 
-    m_presetGroup = new QButtonGroup(this);
-    m_presetGroup->setExclusive(true);
-
-    OverlayRenderer thumbRenderer;
-    const int cols = 2;
-    for (int i = 0; i < int(sizeof(kPresets) / sizeof(kPresets[0])); ++i) {
+    for (int i = 0; i < kPresetCount; ++i) {
         const auto& pr = kPresets[i];
-
-        auto* card = new QPushButton(presetBody);
-        card->setCheckable(true);
+        auto* card = new QFrame(presetBody);
+        card->setObjectName(QStringLiteral("presetCard"));
         card->setCursor(Qt::PointingHandCursor);
         card->setToolTip(QString::fromUtf8(pr.blurb));
-        card->setMinimumHeight(118);
+        card->setProperty("presetIndex", i);
         card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-
-        QJsonObject thumbSt;
-        thumbSt.insert(QStringLiteral("playerA"), QStringLiteral("HOME"));
-        thumbSt.insert(QStringLiteral("playerB"), QStringLiteral("AWAY"));
-        thumbSt.insert(QStringLiteral("scoreA"), 3);
-        thumbSt.insert(QStringLiteral("scoreB"), 2);
-        thumbSt.insert(QStringLiteral("clockSeconds"), 125);
-        thumbSt.insert(QStringLiteral("layout"), QString::fromUtf8(pr.layout));
-        thumbSt.insert(QStringLiteral("theme"), QString::fromUtf8(pr.theme));
-        thumbSt.insert(QStringLiteral("colorA"), QString::fromUtf8(pr.colorA));
-        thumbSt.insert(QStringLiteral("colorB"), QString::fromUtf8(pr.colorB));
-        if (pr.textColor[0] != '\0')
-            thumbSt.insert(QStringLiteral("textColor"), QString::fromUtf8(pr.textColor));
-        if (pr.bgColor[0] != '\0')
-            thumbSt.insert(QStringLiteral("bgColor"), QString::fromUtf8(pr.bgColor));
-
-        const QImage raw = thumbRenderer.renderScoreboard(thumbSt, 640, 360);
-        const QImage cropped = cropOpaque(raw, 12);
-        // Composite onto dark plate so transparent areas don't look broken
-        QImage plate(220, 72, QImage::Format_ARGB32);
-        plate.fill(QColor(12, 14, 18));
-        {
-            QPainter pp(&plate);
-            pp.setRenderHint(QPainter::SmoothPixmapTransform);
-            const QImage scaled = cropped.scaled(220, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            pp.drawImage((220 - scaled.width()) / 2, (72 - scaled.height()) / 2, scaled);
-        }
-
-        card->setIcon(QIcon(QPixmap::fromImage(plate)));
-        card->setIconSize(QSize(220, 72));
-        card->setText(QString::fromUtf8(pr.name));
         card->setStyleSheet(QStringLiteral(
-            "QPushButton{"
-            "  background:#0E1116; border:1px solid #3A3D45;"
-            "  color:#C8CCD4; font-family:'DM Sans'; font-size:11px; font-weight:800;"
-            "  text-align:center; padding:8px 6px 10px 6px;}"
-            "QPushButton:hover{border-color:#4F9EFF; color:#FFFFFF; background:#141820;}"
-            "QPushButton:checked{border:2px solid #4F9EFF; background:#101820; color:#FFFFFF;}"));
+            "QFrame#presetCard{background:#0E1116; border:1px solid #3A3D45;}"));
+        card->installEventFilter(this);
 
-        m_presetGroup->addButton(card, i);
-        presetGrid->addWidget(card, i / cols, i % cols);
+        auto* cardInner = new QVBoxLayout(card);
+        cardInner->setContentsMargins(10, 10, 10, 10);
+        cardInner->setSpacing(5);
+
+        auto* thumb = new QLabel(card);
+        thumb->setAlignment(Qt::AlignCenter);
+        thumb->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        thumb->setScaledContents(false);
+        // Temporary placeholder — resized on show
+        thumb->setFixedHeight(64);
+        thumb->setStyleSheet(QStringLiteral("background:#080A0C; border:none;"));
+
+        auto* name = new QLabel(QString::fromUtf8(pr.name), card);
+        name->setStyleSheet(QStringLiteral(
+            "color:#E8EAEE; font-family:'DM Sans'; font-size:12px; font-weight:800;"
+            "background:transparent; border:none;"));
+        auto* blurb = new QLabel(QString::fromUtf8(pr.blurb), card);
+        blurb->setStyleSheet(QStringLiteral(
+            "color:#6A7384; font-family:'DM Sans'; font-size:10px;"
+            "background:transparent; border:none;"));
+        blurb->setWordWrap(true);
+
+        cardInner->addWidget(thumb);
+        cardInner->addWidget(name);
+        cardInner->addWidget(blurb);
+
+        m_presetCards.push_back(card);
+        m_presetThumbs.push_back(thumb);
+        presetList->addWidget(card);
     }
-    presetGrid->setRowStretch((int(sizeof(kPresets) / sizeof(kPresets[0])) + cols - 1) / cols, 1);
-    rightLay->addWidget(presetScroll, 1);
+    presetList->addStretch(1);
+    rightLay->addWidget(m_presetScroll, 1);
 
-    mainLay->addWidget(left, 5);
-    mainLay->addWidget(right, 6);
+    mainLay->addWidget(left, 0);
+    mainLay->addWidget(right, 1);
     shellLay->addWidget(main, 1);
 
-    // Footer — match Source Properties
     auto* foot = new QWidget(shell);
     foot->setStyleSheet(QStringLiteral("background:#0C0E12; border-top:1px solid #3A3D45;"));
     auto* footLay = new QHBoxLayout(foot);
@@ -584,81 +689,48 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     footLay->addStretch(1);
     footLay->addWidget(box);
     shellLay->addWidget(foot);
-
     root->addWidget(shell, 1);
-
-    // Signals
-    auto applyPreset = [this](int index) {
-        if (index < 0 || index >= int(sizeof(kPresets) / sizeof(kPresets[0])))
-            return;
-        const auto& pr = kPresets[index];
-        m_layoutBox->blockSignals(true);
-        m_themeBox->blockSignals(true);
-        m_layoutBox->setCurrentText(mapLayoutModelToUi(QString::fromUtf8(pr.layout)));
-        m_themeBox->setCurrentText(mapThemeModelToUi(QString::fromUtf8(pr.theme)));
-        m_layoutBox->blockSignals(false);
-        m_themeBox->blockSignals(false);
-        m_colorA = QColor(QString::fromUtf8(pr.colorA));
-        m_colorB = QColor(QString::fromUtf8(pr.colorB));
-        applyColorButton(m_colorABtn, m_colorA, QStringLiteral("Team A"));
-        applyColorButton(m_colorBBtn, m_colorB, QStringLiteral("Team B"));
-        m_useCustomText = pr.textColor[0] != '\0';
-        m_useCustomBg = pr.bgColor[0] != '\0';
-        if (m_useCustomText) {
-            m_textColor = QColor(QString::fromUtf8(pr.textColor));
-            applyColorButton(m_textColorBtn, m_textColor, QStringLiteral("Text"));
-        }
-        if (m_useCustomBg) {
-            m_bgColor = QColor(QString::fromUtf8(pr.bgColor));
-            applyColorButton(m_bgColorBtn, m_bgColor, QStringLiteral("Background"));
-        }
-        const QString sportUi = mapSportModelToUi(QString::fromUtf8(pr.sport));
-        for (auto* b : m_sportGroup->buttons()) {
-            if (b->text() == sportUi) {
-                b->setChecked(true);
-                break;
-            }
-        }
-        refreshPreview();
-    };
-
-    connect(m_presetGroup, &QButtonGroup::idClicked, this, applyPreset);
 
     connect(m_colorABtn, &QPushButton::clicked, this, [this] {
         m_colorA = pickColor(m_colorA, QStringLiteral("Team A color"));
-        applyColorButton(m_colorABtn, m_colorA, QStringLiteral("Team A"));
+        styleSwatch(m_colorABtn, m_colorA);
+        syncHexLabels();
         refreshPreview();
     });
     connect(m_colorBBtn, &QPushButton::clicked, this, [this] {
         m_colorB = pickColor(m_colorB, QStringLiteral("Team B color"));
-        applyColorButton(m_colorBBtn, m_colorB, QStringLiteral("Team B"));
+        styleSwatch(m_colorBBtn, m_colorB);
+        syncHexLabels();
         refreshPreview();
     });
     connect(m_textColorBtn, &QPushButton::clicked, this, [this] {
         m_textColor = pickColor(m_textColor, QStringLiteral("Text color"));
         m_useCustomText = true;
-        applyColorButton(m_textColorBtn, m_textColor, QStringLiteral("Text"));
+        styleSwatch(m_textColorBtn, m_textColor);
+        syncHexLabels();
         refreshPreview();
     });
     connect(m_bgColorBtn, &QPushButton::clicked, this, [this] {
         m_bgColor = pickColor(m_bgColor, QStringLiteral("Background color"));
         m_useCustomBg = true;
-        applyColorButton(m_bgColorBtn, m_bgColor, QStringLiteral("Background"));
+        styleSwatch(m_bgColorBtn, m_bgColor);
+        syncHexLabels();
         refreshPreview();
     });
     connect(resetText, &QPushButton::clicked, this, [this] {
         m_useCustomText = false;
         m_textColor = QColor(QStringLiteral("#FFFFFF"));
-        applyColorButton(m_textColorBtn, m_textColor, QStringLiteral("Text"));
+        styleSwatch(m_textColorBtn, m_textColor);
+        syncHexLabels();
         refreshPreview();
     });
     connect(resetBg, &QPushButton::clicked, this, [this] {
         m_useCustomBg = false;
         m_bgColor = QColor(QStringLiteral("#0A0C10"));
-        applyColorButton(m_bgColorBtn, m_bgColor, QStringLiteral("Background"));
+        styleSwatch(m_bgColorBtn, m_bgColor);
+        syncHexLabels();
         refreshPreview();
     });
-
     connect(m_layoutBox, &QComboBox::currentTextChanged, this, [this](const QString&) {
         refreshPreview();
     });
@@ -682,8 +754,6 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         accept();
     });
     connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
-
-    refreshPreview();
 }
 
 } // namespace railshot
