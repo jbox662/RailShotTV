@@ -15,7 +15,9 @@
 #include "ui/widgets/ObsStatusBarWidget.h"
 #include "ui/widgets/AdvAudioDialog.h"
 #include "ui/widgets/ProjectorWindow.h"
+#include "ui/widgets/Wave4Dialogs.h"
 #include "core/EngineController.h"
+#include "core/ProfileCollectionStore.h"
 #include "overlays/ReplayBuffer.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -151,6 +153,41 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
             ProjectorWindow::openFullscreen(m_engine, kind, this);
         else
             ProjectorWindow::openWindowed(m_engine, kind, this);
+    });
+    connect(m_top, &TopMenuBar::openProfiles, this, [this] {
+        ProfilesDialog dlg(m_engine, this);
+        dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::openCollections, this, [this] {
+        SceneCollectionsDialog dlg(m_engine, this);
+        connect(&dlg, &SceneCollectionsDialog::collectionSwitchRequested, this,
+                [this](const QString& name) {
+                    // Save current collection first if named
+                    const QString cur = currentCollectionName();
+                    QString err;
+                    if (!cur.isEmpty())
+                        m_engine->saveProject(collectionFilePath(cur), &err);
+                    else if (!m_engine->settings()->lastProjectPath().isEmpty())
+                        m_engine->saveProject(m_engine->settings()->lastProjectPath(), &err);
+
+                    if (!m_engine->loadProject(collectionFilePath(name), &err)) {
+                        QMessageBox::warning(this, QStringLiteral("Collections"),
+                                             err.isEmpty() ? QStringLiteral("Failed to load collection")
+                                                           : err);
+                        return;
+                    }
+                    setCurrentCollectionName(name);
+                    statusBar()->showMessage(QStringLiteral("Switched to collection: %1").arg(name), 3000);
+                });
+        dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::openRemux, this, [this] {
+        RemuxDialog dlg(this);
+        dlg.exec();
+    });
+    connect(m_top, &TopMenuBar::openLogViewer, this, [this] {
+        LogViewerDialog dlg(this);
+        dlg.exec();
     });
     connect(m_engine, &EngineController::errorOccurred, this, [this](const QString& msg) {
         Q_UNUSED(msg);

@@ -88,6 +88,9 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     });
     presetMenu->addAction(QStringLiteral("Load Last Preset"), this, [this] { emit openLastProject(); });
     presetMenu->addSeparator();
+    presetMenu->addAction(QStringLiteral("Profiles…"), this, &TopMenuBar::openProfiles);
+    presetMenu->addAction(QStringLiteral("Scene Collections…"), this, &TopMenuBar::openCollections);
+    presetMenu->addSeparator();
     presetMenu->addAction(QStringLiteral("Manage Presets…"), this, [this] { emit openSettings(); });
     preset->setMenu(presetMenu);
 
@@ -107,6 +110,8 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     auto* editBtn = addChrome(QStringLiteral("Edit"));
     auto* editMenu = new QMenu(editBtn);
     editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
+    editMenu->addSeparator();
+    editMenu->addAction(QStringLiteral("Remux Recordings…"), this, &TopMenuBar::openRemux);
     editBtn->setMenu(editMenu);
 
     auto* viewBtn = addChrome(QStringLiteral("View"));
@@ -124,6 +129,8 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     viewMenu->addAction(QStringLiteral("Program Projector (Fullscreen)"), this, [this] {
         emit openProjector(true, true);
     });
+    viewMenu->addSeparator();
+    viewMenu->addAction(QStringLiteral("Current Log…"), this, &TopMenuBar::openLogViewer);
     viewBtn->setMenu(viewMenu);
 
     row->addStretch();

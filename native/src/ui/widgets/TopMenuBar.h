@@ -25,6 +25,10 @@ signals:
     void openAdvAudio();
     /// program=true → Program feed; fullscreen=true → fullscreen projector.
     void openProjector(bool program, bool fullscreen);
+    void openProfiles();
+    void openCollections();
+    void openRemux();
+    void openLogViewer();
     void toggleShortcuts();
     void basicModeChanged(bool on);
     /// Fired just before the Docks menu opens so Dashboard can refill toggles.

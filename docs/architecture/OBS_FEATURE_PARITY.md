@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 3 (Preview power — lock, scale, projectors, interact).
+Last updated: Wave 4 (Profiles, scene collections, remux, log viewer).
 
 ## Design rules
 
@@ -34,7 +34,7 @@ Last updated: Wave 3 (Preview power — lock, scale, projectors, interact).
 | OBSBasic_Screenshots | Screenshots | todo | — |
 | OBSBasic_Projectors | Projector windows | partial | `ProjectorWindow` + View menu |
 | OBSBasic_Docks | Dock layout | partial | Nested QMainWindow docks |
-| OBSBasic_Profiles / _SceneCollections | Profiles/collections | todo | Single project file |
+| OBSBasic_Profiles / _SceneCollections | Profiles/collections | partial | `ProfilesDialog` / `SceneCollectionsDialog` |
 | OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard |
 | OBSBasic_Dropfiles | Drag-drop media | todo | — |
 | OBSBasic_Browser | Extra browsers | todo | — |
@@ -51,7 +51,7 @@ Last updated: Wave 3 (Preview power — lock, scale, projectors, interact).
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` |
 | OBSBasicVCamConfig | todo | External/VCam toggle |
-| OBSRemux / MissingFiles / LogViewer | todo | — |
+| OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `LogViewerDialog` (MissingFiles later) |
 | NameDialog | partial | QInputDialog |
 
 ## Wave progress
@@ -60,6 +60,6 @@ Last updated: Wave 3 (Preview power — lock, scale, projectors, interact).
 - [x] Wave 1 — Controls polish, StatusBar, Scenes toolbar, Context toolbar, Filters + Transform
 - [x] Wave 2 — Adv Audio + mixer depth (balance, monitor modes, sync, tracks, lock)
 - [x] Wave 3 — Preview power (lock, scale, projectors, interact)
-- [ ] Wave 4 — Profiles / collections / remux / logs
+- [x] Wave 4 — Profiles / collections / remux / logs
 - [ ] Wave 5 — Output/service polish
 - [ ] Wave 6 — Extra browsers, dropfiles, hotkey UI, stats dock

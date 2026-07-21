@@ -46,6 +46,8 @@ add_library(railshot_core STATIC
     src/core/JsonSchema.cpp
     src/core/Logger.h
     src/core/Logger.cpp
+    src/core/ProfileCollectionStore.h
+    src/core/ProfileCollectionStore.cpp
 )
 target_include_directories(railshot_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -335,6 +337,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/ProjectorWindow.cpp
     src/ui/widgets/InteractDialog.h
     src/ui/widgets/InteractDialog.cpp
+    src/ui/widgets/Wave4Dialogs.h
+    src/ui/widgets/Wave4Dialogs.cpp
     src/ui/widgets/GoLiveDialog.h
     src/ui/widgets/GoLiveDialog.cpp
     src/ui/widgets/SidebarRail.h

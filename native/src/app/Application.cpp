@@ -1,6 +1,7 @@
 #include "app/Application.h"
 #include "core/EngineController.h"
 #include "core/Logger.h"
+#include "core/ProfileCollectionStore.h"
 #include "platform/windows/WinCrashHandler.h"
 #include "platform/windows/ComInitializer.h"
 #include "ui/MainWindow.h"
@@ -51,6 +52,8 @@ bool Application::bootstrap(QString* error)
     if (!m_engine->initialize(error))
         return false;
 
+    ensureDefaultProfile(m_engine->settings()->outputProfile());
+
     // Restore last project if present
     const auto last = m_engine->settings()->lastProjectPath();
     if (!last.isEmpty() && QFile::exists(last)) {
@@ -58,6 +61,13 @@ bool Application::bootstrap(QString* error)
         m_engine->loadProject(last, &err);
     } else {
         m_engine->newProject();
+    }
+
+    if (listCollectionNames().isEmpty()) {
+        QString err;
+        const QString name = QStringLiteral("Untitled");
+        m_engine->saveProject(collectionFilePath(name), &err);
+        setCurrentCollectionName(name);
     }
 
     m_window = std::make_unique<MainWindow>(m_engine.get());
