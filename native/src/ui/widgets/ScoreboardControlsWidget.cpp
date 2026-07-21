@@ -6,6 +6,7 @@
 #include "scoreboard/ScoreboardModel.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QLineEdit>
@@ -17,6 +18,7 @@
 #include <QFrame>
 #include <QSizePolicy>
 #include <QButtonGroup>
+#include <QVector>
 #include <utility>
 
 namespace railshot {
@@ -192,6 +194,71 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     turnRow->addWidget(turnB);
     turnRow->addStretch(1);
     poolLay->addLayout(turnRow);
+
+    // Ball rack — click to pocket / restore (shows balls left on table)
+    auto* rackLab = new QLabel(QStringLiteral("Balls on table"), poolBox);
+    rackLab->setObjectName(QStringLiteral("sec"));
+    poolLay->addWidget(rackLab);
+    auto* rackHint = new QLabel(QStringLiteral("Click a ball to pocket / put back"), poolBox);
+    rackHint->setStyleSheet(QStringLiteral("color:#6A7384; font-size:8px; background:transparent; border:none;"));
+    poolLay->addWidget(rackHint);
+
+    static const QColor kBallCol[] = {
+        {},
+        QColor(242, 196, 28), QColor(30, 96, 210), QColor(210, 40, 45), QColor(110, 40, 160),
+        QColor(230, 120, 20), QColor(30, 140, 55), QColor(130, 30, 40), QColor(18, 18, 20),
+        QColor(242, 196, 28), QColor(30, 96, 210), QColor(210, 40, 45), QColor(110, 40, 160),
+        QColor(230, 120, 20), QColor(30, 140, 55), QColor(130, 30, 40),
+    };
+
+    auto* rackGrid = new QGridLayout();
+    rackGrid->setContentsMargins(0, 0, 0, 0);
+    rackGrid->setHorizontalSpacing(3);
+    rackGrid->setVerticalSpacing(3);
+    QVector<QPushButton*> ballBtns;
+    ballBtns.reserve(15);
+    const int mask0 = model->state().pocketedMask;
+    for (int n = 1; n <= 15; ++n) {
+        auto* btn = new QPushButton(QString::number(n), poolBox);
+        btn->setCheckable(true);
+        btn->setChecked((mask0 & (1 << (n - 1))) == 0); // checked = still on table
+        btn->setFixedSize(22, 22);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setProperty("ballNumber", n);
+        const QColor c = kBallCol[n];
+        const bool dark = c.lightness() < 80;
+        const QString fg = dark ? QStringLiteral("#FFFFFF") : QStringLiteral("#111111");
+        btn->setStyleSheet(QStringLiteral(
+            "QPushButton{"
+            "  background:%1; border:1px solid #2A2E36; border-radius:11px;"
+            "  color:%2; font-size:8px; font-weight:900; padding:0;}"
+            "QPushButton:!checked{"
+            "  background:#2A2E36; color:#5A6070; border-color:#1A1D22;}"
+            "QPushButton:hover{border-color:#86EFAC;}")
+                               .arg(c.name(), fg));
+        ballBtns.push_back(btn);
+        rackGrid->addWidget(btn, (n - 1) / 8, (n - 1) % 8);
+    }
+    poolLay->addLayout(rackGrid);
+
+    auto* rackActions = new QHBoxLayout();
+    rackActions->setSpacing(4);
+    auto* rackReset = new QPushButton(QStringLiteral("All on"), poolBox);
+    auto* rackClear = new QPushButton(QStringLiteral("All off"), poolBox);
+    for (auto* b : {rackReset, rackClear}) {
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFixedHeight(20);
+        b->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
+            "font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;}"
+            "QPushButton:hover{border-color:#4F9EFF;color:#E0E2E8;}"));
+    }
+    rackReset->setToolTip(QStringLiteral("Put all balls back on the table"));
+    rackClear->setToolTip(QStringLiteral("Mark all balls pocketed"));
+    rackActions->addWidget(rackReset);
+    rackActions->addWidget(rackClear);
+    rackActions->addStretch(1);
+    poolLay->addLayout(rackActions);
     lay->addWidget(poolBox);
 
     // ── Baseball extras ──
@@ -346,6 +413,31 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         st.activeSide = id;
         model->setState(st);
     });
+    for (auto* btn : ballBtns) {
+        connect(btn, &QPushButton::clicked, this, [model, btn] {
+            const int n = btn->property("ballNumber").toInt();
+            if (n < 1 || n > 15)
+                return;
+            auto st = model->state();
+            const int bit = 1 << (n - 1);
+            // checked = on table → clear pocketed bit; unchecked = pocketed → set bit
+            if (btn->isChecked())
+                st.pocketedMask &= ~bit;
+            else
+                st.pocketedMask |= bit;
+            model->setState(st);
+        });
+    }
+    connect(rackReset, &QPushButton::clicked, this, [model] {
+        auto st = model->state();
+        st.pocketedMask = 0;
+        model->setState(st);
+    });
+    connect(rackClear, &QPushButton::clicked, this, [model] {
+        auto st = model->state();
+        st.pocketedMask = (1 << 15) - 1; // balls 1–15 pocketed
+        model->setState(st);
+    });
     connect(ballsSp, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
         auto st = model->state();
         st.balls = v;
@@ -491,6 +583,14 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
             QSignalBlocker bb(turnB);
             turnA->setChecked(st.activeSide == 1);
             turnB->setChecked(st.activeSide == 2);
+            for (auto* btn : ballBtns) {
+                const int n = btn->property("ballNumber").toInt();
+                const bool onTable = (st.pocketedMask & (1 << (n - 1))) == 0;
+                if (btn->isChecked() != onTable) {
+                    QSignalBlocker block(btn);
+                    btn->setChecked(onTable);
+                }
+            }
         }
         if (baseball) {
             QSignalBlocker b1b(ballsSp);
