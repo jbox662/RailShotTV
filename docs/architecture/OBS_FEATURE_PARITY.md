@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 8 (Sources menu, Filters stack, color tags, duplicate).
+Last updated: Wave 9 (Replay Start/Stop, Studio Swap, transition options).
 
 ## Design rules
 
@@ -17,14 +17,14 @@ Last updated: Wave 8 (Sources menu, Filters stack, color tags, duplicate).
 | OBS | Role | Status | RailShot |
 |-----|------|--------|----------|
 | OBSBasic / OBSBasic_* | Main shell | partial | `MainWindow`, `DashboardPage`, `TopMenuBar` |
-| OBSBasicControls | Stream/Record/Replay/VCam/Studio | partial | `BottomToolbar` + Go Live |
+| OBSBasicControls | Stream/Record/Replay/VCam/Studio | partial | `BottomToolbar` + Go Live + Replay Start/Stop + Studio Swap |
 | OBSBasicStatusBar | FPS/CPU/dropped/bitrate/timers | partial | `ObsStatusBarWidget` (+ reconnect) |
 | OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + scale/lock/projectors |
-| OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle |
+| OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle + Swap |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe L/R/U/D; Merge ≠ Fade) |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
 | OBSBasic_ContextToolbar | Source context toolbar | partial | `SourceContextToolbar` |
@@ -64,4 +64,4 @@ Last updated: Wave 8 (Sources menu, Filters stack, color tags, duplicate).
 - [x] Wave 6 — Extra browsers, dropfiles, hotkey UI, stats dock
 - [x] Wave 7 — Screenshots, Missing Files, VCam config, Multiview
 - [x] Wave 8 — Sources context menu, duplicate, color tags, Filters stack (Color Correction + reorder + copy/paste)
-- [ ] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, transition option depth
+- [x] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, Wipe direction + Merge≠Fade

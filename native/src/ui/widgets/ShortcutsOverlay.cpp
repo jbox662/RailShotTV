@@ -99,7 +99,8 @@ ShortcutsOverlay::ShortcutsOverlay(EngineController* engine, QWidget* parent)
         QStringLiteral("scene6"), QStringLiteral("scene7"), QStringLiteral("scene8"),
     }), body));
     lay->addWidget(section(QStringLiteral("STREAM / RECORD"), rowsFor({
-        QStringLiteral("streamToggle"), QStringLiteral("recordToggle"), QStringLiteral("saveReplay"),
+            QStringLiteral("streamToggle"), QStringLiteral("recordToggle"), QStringLiteral("replayToggle"),
+            QStringLiteral("saveReplay"), QStringLiteral("studioSwap"), QStringLiteral("studioModeToggle"),
         QStringLiteral("screenshotPreview"), QStringLiteral("screenshotProgram"),
     }), body));
     lay->addWidget(section(QStringLiteral("AUDIO / SCOREBOARD"), rowsFor({

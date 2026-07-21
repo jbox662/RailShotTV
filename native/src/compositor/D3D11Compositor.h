@@ -43,6 +43,9 @@ public:
     bool hasProgramHold() const { return m_holdTex != nullptr; }
     /// After compose of new program, blend hold over it (crossfade / wipe).
     void blendProgramHold(float progress, TransitionType type);
+    /// 0=to right, 1=to left, 2=to bottom, 3=to top.
+    void setWipeDirection(int direction);
+    int wipeDirection() const { return m_wipeDirection; }
 
     /// Readback program/preview frame (BGRA). Avoid in steady UI path.
     QImage readbackProgram() const;
@@ -79,6 +82,7 @@ private:
     ID3D11Buffer* m_cb = nullptr;
     ID3D11SamplerState* m_sampler = nullptr;
     ID3D11BlendState* m_blend = nullptr;
+    int m_wipeDirection = 0;
 };
 
 } // namespace railshot

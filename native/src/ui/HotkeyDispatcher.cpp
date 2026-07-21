@@ -36,6 +36,9 @@ QString HotkeyDispatcher::labelForAction(const QString& action)
         {QStringLiteral("streamToggle"), QStringLiteral("Start/Stop Streaming")},
         {QStringLiteral("recordToggle"), QStringLiteral("Start/Stop Recording")},
         {QStringLiteral("saveReplay"), QStringLiteral("Save Replay Buffer")},
+        {QStringLiteral("replayToggle"), QStringLiteral("Start/Stop Replay Buffer")},
+        {QStringLiteral("studioSwap"), QStringLiteral("Studio Mode Swap Preview/Program")},
+        {QStringLiteral("studioModeToggle"), QStringLiteral("Toggle Studio Mode")},
         {QStringLiteral("muteMic"), QStringLiteral("Mute/Unmute Mic")},
         {QStringLiteral("muteDesktop"), QStringLiteral("Mute/Unmute Desktop Audio")},
         {QStringLiteral("scoreAPlus"), QStringLiteral("Score A +1")},
@@ -63,7 +66,9 @@ QStringList HotkeyDispatcher::orderedActions()
 {
     return {
         QStringLiteral("go"), QStringLiteral("streamToggle"), QStringLiteral("recordToggle"),
-        QStringLiteral("saveReplay"), QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
+        QStringLiteral("replayToggle"), QStringLiteral("saveReplay"),
+        QStringLiteral("studioSwap"), QStringLiteral("studioModeToggle"),
+        QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
         QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
         QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
         QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
@@ -146,6 +151,18 @@ void HotkeyDispatcher::dispatch(const QString& action)
     if (action == QLatin1String("saveReplay")) {
         QString err;
         m_engine->saveReplay(&err);
+        return;
+    }
+    if (action == QLatin1String("replayToggle")) {
+        m_engine->setReplayBufferEnabled(!m_engine->replayBufferEnabled());
+        return;
+    }
+    if (action == QLatin1String("studioSwap")) {
+        m_engine->swapPreviewProgram();
+        return;
+    }
+    if (action == QLatin1String("studioModeToggle")) {
+        m_engine->setStudioMode(!m_engine->studioMode());
         return;
     }
     if (action == QLatin1String("screenshotPreview")) {

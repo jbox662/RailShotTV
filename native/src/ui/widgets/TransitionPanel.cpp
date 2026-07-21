@@ -12,6 +12,8 @@
 #include <QStyle>
 #include <QInputDialog>
 #include <QMenu>
+#include <QAction>
+#include <QCursor>
 
 namespace railshot {
 
@@ -73,16 +75,48 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
         opt->setCursor(Qt::PointingHandCursor);
         opt->setToolTip(QStringLiteral("%1 options").arg(t));
         connect(opt, &QPushButton::clicked, this, [this, t] {
-            bool ok = false;
-            const int ms = QInputDialog::getInt(this, QStringLiteral("%1 Duration").arg(t),
-                                                QStringLiteral("Duration (ms)"),
-                                                m_engine->projectSnapshot().transitionMs,
-                                                0, 5000, 50, &ok);
-            if (!ok) return;
-            m_active = t;
-            m_activeLabel->setText(t.toUpper());
-            m_engine->setTransition(transitionTypeFromString(t), ms);
-            restyleTypes();
+            QMenu menu(this);
+            menu.addAction(QStringLiteral("Duration…"), this, [this, t] {
+                bool ok = false;
+                const int ms = QInputDialog::getInt(this, QStringLiteral("%1 Duration").arg(t),
+                                                    QStringLiteral("Duration (ms)"),
+                                                    m_engine->projectSnapshot().transitionMs,
+                                                    0, 5000, 50, &ok);
+                if (!ok) return;
+                m_active = t;
+                m_activeLabel->setText(t.toUpper());
+                m_engine->setTransition(transitionTypeFromString(t), ms);
+                restyleTypes();
+            });
+            if (t == QLatin1String("Wipe")) {
+                menu.addSeparator();
+                auto* dir = menu.addMenu(QStringLiteral("Direction"));
+                const int cur = m_engine->wipeDirection();
+                auto addDir = [&](const QString& label, int d) {
+                    auto* a = dir->addAction(label);
+                    a->setCheckable(true);
+                    a->setChecked(cur == d);
+                    connect(a, &QAction::triggered, this, [this, t, d] {
+                        m_engine->setWipeDirection(d);
+                        m_active = t;
+                        m_activeLabel->setText(t.toUpper());
+                        m_engine->setTransition(TransitionType::Wipe,
+                                                m_engine->projectSnapshot().transitionMs);
+                        restyleTypes();
+                    });
+                };
+                addDir(QStringLiteral("Right"), 0);
+                addDir(QStringLiteral("Left"), 1);
+                addDir(QStringLiteral("Down"), 2);
+                addDir(QStringLiteral("Up"), 3);
+            } else if (t == QLatin1String("Merge")) {
+                menu.addSeparator();
+                menu.addAction(QStringLiteral("Merge uses a quadratic dissolve (≠ Fade)"))->setEnabled(false);
+            } else if (t == QLatin1String("CubeZoom")) {
+                menu.addSeparator();
+                menu.addAction(QStringLiteral("True 3D cube deferred — uses Fade for now"))->setEnabled(false);
+            }
+            menu.exec(QCursor::pos());
         });
         row->addWidget(b, 1);
         row->addWidget(opt);

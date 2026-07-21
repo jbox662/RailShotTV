@@ -28,6 +28,8 @@ private:
     QPushButton* m_streamBtn = nullptr;
     QPushButton* m_recordBtn = nullptr;
     QPushButton* m_studioBtn = nullptr;
+    QPushButton* m_swapBtn = nullptr;
+    QPushButton* m_replayToggleBtn = nullptr;
     QPushButton* m_multiBtn = nullptr;
     QPushButton* m_playlistBtn = nullptr;
     QPushButton* m_overlayBtn = nullptr;

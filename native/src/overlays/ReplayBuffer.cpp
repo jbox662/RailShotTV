@@ -14,6 +14,15 @@ void ReplayBuffer::setCapacitySeconds(int seconds)
     m_capacitySec = qMax(5, seconds);
 }
 
+void ReplayBuffer::setEnabled(bool enabled)
+{
+    if (m_enabled == enabled) return;
+    m_enabled = enabled;
+    if (!enabled)
+        clear();
+    emit enabledChanged(m_enabled);
+}
+
 qint64 ReplayBuffer::bufferedDurationUs() const
 {
     std::lock_guard lock(m_mutex);
@@ -47,6 +56,7 @@ void ReplayBuffer::trimLocked(qint64 newestPtsUs)
 
 void ReplayBuffer::pushVideo(const EncodedPacket& pkt)
 {
+    if (!m_enabled) return;
     std::lock_guard lock(m_mutex);
     m_video.push_back(pkt);
     trimLocked(pkt.ptsUs);
@@ -54,6 +64,7 @@ void ReplayBuffer::pushVideo(const EncodedPacket& pkt)
 
 void ReplayBuffer::pushAudio(const EncodedPacket& pkt)
 {
+    if (!m_enabled) return;
     std::lock_guard lock(m_mutex);
     m_audio.push_back(pkt);
     trimLocked(pkt.ptsUs);

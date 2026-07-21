@@ -49,11 +49,22 @@ public:
 
     void setPreviewScene(const QString& sceneId);
     void setProgramScene(const QString& sceneId);
+    /// OBS Studio Mode: swap Preview ↔ Program scene assignments.
+    void swapPreviewProgram();
     void go(TransitionType type = TransitionType::Cut);
     void setTransition(TransitionType type, int durationMs);
+    /// Wipe direction: 0=right, 1=left, 2=down, 3=up (OBS-style).
+    void setWipeDirection(int direction);
+    int wipeDirection() const;
 
     void setInputsPaused(bool paused);
     bool inputsPaused() const { return m_inputsPaused; }
+
+    void setStudioMode(bool enabled);
+    bool studioMode() const { return m_studioMode; }
+
+    void setReplayBufferEnabled(bool enabled);
+    bool replayBufferEnabled() const;
 
     bool setSourceIsoRecording(const QString& sourceId, bool armed, QString* error = nullptr);
     bool isSourceIsoRecording(const QString& sourceId) const;
@@ -104,6 +115,8 @@ signals:
     void replaySaved(const QString& path);
     void screenshotSaved(const QString& path);
     void selectedSourceChanged(const QString& sourceId);
+    void studioModeChanged(bool enabled);
+    void replayBufferEnabledChanged(bool enabled);
 
 private slots:
     void onTelemetryTick();
@@ -137,6 +150,7 @@ private:
     EngineState m_state = EngineState::Idle;
     bool m_initialized = false;
     bool m_inputsPaused = false;
+    bool m_studioMode = true;
     QString m_selectedSourceId;
     class IsoRecordManager* m_iso = nullptr;
 };

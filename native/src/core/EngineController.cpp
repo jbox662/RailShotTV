@@ -77,7 +77,7 @@ EngineController::EngineController(QObject* parent)
                     m_replay->setCodecConfig(profile, vExtra, aExtra, rate, ch);
             });
     connect(m_outputs.get(), &OutputHub::encodedPacket, this, [this](const EncodedPacket& pkt) {
-        if (!m_replay) return;
+        if (!m_replay || !m_replay->isEnabled()) return;
         if (pkt.video) m_replay->pushVideo(pkt);
         else m_replay->pushAudio(pkt);
     });
@@ -211,6 +211,8 @@ bool EngineController::initialize(QString* error)
     m_state = EngineState::Previewing;
     rebuildSourcesForActiveScenes();
     syncMixerChannelsFromProject();
+    if (m_compositor)
+        m_compositor->setWipeDirection(wipeDirection());
     Logger::info(QStringLiteral("EngineController initialized"));
     return true;
 }
@@ -252,6 +254,8 @@ bool EngineController::loadProject(const QString& path, QString* error)
     }
     rebuildSourcesForActiveScenes();
     syncMixerChannelsFromProject();
+    if (m_compositor)
+        m_compositor->setWipeDirection(wipeDirection());
     emit projectLoaded(path);
     return true;
 }
@@ -294,6 +298,19 @@ void EngineController::setPreviewScene(const QString& sceneId)
 void EngineController::setProgramScene(const QString& sceneId)
 {
     m_sceneGraph->setProgramSceneId(sceneId);
+}
+
+void EngineController::swapPreviewProgram()
+{
+    m_sceneGraph->mutate([&](Project& p) {
+        const QString a = p.previewSceneId;
+        const QString b = p.programSceneId;
+        p.previewSceneId = b;
+        p.programSceneId = a;
+        if (!p.previewSceneId.isEmpty())
+            p.activeSceneId = p.previewSceneId;
+    });
+    rebuildSourcesForActiveScenes();
 }
 
 void EngineController::go(TransitionType type)
@@ -347,6 +364,41 @@ void EngineController::setTransition(TransitionType type, int durationMs)
 {
     m_sceneGraph->setTransition(type, durationMs);
     if (m_transition) m_transition->configure(type, durationMs);
+}
+
+void EngineController::setWipeDirection(int direction)
+{
+    const int d = std::clamp(direction, 0, 3);
+    m_sceneGraph->mutate([&](Project& p) {
+        p.extras.insert(QStringLiteral("wipeDirection"), d);
+    });
+    if (m_compositor)
+        m_compositor->setWipeDirection(d);
+}
+
+int EngineController::wipeDirection() const
+{
+    if (!m_sceneGraph) return 0;
+    return m_sceneGraph->snapshot().extras.value(QStringLiteral("wipeDirection")).toInt(0);
+}
+
+void EngineController::setStudioMode(bool enabled)
+{
+    if (m_studioMode == enabled) return;
+    m_studioMode = enabled;
+    emit studioModeChanged(enabled);
+}
+
+void EngineController::setReplayBufferEnabled(bool enabled)
+{
+    if (!m_replay) return;
+    m_replay->setEnabled(enabled);
+    emit replayBufferEnabledChanged(m_replay->isEnabled());
+}
+
+bool EngineController::replayBufferEnabled() const
+{
+    return m_replay && m_replay->isEnabled();
 }
 
 QString EngineController::addSource(SourceType type, const QString& name, const QJsonObject& settings)

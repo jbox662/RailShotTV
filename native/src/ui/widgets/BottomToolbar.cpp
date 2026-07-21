@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QRadialGradient>
+#include <QSignalBlocker>
 
 namespace railshot {
 
@@ -240,6 +241,24 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->addWidget(overlay);
     m_overlayBtn = overlay;
 
+    auto* replayToggle = new QPushButton(QStringLiteral("Replay"), this);
+    replayToggle->setObjectName(QStringLiteral("toolbarChromeBtn"));
+    replayToggle->setCheckable(true);
+    replayToggle->setFixedHeight(22);
+    replayToggle->setToolTip(QStringLiteral("Start/Stop Replay Buffer (OBS). Needs Stream or Record for packets."));
+    connect(replayToggle, &QPushButton::toggled, this, [this, replayToggle](bool on) {
+        m_engine->setReplayBufferEnabled(on);
+        replayToggle->setText(on ? QStringLiteral("■ Replay") : QStringLiteral("Replay"));
+    });
+    connect(m_engine, &EngineController::replayBufferEnabledChanged, this,
+            [replayToggle](bool on) {
+                QSignalBlocker b(replayToggle);
+                replayToggle->setChecked(on);
+                replayToggle->setText(on ? QStringLiteral("■ Replay") : QStringLiteral("Replay"));
+            });
+    row->addWidget(replayToggle);
+    m_replayToggleBtn = replayToggle;
+
     auto* replayBtn = new QPushButton(QStringLiteral("Save Replay"), this);
     replayBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
     replayBtn->setFixedHeight(22);
@@ -271,8 +290,24 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     m_studioBtn->setChecked(true);
     m_studioBtn->setFixedHeight(22);
     m_studioBtn->setToolTip(QStringLiteral("Show Preview + Program (OBS Studio Mode)"));
-    connect(m_studioBtn, &QPushButton::toggled, this, &BottomToolbar::studioModeToggled);
+    connect(m_studioBtn, &QPushButton::toggled, this, [this](bool on) {
+        m_engine->setStudioMode(on);
+        emit studioModeToggled(on);
+    });
+    connect(m_engine, &EngineController::studioModeChanged, this, [this](bool on) {
+        QSignalBlocker b(m_studioBtn);
+        m_studioBtn->setChecked(on);
+        emit studioModeToggled(on);
+    });
     row->addWidget(m_studioBtn);
+
+    auto* swapBtn = new QPushButton(QStringLiteral("Swap"), this);
+    swapBtn->setObjectName(QStringLiteral("toolbarChromeBtn"));
+    swapBtn->setFixedHeight(22);
+    swapBtn->setToolTip(QStringLiteral("Swap Preview ↔ Program (OBS Studio Mode)"));
+    connect(swapBtn, &QPushButton::clicked, this, [this] { m_engine->swapPreviewProgram(); });
+    row->addWidget(swapBtn);
+    m_swapBtn = swapBtn;
 
     row->addStretch();
 

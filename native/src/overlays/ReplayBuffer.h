@@ -18,6 +18,9 @@ public:
     void setCapacitySeconds(int seconds);
     int capacitySeconds() const { return m_capacitySec; }
     qint64 bufferedDurationUs() const;
+    /// OBS Start/Stop Replay Buffer — when false, push* is ignored.
+    void setEnabled(bool enabled);
+    bool isEnabled() const { return m_enabled; }
     void setCodecConfig(const OutputProfile& profile,
                         const QByteArray& videoExtradata,
                         const QByteArray& audioExtradata,
@@ -31,10 +34,14 @@ public:
     int audioPacketCount() const;
     bool hasConfig() const;
 
+signals:
+    void enabledChanged(bool enabled);
+
 private:
     void trimLocked(qint64 newestPtsUs);
 
     int m_capacitySec = 30;
+    bool m_enabled = false;
     mutable std::mutex m_mutex;
     std::deque<EncodedPacket> m_video;
     std::deque<EncodedPacket> m_audio;

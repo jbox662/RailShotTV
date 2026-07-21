@@ -484,7 +484,9 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     connect(m_program, &PreviewWidget::interactRequested, this, openInteract);
 
     connect(m_toolbar, &BottomToolbar::studioModeToggled, this, &DashboardPage::setStudioMode);
+    connect(m_engine, &EngineController::studioModeChanged, this, &DashboardPage::setStudioMode);
     // Default Studio Mode is ON — Preview editable, Program view-only.
+    m_engine->setStudioMode(true);
     setStudioMode(true);
 
     connect(m_tiles, &InputTilesWidget::configureSourceRequested, this, [this](const QString& id) {

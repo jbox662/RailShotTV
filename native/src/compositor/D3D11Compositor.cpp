@@ -319,6 +319,11 @@ void D3D11Compositor::clearProgramHold()
 #endif
 }
 
+void D3D11Compositor::setWipeDirection(int direction)
+{
+    m_wipeDirection = std::clamp(direction, 0, 3);
+}
+
 void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
 {
 #ifdef _WIN32
@@ -350,18 +355,63 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
     if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
         auto* cb = reinterpret_cast<CBData*>(mapped.pData);
         if (type == TransitionType::Wipe) {
-            // Old program slides away to the right as progress increases
-            cb->rect[0] = progress;
-            cb->rect[1] = 0.0f;
-            cb->rect[2] = 1.0f - progress;
-            cb->rect[3] = 1.0f;
+            const float p = progress;
+            switch (m_wipeDirection) {
+            case 1: // to left
+                cb->rect[0] = 0.0f;
+                cb->rect[1] = 0.0f;
+                cb->rect[2] = 1.0f - p;
+                cb->rect[3] = 1.0f;
+                cb->cropMin[0] = 0.0f;
+                cb->cropMin[1] = 0.0f;
+                cb->cropMax[0] = 1.0f - p;
+                cb->cropMax[1] = 1.0f;
+                break;
+            case 2: // to bottom
+                cb->rect[0] = 0.0f;
+                cb->rect[1] = p;
+                cb->rect[2] = 1.0f;
+                cb->rect[3] = 1.0f - p;
+                cb->cropMin[0] = 0.0f;
+                cb->cropMin[1] = p;
+                cb->cropMax[0] = 1.0f;
+                cb->cropMax[1] = 1.0f;
+                break;
+            case 3: // to top
+                cb->rect[0] = 0.0f;
+                cb->rect[1] = 0.0f;
+                cb->rect[2] = 1.0f;
+                cb->rect[3] = 1.0f - p;
+                cb->cropMin[0] = 0.0f;
+                cb->cropMin[1] = 0.0f;
+                cb->cropMax[0] = 1.0f;
+                cb->cropMax[1] = 1.0f - p;
+                break;
+            default: // to right
+                cb->rect[0] = p;
+                cb->rect[1] = 0.0f;
+                cb->rect[2] = 1.0f - p;
+                cb->rect[3] = 1.0f;
+                cb->cropMin[0] = p;
+                cb->cropMin[1] = 0.0f;
+                cb->cropMax[0] = 1.0f;
+                cb->cropMax[1] = 1.0f;
+                break;
+            }
             cb->opacity = 1.0f;
-            cb->cropMin[0] = progress;
+        } else if (type == TransitionType::Merge) {
+            // Distinct from Fade: quadratic ease-in dissolve
+            cb->rect[0] = 0.0f;
+            cb->rect[1] = 0.0f;
+            cb->rect[2] = 1.0f;
+            cb->rect[3] = 1.0f;
+            cb->opacity = 1.0f - (progress * progress);
+            cb->cropMin[0] = 0.0f;
             cb->cropMin[1] = 0.0f;
             cb->cropMax[0] = 1.0f;
             cb->cropMax[1] = 1.0f;
         } else {
-            // Fade / Merge / CubeZoom (crossfade alias): dissolve old over new
+            // Fade / CubeZoom (crossfade alias): linear dissolve
             cb->rect[0] = 0.0f;
             cb->rect[1] = 0.0f;
             cb->rect[2] = 1.0f;
