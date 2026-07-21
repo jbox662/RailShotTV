@@ -39,6 +39,8 @@
 using railshot::browser_ipc::FrameHeader;
 using railshot::browser_ipc::bufferBytes;
 using railshot::browser_ipc::kMagic;
+using railshot::browser_ipc::kCmdNone;
+using railshot::browser_ipc::kCmdReload;
 
 namespace {
 #if defined(_WIN32) && defined(RAILSHOT_HAS_WEBVIEW2) && RAILSHOT_HAS_WEBVIEW2
@@ -100,6 +102,9 @@ void publishFrame(SharedState& s, const QImage& img, quint64 index, quint32 stat
     if (!s.view) return;
     if (s.mutex) WaitForSingleObject(static_cast<HANDLE>(s.mutex), 50);
     auto* hdr = static_cast<FrameHeader*>(s.view);
+    // Preserve command / commandAck — main process uses them for OBS-style soft reload.
+    const quint32 keepCmd = hdr->command;
+    const quint32 keepAck = hdr->commandAck;
     hdr->magic = kMagic;
     hdr->width = static_cast<quint32>(s.width);
     hdr->height = static_cast<quint32>(s.height);
@@ -108,6 +113,8 @@ void publishFrame(SharedState& s, const QImage& img, quint64 index, quint32 stat
     hdr->frameIndex = index;
     hdr->ptsUs = QDateTime::currentMSecsSinceEpoch() * 1000;
     hdr->status = status;
+    hdr->command = keepCmd;
+    hdr->commandAck = keepAck;
     std::memset(hdr->error, 0, sizeof(hdr->error));
     if (!err.isEmpty()) {
         const QByteArray utf = err.toUtf8();
@@ -235,6 +242,8 @@ struct WebViewHost {
     bool ready = false;
     bool contentReady = false;
     bool capturing = false;
+    /// OBS Refresh: hold last painted frame until navigation completes (no blank flash).
+    bool suppressCapture = false;
     QString lastError;
     QImage lastFrame;
 
@@ -335,6 +344,8 @@ struct WebViewHost {
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                         [this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
                                             contentReady = true;
+                                            // OBS: new paints resume; last texture held until then.
+                                            suppressCapture = false;
                                             return S_OK;
                                         })
                                         .Get(),
@@ -372,12 +383,24 @@ struct WebViewHost {
         return true;
     }
 
+    /// OBS BrowserSource::Refresh → CefBrowser::ReloadIgnoreCache (same instance).
+    void softReload()
+    {
+        if (!webview)
+            return;
+        suppressCapture = true;
+        webview->Reload();
+    }
+
     /// Capture one frame into lastFrame. Returns true if lastFrame was updated.
     bool captureOnce(int w, int h)
     {
         if (!webview || capturing)
             return false;
         if (!contentReady)
+            return false;
+        // During soft reload, do not replace lastFrame with blank/loading CapturePreview.
+        if (suppressCapture)
             return false;
         capturing = true;
         QImage img = captureWebViewPreview(webview.Get(), w, h);
@@ -402,6 +425,7 @@ struct WebViewHost {
         ready = false;
         contentReady = false;
         capturing = false;
+        suppressCapture = false;
     }
 };
 #endif
@@ -516,7 +540,19 @@ int main(int argc, char** argv)
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
+                // Poll OBS-style soft-reload command from RailShotTV.
+                if (shared.view) {
+                    if (shared.mutex) WaitForSingleObject(static_cast<HANDLE>(shared.mutex), 20);
+                    auto* hdr = static_cast<FrameHeader*>(shared.view);
+                    if (hdr->magic == kMagic && hdr->command == kCmdReload) {
+                        host.softReload();
+                        hdr->command = kCmdNone;
+                        hdr->commandAck += 1;
+                    }
+                    if (shared.mutex) ReleaseMutex(static_cast<HANDLE>(shared.mutex));
+                }
                 // Only push when a new capture succeeds — never overwrite with a failed/blank frame.
+                // During Reload, captureOnce returns false → lastFrame (and GPU texture) stay put.
                 if (host.captureOnce(shared.width, shared.height))
                     publishFrame(shared, host.lastFrame, ++frame, 0, {});
             });

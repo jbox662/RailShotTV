@@ -27,6 +27,8 @@ BrowserSource::BrowserSource(QString id, QString name, QJsonObject settings)
 {
     m_width = m_settings.value(QStringLiteral("width")).toInt(1280);
     m_height = m_settings.value(QStringLiteral("height")).toInt(720);
+    m_refreshToken = m_settings.value(QStringLiteral("refreshToken")).toInt(0);
+    m_reloadToken = m_settings.value(QStringLiteral("reloadToken")).toInt(0);
 }
 
 BrowserSource::~BrowserSource()
@@ -300,14 +302,54 @@ bool BrowserSource::acquireLatest(VideoFrame& out)
     return true;
 }
 
+void BrowserSource::writeReloadCommand()
+{
+#ifdef _WIN32
+    if (!m_view) return;
+    if (m_mutexHandle)
+        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
+    auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
+    if (hdr->magic == browser_ipc::kMagic || hdr->magic == 0) {
+        hdr->magic = browser_ipc::kMagic;
+        hdr->command = browser_ipc::kCmdReload;
+    }
+    if (m_mutexHandle)
+        ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
+#endif
+}
+
+void BrowserSource::requestSoftReload()
+{
+    std::lock_guard lock(m_mutex);
+    writeReloadCommand();
+}
+
 void BrowserSource::applySettings(const QJsonObject& settings)
 {
     std::lock_guard lock(m_mutex);
     const QString oldUrl = m_settings.value(QStringLiteral("url")).toString();
+    const int oldRefresh = m_settings.value(QStringLiteral("refreshToken")).toInt(m_refreshToken);
+    const int oldReload = m_settings.value(QStringLiteral("reloadToken")).toInt(m_reloadToken);
     m_settings = settings;
     m_width = m_settings.value(QStringLiteral("width")).toInt(m_width);
     m_height = m_settings.value(QStringLiteral("height")).toInt(m_height);
     const QString newUrl = m_settings.value(QStringLiteral("url")).toString();
+    const int newRefresh = m_settings.value(QStringLiteral("refreshToken")).toInt(0);
+    const int newReload = m_settings.value(QStringLiteral("reloadToken")).toInt(0);
+
+    // OBS Refresh / Reload page: soft reload in-process — keep last D3D texture.
+    if (m_running.load()
+        && (newRefresh != oldRefresh || newReload != oldReload
+            || newRefresh != m_refreshToken || newReload != m_reloadToken)) {
+        m_refreshToken = newRefresh;
+        m_reloadToken = newReload;
+        writeReloadCommand();
+        return;
+    }
+    m_refreshToken = newRefresh;
+    m_reloadToken = newReload;
+
+    // URL change: restart helper (OBS recreates browser on URL update).
     if (m_running.load() && oldUrl != newUrl) {
         if (m_helper.state() != QProcess::NotRunning) {
             m_helper.terminate();

@@ -118,13 +118,14 @@ void SourceContextToolbar::rebuild()
 
     switch (src->type) {
     case SourceType::Browser: {
-        auto* refresh = addBtn(QStringLiteral("Refresh"), QStringLiteral("Reload browser page"));
+        auto* refresh = addBtn(QStringLiteral("Refresh"), QStringLiteral("Reload browser page (OBS-style)"));
         connect(refresh, &QPushButton::clicked, this, [this] {
-            m_engine->sceneGraph()->mutate([this](Project& p) {
-                if (auto* s = p.findSourceAnywhere(m_sourceId))
-                    s->settings.insert(QStringLiteral("refreshToken"),
-                                       s->settings.value(QStringLiteral("refreshToken")).toInt() + 1);
-            });
+            const auto* live = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId);
+            if (!live) return;
+            auto settings = live->settings;
+            settings.insert(QStringLiteral("refreshToken"),
+                            settings.value(QStringLiteral("refreshToken")).toInt(0) + 1);
+            m_engine->updateSourceSettings(m_sourceId, settings);
         });
         break;
     }

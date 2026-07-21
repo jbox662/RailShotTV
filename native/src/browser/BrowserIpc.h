@@ -20,9 +20,16 @@ struct FrameHeader {
     quint64 frameIndex = 0;
     qint64 ptsUs = 0;
     quint32 status = 0; // 0=ok, 1=loading, 2=error
+    /// Main → helper: 0=none, 1=soft reload (OBS Refresh / ReloadIgnoreCache).
+    quint32 command = 0;
+    /// Helper → main: echoes last handled command id/counter.
+    quint32 commandAck = 0;
     char error[128] = {};
 };
 #pragma pack(pop)
+
+inline constexpr quint32 kCmdNone = 0;
+inline constexpr quint32 kCmdReload = 1;
 
 inline size_t bufferBytes(int width, int height)
 {

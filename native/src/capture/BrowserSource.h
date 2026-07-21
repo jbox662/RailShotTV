@@ -24,12 +24,15 @@ public:
     QSize size() const override { return {m_width, m_height}; }
 
     void applySettings(const QJsonObject& settings);
+    /// OBS Refresh: soft-reload page in helper (keep last texture / no process restart).
+    void requestSoftReload();
 
 private:
     bool openSharedMemory(QString* error);
     void closeSharedMemory();
     bool ensureHelper(QString* error);
     bool uploadLatest(QString* error);
+    void writeReloadCommand();
     QString helperExecutable() const;
     QString mappingName() const;
 
@@ -43,6 +46,8 @@ private:
     int m_width = 1280;
     int m_height = 720;
     quint64 m_lastFrameIndex = 0;
+    int m_refreshToken = 0;
+    int m_reloadToken = 0;
     QProcess m_helper;
 
 #ifdef _WIN32
