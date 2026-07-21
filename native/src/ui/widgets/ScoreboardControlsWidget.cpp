@@ -24,9 +24,8 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     setMinimumWidth(200);
     setStyleSheet(QStringLiteral(
         "QWidget#scoreboardControls {"
-        "  background:#0A0C0F;"
-        "  border-top:3px solid #22C55E;"
-        "  border-left:2px solid #22C55E;"
+        "  background:#0D0F12;"
+        "  border:none;"
         "}"
         "QWidget#scoreboardControls QLabel#sec {"
         "  color:#22C55E; font-size:9px; font-weight:900; letter-spacing:1px;"

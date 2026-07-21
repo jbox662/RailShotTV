@@ -50,7 +50,7 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     setStyleSheet(QStringLiteral(
         "QWidget#audioMixer {"
         "  background:#0D0F12;"
-        "  border-top:2px solid #A855F7;"
+        "  border:none;"
         "}"
         "QWidget#audioMixer QLabel#mixerHint {"
         "  color:#6B7280; font-size:9px; font-weight:600;"

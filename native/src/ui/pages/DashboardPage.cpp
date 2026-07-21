@@ -150,27 +150,44 @@ void populateOverlayMenu(QMenu* menu, EngineController* engine, DashboardPage* p
 
 constexpr const char* kDockHostStyle = R"(
 QMainWindow#dashboardDockHost {
-  background: #0A0C0F;
-  border-top: 2px solid #3A3D45;
+  background: #05070A;
+  border-top: 2px solid #2A2D35;
+}
+/* Visible gutter between docks — keeps panels from reading as one slab */
+QMainWindow#dashboardDockHost QMainWindow::separator {
+  background: #05070A;
+  width: 6px;
+  height: 6px;
+}
+QMainWindow#dashboardDockHost QMainWindow::separator:hover {
+  background: #3A6AFF;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:horizontal {
-  background: #2A2D35;
-  width: 2px;
+  background: #05070A;
+  width: 6px;
   margin: 0px;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:horizontal:hover {
-  background: #4F9EFF;
-  width: 3px;
+  background: #3A6AFF;
 }
 QMainWindow#dashboardDockHost QSplitter::handle:vertical {
-  background: #2A2D35;
-  height: 2px;
+  background: #05070A;
+  height: 6px;
 }
 QMainWindow#dashboardDockHost QDockWidget {
-  border: 1px solid #3A3D45;
+  border: 1px solid #4A5060;
   background: #0D0F12;
   titlebar-close-icon: none;
   titlebar-normal-icon: none;
+}
+QMainWindow#dashboardDockHost QDockWidget > QWidget {
+  background: #0D0F12;
+  border: none;
+}
+QMainWindow#dashboardDockHost QFrame#dockContentFrame {
+  background: #0D0F12;
+  border: none;
+  margin: 0px;
 }
 )";
 
@@ -179,16 +196,16 @@ public:
     DockTitleBar(QDockWidget* dock, const QString& title, const QString& accent, QWidget* parent = nullptr)
         : QWidget(parent), m_dock(dock)
     {
-        setFixedHeight(26);
+        setFixedHeight(28);
         setCursor(Qt::SizeAllCursor);
         setObjectName(QStringLiteral("dockTitleBar"));
-        // Chromatic Command panel header: accent bar + tinted gradient wash
+        // Chromatic Command panel header: accent bar + tinted gradient wash + hard bottom rule
         setStyleSheet(QStringLiteral(
             "QWidget#dockTitleBar {"
             "  border-left: 3px solid %1;"
             "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-            "    stop:0 %2, stop:0.45 transparent);"
-            "  border-bottom: 1px solid #3A3D45;"
+            "    stop:0 %2, stop:0.5 #14181E);"
+            "  border-bottom: 2px solid #4A5060;"
             "}")
                           .arg(accent, tintForAccent(accent)));
 
@@ -315,7 +332,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     scenesCol->setObjectName(QStringLiteral("chromePanel"));
     scenesCol->setMinimumWidth(150);
     scenesCol->setStyleSheet(QStringLiteral(
-        "QWidget#chromePanel{background:#0A0C0F; border-right:1px solid #2A2D35;}"));
+        "QWidget#chromePanel{background:#0D0F12; border:none;}"));
     auto* scenesLay = new QVBoxLayout(scenesCol);
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
@@ -583,7 +600,15 @@ QDockWidget* DashboardPage::makeDock(const QString& title, const QString& object
 {
     auto* dock = new QDockWidget(title, m_dockHost);
     dock->setObjectName(objectName);
-    dock->setWidget(content);
+    // Frame content so each dock reads as its own card against the dark gutter.
+    auto* frame = new QFrame(dock);
+    frame->setObjectName(QStringLiteral("dockContentFrame"));
+    auto* frameLay = new QVBoxLayout(frame);
+    frameLay->setContentsMargins(0, 0, 0, 0);
+    frameLay->setSpacing(0);
+    content->setParent(frame);
+    frameLay->addWidget(content);
+    dock->setWidget(frame);
     dock->setAllowedAreas(Qt::AllDockWidgetAreas);
     dock->setFeatures(QDockWidget::DockWidgetMovable
                       | QDockWidget::DockWidgetFloatable
