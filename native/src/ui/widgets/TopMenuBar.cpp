@@ -7,6 +7,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QMenu>
+#include <QMenuBar>
+#include <QSizePolicy>
 #include <QFrame>
 #include <QMessageBox>
 #include <QStyle>
@@ -23,6 +25,31 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
         "QWidget#topMenuBar {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
         "  border-bottom: 1px solid #3A3D45;"
+        "}"
+        "QWidget#topMenuBar QMenuBar {"
+        "  background: transparent;"
+        "  border: none;"
+        "  spacing: 2px;"
+        "  color: #E0E2E8;"
+        "  font-size: 10px;"
+        "  font-weight: 600;"
+        "}"
+        "QWidget#topMenuBar QMenuBar::item {"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #32363F, stop:1 #1A1E26);"
+        "  border: 1px solid #5A5E68;"
+        "  border-radius: 3px;"
+        "  color: #E0E2E8;"
+        "  padding: 2px 10px;"
+        "  margin: 0 1px;"
+        "}"
+        "QWidget#topMenuBar QMenuBar::item:selected {"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #3A404C, stop:1 #242830);"
+        "  border: 1px solid #4F9EFF;"
+        "  color: #FFFFFF;"
+        "}"
+        "QWidget#topMenuBar QMenuBar::item:pressed {"
+        "  background: #12151A;"
+        "  border-color: #3A3D45;"
         "}"
         "QWidget#topMenuBar QPushButton#menuChromeBtn {"
         "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #32363F, stop:1 #1A1E26);"
@@ -72,51 +99,30 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     row->addWidget(brand);
     row->addSpacing(8);
 
-    auto addChrome = [&](const QString& text) {
-        auto* b = new QPushButton(text, this);
-        b->setObjectName(QStringLiteral("menuChromeBtn"));
-        b->setCursor(Qt::PointingHandCursor);
-        b->setFocusPolicy(Qt::NoFocus);
-        row->addWidget(b);
-        return b;
-    };
+    auto* menuBar = new QMenuBar(this);
+    menuBar->setNativeMenuBar(false);
+    menuBar->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
 
-    auto* preset = addChrome(QStringLiteral("Preset"));
-    auto* presetMenu = new QMenu(preset);
-    presetMenu->addAction(QStringLiteral("Save New Preset…"), this, [this] {
-        emit saveProjectAs();
-    });
-    presetMenu->addAction(QStringLiteral("Load Last Preset"), this, [this] { emit openLastProject(); });
-    presetMenu->addSeparator();
-    presetMenu->addAction(QStringLiteral("Profiles…"), this, &TopMenuBar::openProfiles);
-    presetMenu->addAction(QStringLiteral("Scene Collections…"), this, &TopMenuBar::openCollections);
-    presetMenu->addSeparator();
-    presetMenu->addAction(QStringLiteral("Manage Presets…"), this, [this] { emit openSettings(); });
-    preset->setMenu(presetMenu);
+    auto* fileMenu = menuBar->addMenu(QStringLiteral("File"));
+    fileMenu->addAction(QStringLiteral("New"), this, &TopMenuBar::newProject);
+    fileMenu->addAction(QStringLiteral("Open…"), this, &TopMenuBar::openProject);
+    fileMenu->addAction(QStringLiteral("Save"), this, &TopMenuBar::saveProject);
+    fileMenu->addAction(QStringLiteral("Save As…"), this, &TopMenuBar::saveProjectAs);
+    fileMenu->addAction(QStringLiteral("Open Last"), this, &TopMenuBar::openLastProject);
+    fileMenu->addSeparator();
+    fileMenu->addAction(QStringLiteral("Save New Preset…"), this, [this] { emit saveProjectAs(); });
+    fileMenu->addAction(QStringLiteral("Load Last Preset"), this, [this] { emit openLastProject(); });
+    fileMenu->addSeparator();
+    fileMenu->addAction(QStringLiteral("Profiles…"), this, &TopMenuBar::openProfiles);
+    fileMenu->addAction(QStringLiteral("Scene Collections…"), this, &TopMenuBar::openCollections);
 
-    connect(addChrome(QStringLiteral("New")), &QPushButton::clicked, this, &TopMenuBar::newProject);
-    connect(addChrome(QStringLiteral("Open")), &QPushButton::clicked, this, &TopMenuBar::openProject);
-    connect(addChrome(QStringLiteral("Save")), &QPushButton::clicked, this, &TopMenuBar::saveProject);
-    connect(addChrome(QStringLiteral("Save As")), &QPushButton::clicked, this, &TopMenuBar::saveProjectAs);
-    connect(addChrome(QStringLiteral("Last")), &QPushButton::clicked, this, &TopMenuBar::openLastProject);
-
-    auto* docksBtn = addChrome(QStringLiteral("Docks"));
-    m_docksMenu = new QMenu(docksBtn);
-    docksBtn->setMenu(m_docksMenu);
-    connect(m_docksMenu, &QMenu::aboutToShow, this, [this] {
-        emit docksMenuAboutToShow(m_docksMenu);
-    });
-
-    auto* editBtn = addChrome(QStringLiteral("Edit"));
-    auto* editMenu = new QMenu(editBtn);
+    auto* editMenu = menuBar->addMenu(QStringLiteral("Edit"));
     editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("Remux Recordings…"), this, &TopMenuBar::openRemux);
     editMenu->addAction(QStringLiteral("Missing Files…"), this, &TopMenuBar::openMissingFiles);
-    editBtn->setMenu(editMenu);
 
-    auto* viewBtn = addChrome(QStringLiteral("View"));
-    auto* viewMenu = new QMenu(viewBtn);
+    auto* viewMenu = menuBar->addMenu(QStringLiteral("View"));
     viewMenu->addAction(QStringLiteral("Preview Projector (Windowed)"), this, [this] {
         emit openProjector(false, false);
     });
@@ -143,9 +149,23 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     viewMenu->addSeparator();
     viewMenu->addAction(QStringLiteral("Virtual Camera…"), this, &TopMenuBar::openVCamConfig);
     viewMenu->addAction(QStringLiteral("Current Log…"), this, &TopMenuBar::openLogViewer);
-    viewBtn->setMenu(viewMenu);
 
+    m_docksMenu = menuBar->addMenu(QStringLiteral("Docks"));
+    connect(m_docksMenu, &QMenu::aboutToShow, this, [this] {
+        emit docksMenuAboutToShow(m_docksMenu);
+    });
+
+    row->addWidget(menuBar);
     row->addStretch();
+
+    auto addChrome = [&](const QString& text) {
+        auto* b = new QPushButton(text, this);
+        b->setObjectName(QStringLiteral("menuChromeBtn"));
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFocusPolicy(Qt::NoFocus);
+        row->addWidget(b);
+        return b;
+    };
 
     m_fullscreen = addChrome(QStringLiteral("Fullscreen"));
     m_fullscreen->setCheckable(true);

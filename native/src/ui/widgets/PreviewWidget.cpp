@@ -25,6 +25,7 @@
 #include <QMenu>
 #include <QCursor>
 #include <QSignalBlocker>
+#include <QFontMetrics>
 #include <QMimeData>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -979,13 +980,13 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     col->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(28);
+    header->setFixedHeight(32);
     header->setStyleSheet(QStringLiteral(
         "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
         "border-bottom: 2px solid %1;")
                               .arg(accent));
     auto* h = new QHBoxLayout(header);
-    h->setContentsMargins(10, 0, 10, 0);
+    h->setContentsMargins(10, 4, 10, 4);
     h->setSpacing(8);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
     title->setObjectName(program ? QStringLiteral("programLabel") : QStringLiteral("previewLabel"));
@@ -1001,6 +1002,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     auto* sceneName = new QLabel(QStringLiteral("No Scene"), header);
     sceneName->setObjectName(QStringLiteral("mono"));
+    sceneName->setMaximumWidth(180);
     sceneName->setStyleSheet(QStringLiteral(
         "font-family:'JetBrains Mono'; font-size:10px; color:#A0A8B8; background:transparent;"));
     h->addWidget(sceneName);
@@ -1043,7 +1045,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     auto* clearBtn = new QLabel(QStringLiteral("CLEAR"), header);
     clearBtn->setCursor(Qt::PointingHandCursor);
     clearBtn->setStyleSheet(QStringLiteral(
-        "padding:1px 7px; border:1px solid %1; border-radius:2px; color:%2;"
+        "padding:2px 8px; border:1px solid %1; border-radius:2px; color:%2;"
         "font-size:9px; font-weight:700; letter-spacing:1px; background:transparent;")
                                 .arg(program ? QStringLiteral("#FF5A2C60") : QStringLiteral("#22C55E60"),
                                      program ? QStringLiteral("#FF8A6A") : QStringLiteral("#6EE7A0")));
@@ -1051,63 +1053,46 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     clearBtn->setProperty("clearRole", program ? QStringLiteral("program") : QStringLiteral("preview"));
     h->addWidget(clearBtn);
 
-    // Scale / lock / projector chrome (OBS Preview power)
+    // OBS-like: Fit / Scale / Lock / Projector collapsed into one Display menu (no header overlap).
     m_scaleLabel = new QLabel(QStringLiteral("Fit"), header);
     m_scaleLabel->setStyleSheet(QStringLiteral(
-        "font-family:'JetBrains Mono'; font-size:9px; color:#A0A8B8;"
-        "background:#0A0C0F; border:1px solid #3A3D45; border-radius:2px; padding:2px 6px;"));
+        "font-family:'JetBrains Mono'; font-size:9px; color:#A0A8B8; background:transparent;"));
     h->addWidget(m_scaleLabel);
 
-    auto* scaleBtn = new QPushButton(QStringLiteral("Scale"), header);
-    scaleBtn->setCursor(Qt::PointingHandCursor);
-    scaleBtn->setFixedHeight(20);
-    scaleBtn->setStyleSheet(QStringLiteral(
+    auto* displayBtn = new QPushButton(QStringLiteral("Display ▾"), header);
+    displayBtn->setCursor(Qt::PointingHandCursor);
+    displayBtn->setFixedHeight(22);
+    displayBtn->setStyleSheet(QStringLiteral(
         "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
-        "font-size:9px;font-weight:700;padding:1px 8px;}"
+        "font-size:9px;font-weight:700;padding:2px 8px;}"
         "QPushButton:hover{border-color:#4F9EFF;}"));
-    auto* scaleMenu = new QMenu(scaleBtn);
-    scaleMenu->addAction(QStringLiteral("Fit to Window"), this, [this] {
+    auto* displayMenu = new QMenu(displayBtn);
+    displayMenu->addAction(QStringLiteral("Fit to Window"), this, [this] {
         setDisplayMode(PreviewDisplayMode::FitWindow);
     });
-    scaleMenu->addAction(QStringLiteral("Canvas (100%)"), this, [this] {
+    displayMenu->addAction(QStringLiteral("Canvas (100%)"), this, [this] {
         setDisplayMode(PreviewDisplayMode::FixedScale);
         setScaleAmount(1.0f);
     });
-    scaleMenu->addSeparator();
-    scaleMenu->addAction(QStringLiteral("Zoom In"), this, &PreviewWidget::zoomIn);
-    scaleMenu->addAction(QStringLiteral("Zoom Out"), this, &PreviewWidget::zoomOut);
-    scaleMenu->addAction(QStringLiteral("Reset Zoom"), this, &PreviewWidget::resetScale);
-    scaleBtn->setMenu(scaleMenu);
-    h->addWidget(scaleBtn);
-
+    displayMenu->addSeparator();
+    displayMenu->addAction(QStringLiteral("Zoom In"), this, &PreviewWidget::zoomIn);
+    displayMenu->addAction(QStringLiteral("Zoom Out"), this, &PreviewWidget::zoomOut);
+    displayMenu->addAction(QStringLiteral("Reset Zoom"), this, &PreviewWidget::resetScale);
     if (!program) {
-        m_lockBtn = new QPushButton(QStringLiteral("Lock"), header);
-        m_lockBtn->setCheckable(true);
-        m_lockBtn->setCursor(Qt::PointingHandCursor);
-        m_lockBtn->setFixedHeight(20);
-        m_lockBtn->setToolTip(QStringLiteral("Lock preview editing (move/resize)"));
-        m_lockBtn->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
-            "font-size:9px;font-weight:700;padding:1px 8px;}"
-            "QPushButton:checked{background:#3A2010;border-color:#F97316;color:#FDBA74;}"
-            "QPushButton:hover{border-color:#4F9EFF;}"));
-        connect(m_lockBtn, &QPushButton::toggled, this, &PreviewWidget::setEditLocked);
-        h->addWidget(m_lockBtn);
+        displayMenu->addSeparator();
+        auto* lockAct = displayMenu->addAction(QStringLiteral("Lock Preview Editing"));
+        lockAct->setCheckable(true);
+        connect(lockAct, &QAction::toggled, this, &PreviewWidget::setEditLocked);
+        connect(this, &PreviewWidget::editLockedChanged, lockAct, [lockAct](bool on) {
+            QSignalBlocker b(lockAct);
+            lockAct->setChecked(on);
+        });
     }
-
-    auto* projBtn = new QPushButton(QStringLiteral("Proj"), header);
-    projBtn->setCursor(Qt::PointingHandCursor);
-    projBtn->setFixedHeight(20);
-    projBtn->setToolTip(QStringLiteral("Open projector"));
-    projBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:#1A1E26;border:1px solid #5A5E68;border-radius:2px;color:#E0E2E8;"
-        "font-size:9px;font-weight:700;padding:1px 8px;}"
-        "QPushButton:hover{border-color:#4F9EFF;}"));
-    auto* projMenu = new QMenu(projBtn);
-    projMenu->addAction(QStringLiteral("Windowed Projector"), this, &PreviewWidget::openProjectorWindowed);
-    projMenu->addAction(QStringLiteral("Fullscreen Projector"), this, &PreviewWidget::openProjectorFullscreen);
-    projBtn->setMenu(projMenu);
-    h->addWidget(projBtn);
+    displayMenu->addSeparator();
+    displayMenu->addAction(QStringLiteral("Windowed Projector"), this, &PreviewWidget::openProjectorWindowed);
+    displayMenu->addAction(QStringLiteral("Fullscreen Projector"), this, &PreviewWidget::openProjectorFullscreen);
+    displayBtn->setMenu(displayMenu);
+    h->addWidget(displayBtn);
 
     col->addWidget(header);
 
@@ -1151,13 +1136,18 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     }
 
     if (engine) {
-        connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this, sceneName, clearBtn] {
+        auto applySceneName = [sceneName](const QString& name) {
+            const QString raw = name.isEmpty() ? QStringLiteral("No Scene") : name;
+            sceneName->setToolTip(raw);
+            sceneName->setText(sceneName->fontMetrics().elidedText(raw, Qt::ElideRight, 180));
+        };
+        connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this, clearBtn, applySceneName] {
             const auto p = m_engine->projectSnapshot();
             const QString id = m_program
                                    ? p.programSceneId
                                    : (p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
             const auto* sc = p.findScene(id);
-            sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
+            applySceneName(sc ? sc->name : QString());
             clearBtn->setVisible(!m_program && !p.previewSceneId.isEmpty());
         });
         const auto p = engine->projectSnapshot();
@@ -1165,7 +1155,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
                                ? p.programSceneId
                                : (p.previewSceneId.isEmpty() ? p.activeSceneId : p.previewSceneId);
         const auto* sc = p.findScene(id);
-        sceneName->setText(sc ? sc->name : QStringLiteral("No Scene"));
+        applySceneName(sc ? sc->name : QString());
         clearBtn->setVisible(!program && !p.previewSceneId.isEmpty());
     }
 
@@ -1310,6 +1300,7 @@ void PreviewWidget::resetScale()
 
 void PreviewWidget::setEditLocked(bool locked)
 {
+    if (m_editLocked == locked) return;
     m_editLocked = locked;
     if (m_lockBtn) {
         QSignalBlocker b(m_lockBtn);
@@ -1318,6 +1309,7 @@ void PreviewWidget::setEditLocked(bool locked)
     }
     if (m_overlay)
         m_overlay->refreshChrome();
+    emit editLockedChanged(locked);
 }
 
 void PreviewWidget::openProjectorWindowed()

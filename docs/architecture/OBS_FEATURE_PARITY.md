@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 9 (Replay Start/Stop, Studio Swap, transition options).
+Last updated: Wave 10 (OBS-style chrome: menu bar + Controls core, dock/preview overlap fixes).
 
 ## Design rules
 
@@ -16,10 +16,10 @@ Last updated: Wave 9 (Replay Start/Stop, Studio Swap, transition options).
 
 | OBS | Role | Status | RailShot |
 |-----|------|--------|----------|
-| OBSBasic / OBSBasic_* | Main shell | partial | `MainWindow`, `DashboardPage`, `TopMenuBar` |
-| OBSBasicControls | Stream/Record/Replay/VCam/Studio | partial | `BottomToolbar` + Go Live + Replay Start/Stop + Studio Swap |
+| OBSBasic / OBSBasic_* | Main shell | partial | `MainWindow`, `DashboardPage`, `TopMenuBar` (File/Edit/View/Docks menus) |
+| OBSBasicControls | Stream/Record/Replay/VCam/Studio | partial | `BottomToolbar` Controls core + Swap (Studio on); tools via Docks |
 | OBSBasicStatusBar | FPS/CPU/dropped/bitrate/timers | partial | `ObsStatusBarWidget` (+ reconnect) |
-| OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + scale/lock/projectors |
+| OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + Display ▾ (scale/lock/projectors) |
 | OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle + Swap |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
@@ -65,3 +65,4 @@ Last updated: Wave 9 (Replay Start/Stop, Studio Swap, transition options).
 - [x] Wave 7 — Screenshots, Missing Files, VCam config, Multiview
 - [x] Wave 8 — Sources context menu, duplicate, color tags, Filters stack (Color Correction + reorder + copy/paste)
 - [x] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, Wipe direction + Merge≠Fade
+- [x] Wave 10 — OBS chrome cleanup (File/Edit/View/Docks menus; Controls core; Scenes/Preview overlap fixes)

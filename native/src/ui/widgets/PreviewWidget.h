@@ -50,6 +50,7 @@ signals:
     void sourceSelected(const QString& sourceId);
     void configureSourceRequested(const QString& sourceId);
     void interactRequested(const QString& sourceId);
+    void editLockedChanged(bool locked);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

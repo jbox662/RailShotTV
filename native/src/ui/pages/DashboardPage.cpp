@@ -49,6 +49,7 @@
 #include <QByteArray>
 #include <QMouseEvent>
 #include <QCursor>
+#include <QSignalBlocker>
 
 namespace railshot {
 
@@ -319,28 +320,35 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     scenesLay->setContentsMargins(0, 0, 0, 0);
     scenesLay->setSpacing(0);
     auto* scenesTools = new QWidget(scenesCol);
-    scenesTools->setFixedHeight(28);
+    scenesTools->setObjectName(QStringLiteral("scenesTools"));
+    scenesTools->setFixedHeight(30);
+    // No top border — DockTitleBar already owns the separator (avoids double-rule overlap).
     scenesTools->setStyleSheet(QStringLiteral(
-        "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #1A1D22,stop:1 #0D0F12);"
-        "border-bottom:1px solid #2A2D35;"));
+        "QWidget#scenesTools{"
+        "  background:#0D0F12;"
+        "  border:none;"
+        "  border-bottom:1px solid #2A2D35;"
+        "}"));
     auto* scenesToolsLay = new QHBoxLayout(scenesTools);
-    scenesToolsLay->setContentsMargins(4, 3, 4, 3);
-    scenesToolsLay->setSpacing(3);
+    scenesToolsLay->setContentsMargins(6, 4, 6, 4);
+    scenesToolsLay->setSpacing(4);
 
     const auto sceneToolStyle = QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #32363F,stop:1 #1A1E26);"
         "border:1px solid #5A5E68;color:#E0E2E8;font-family:'DM Sans';font-size:11px;"
-        "font-weight:800;border-radius:3px;padding:0 6px;min-width:22px;max-height:22px;}"
+        "font-weight:800;border-radius:3px;padding:0;min-width:24px;max-width:28px;"
+        "min-height:20px;max-height:20px;}"
         "QPushButton:hover{border-color:#4F9EFF;color:#FFFFFF;}"
         "QPushButton:disabled{color:#505860;border-color:#2A2D35;}");
 
     auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
     addScene->setToolTip(QStringLiteral("Add scene"));
     addScene->setCursor(Qt::PointingHandCursor);
+    addScene->setFixedSize(28, 20);
     addScene->setStyleSheet(QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1A3AFF);"
         "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:12px;"
-        "font-weight:800;border-radius:3px;padding:0 8px;min-width:22px;max-height:22px;}"
+        "font-weight:800;border-radius:3px;padding:0;min-height:20px;max-height:20px;}"
         "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);}"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
@@ -349,6 +357,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* remScene = new QPushButton(QStringLiteral("\u2212"), scenesTools);
     remScene->setToolTip(QStringLiteral("Remove scene"));
     remScene->setCursor(Qt::PointingHandCursor);
+    remScene->setFixedSize(28, 20);
     remScene->setStyleSheet(sceneToolStyle);
     connect(remScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
@@ -360,6 +369,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* dupScene = new QPushButton(QStringLiteral("⧉"), scenesTools);
     dupScene->setToolTip(QStringLiteral("Duplicate scene"));
     dupScene->setCursor(Qt::PointingHandCursor);
+    dupScene->setFixedSize(28, 20);
     dupScene->setStyleSheet(sceneToolStyle);
     connect(dupScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
@@ -371,6 +381,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* upScene = new QPushButton(QStringLiteral("↑"), scenesTools);
     upScene->setToolTip(QStringLiteral("Move scene up"));
     upScene->setCursor(Qt::PointingHandCursor);
+    upScene->setFixedSize(28, 20);
     upScene->setStyleSheet(sceneToolStyle);
     connect(upScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
@@ -382,6 +393,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     auto* downScene = new QPushButton(QStringLiteral("↓"), scenesTools);
     downScene->setToolTip(QStringLiteral("Move scene down"));
     downScene->setCursor(Qt::PointingHandCursor);
+    downScene->setFixedSize(28, 20);
     downScene->setStyleSheet(sceneToolStyle);
     connect(downScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
@@ -703,6 +715,37 @@ void DashboardPage::populateDocksMenu(QMenu* menu)
     menu->addSeparator();
     menu->addAction(QStringLiteral("Add Browser Panel…"), this, [this] { addExtraBrowserPanel(); });
     menu->addAction(QStringLiteral("Reset Desk Layout"), this, &DashboardPage::resetDockLayout);
+
+    // Tools formerly on the bottom Controls strip (OBS puts these under Docks/Tools).
+    menu->addSeparator();
+    menu->addAction(QStringLiteral("MultiCorder"), this, [this] {
+        const bool open = !m_multi->isVisible();
+        setMultiCorderOpen(open);
+        if (open) setPlayListOpen(false);
+    });
+    menu->addAction(QStringLiteral("PlayList"), this, [this] {
+        const bool open = !m_playlist->isVisible();
+        setPlayListOpen(open);
+        if (open) setMultiCorderOpen(false);
+    });
+    menu->addAction(QStringLiteral("Overlays…"), this, [this] {
+        QMenu overlay(this);
+        populateOverlayMenu(&overlay, m_engine, this);
+        overlay.addSeparator();
+        overlay.addAction(QStringLiteral("Reset desk layout"), this, &DashboardPage::resetDockLayout);
+        overlay.exec(QCursor::pos());
+    });
+    auto* externalAct = menu->addAction(QStringLiteral("External Output"));
+    externalAct->setCheckable(true);
+    externalAct->setToolTip(QStringLiteral("Send Program to External (Virtual Camera path)"));
+    connect(externalAct, &QAction::toggled, this, [this, externalAct](bool on) {
+        QString err;
+        if (!m_engine->setExternalOutputEnabled(on, &err)) {
+            QMessageBox::warning(this, QStringLiteral("External"), err);
+            QSignalBlocker b(externalAct);
+            externalAct->setChecked(false);
+        }
+    });
 }
 
 QDockWidget* DashboardPage::createExtraBrowserDock(const QString& panelId, const QString& title,

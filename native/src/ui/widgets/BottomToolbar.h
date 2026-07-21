@@ -30,9 +30,6 @@ private:
     QPushButton* m_studioBtn = nullptr;
     QPushButton* m_swapBtn = nullptr;
     QPushButton* m_replayToggleBtn = nullptr;
-    QPushButton* m_multiBtn = nullptr;
-    QPushButton* m_playlistBtn = nullptr;
-    QPushButton* m_overlayBtn = nullptr;
     QLabel* m_statusPill = nullptr;
 };
 

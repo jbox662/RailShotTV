@@ -4,7 +4,6 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QStyle>
-#include <QPoint>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QRadialGradient>
@@ -123,21 +122,6 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         "  min-height: 22px;"
         "  max-height: 24px;"
         "}"
-        "QWidget#bottomToolbar QPushButton#addInputBtn {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #3A6AFF, stop:1 #1A3AFF);"
-        "  border: 1px solid #5A8AFF;"
-        "  border-radius: 3px;"
-        "  color: #FFFFFF;"
-        "  font-weight: 800;"
-        "  font-size: 10px;"
-        "  padding: 2px 10px;"
-        "  min-height: 22px;"
-        "  max-height: 24px;"
-        "}"
-        "QWidget#bottomToolbar QPushButton#addInputBtn:hover {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5A8AFF, stop:1 #3A6AFF);"
-        "  border: 1px solid #8AB4FF;"
-        "}"
         "QWidget#bottomToolbar QLabel#statusPill {"
         "  font-family: 'JetBrains Mono','Consolas',monospace;"
         "  font-size: 8px;"
@@ -152,13 +136,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     row->setContentsMargins(6, 4, 6, 4);
     row->setSpacing(4);
 
-    auto* add = new QPushButton(QStringLiteral("Add Input  ▾"), this);
-    add->setObjectName(QStringLiteral("addInputBtn"));
-    add->setCursor(Qt::PointingHandCursor);
-    add->setFixedHeight(22);
-    connect(add, &QPushButton::clicked, this, &BottomToolbar::addInputRequested);
-    row->addWidget(add);
-
+    // OBS Controls core: Record · Stream · Replay · Save Replay · Virtual Cam · Studio · Swap
     m_recordBtn = new QPushButton(QStringLiteral("+ Record"), this);
     m_recordBtn->setObjectName(QStringLiteral("recordButton"));
     m_recordBtn->setCursor(Qt::PointingHandCursor);
@@ -182,21 +160,6 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     });
     row->addWidget(m_recordBtn);
 
-    auto* external = new QPushButton(QStringLiteral("External"), this);
-    external->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    external->setCheckable(true);
-    external->setCursor(Qt::PointingHandCursor);
-    external->setFixedHeight(22);
-    external->setToolTip(QStringLiteral("Send Program to External (Virtual Camera)"));
-    connect(external, &QPushButton::toggled, this, [this, external](bool on) {
-        QString err;
-        if (!m_engine->setExternalOutputEnabled(on, &err)) {
-            QMessageBox::warning(this, QStringLiteral("External"), err);
-            external->setChecked(false);
-        }
-    });
-    row->addWidget(external);
-
     m_streamBtn = new StreamGlowButton(QStringLiteral("● Stream"), this);
     m_streamBtn->setObjectName(QStringLiteral("streamButton"));
     m_streamBtn->setCursor(Qt::PointingHandCursor);
@@ -214,32 +177,6 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
         }
     });
     row->addWidget(m_streamBtn);
-
-    auto* multi = new QPushButton(QStringLiteral("MultiCorder"), this);
-    multi->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    multi->setCursor(Qt::PointingHandCursor);
-    multi->setFixedHeight(22);
-    connect(multi, &QPushButton::clicked, this, &BottomToolbar::multiCorderRequested);
-    row->addWidget(multi);
-    m_multiBtn = multi;
-
-    auto* playlist = new QPushButton(QStringLiteral("PlayList"), this);
-    playlist->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    playlist->setCursor(Qt::PointingHandCursor);
-    playlist->setFixedHeight(22);
-    connect(playlist, &QPushButton::clicked, this, &BottomToolbar::playListRequested);
-    row->addWidget(playlist);
-    m_playlistBtn = playlist;
-
-    auto* overlay = new QPushButton(QStringLiteral("Overlay  ▾"), this);
-    overlay->setObjectName(QStringLiteral("toolbarChromeBtn"));
-    overlay->setCursor(Qt::PointingHandCursor);
-    overlay->setFixedHeight(22);
-    connect(overlay, &QPushButton::clicked, this, [this, overlay] {
-        emit overlayMenuRequested(overlay->mapToGlobal(QPoint(0, overlay->height())));
-    });
-    row->addWidget(overlay);
-    m_overlayBtn = overlay;
 
     auto* replayToggle = new QPushButton(QStringLiteral("Replay"), this);
     replayToggle->setObjectName(QStringLiteral("toolbarChromeBtn"));
@@ -292,11 +229,13 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     m_studioBtn->setToolTip(QStringLiteral("Show Preview + Program (OBS Studio Mode)"));
     connect(m_studioBtn, &QPushButton::toggled, this, [this](bool on) {
         m_engine->setStudioMode(on);
+        if (m_swapBtn) m_swapBtn->setVisible(on);
         emit studioModeToggled(on);
     });
     connect(m_engine, &EngineController::studioModeChanged, this, [this](bool on) {
         QSignalBlocker b(m_studioBtn);
         m_studioBtn->setChecked(on);
+        if (m_swapBtn) m_swapBtn->setVisible(on);
         emit studioModeToggled(on);
     });
     row->addWidget(m_studioBtn);
@@ -308,6 +247,7 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
     connect(swapBtn, &QPushButton::clicked, this, [this] { m_engine->swapPreviewProgram(); });
     row->addWidget(swapBtn);
     m_swapBtn = swapBtn;
+    m_swapBtn->setVisible(m_studioBtn->isChecked());
 
     row->addStretch();
 
@@ -362,13 +302,11 @@ BottomToolbar::BottomToolbar(EngineController* engine, QWidget* parent)
 
     motion::installPressScale(m_streamBtn);
     motion::installPressScale(m_recordBtn);
-    motion::installPressScale(add);
 }
 
 void BottomToolbar::setBasicMode(bool on)
 {
-    if (m_multiBtn) m_multiBtn->setVisible(!on);
-    if (m_playlistBtn) m_playlistBtn->setVisible(!on);
+    Q_UNUSED(on);
 }
 
 } // namespace railshot
