@@ -979,7 +979,7 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
 
     stage = new StageChrome(program, this);
     auto* stageLay = new QVBoxLayout(stage);
-    stageLay->setContentsMargins(3, m_program ? 20 : 3, 3, 3);
+    stageLay->setContentsMargins(3, 3, 3, 3);
     stageLay->setSpacing(0);
 
     auto* stackHost = new QWidget(stage);

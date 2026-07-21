@@ -257,16 +257,18 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     previewColLay->setContentsMargins(0, 0, 0, 0);
     previewColLay->setSpacing(0);
     m_preview = new PreviewWidget(engine, false, m_previewColumn);
-    m_contextBar = new SourceContextToolbar(engine, m_previewColumn);
     previewColLay->addWidget(m_preview, 1);
-    previewColLay->addWidget(m_contextBar);
 
     m_program = new PreviewWidget(engine, true, this);
     m_transitions = new TransitionPanel(engine, this);
     monitors->addWidget(m_previewColumn, 1);
-    monitors->addWidget(m_transitions);
+    monitors->addWidget(m_transitions, 0);
     monitors->addWidget(m_program, 1);
     root->addLayout(monitors, 5);
+
+    // Context toolbar under both monitors so Preview/Program canvases stay equal height.
+    m_contextBar = new SourceContextToolbar(engine, this);
+    root->addWidget(m_contextBar);
 
     // Nested QMainWindow hosts OBS-style docks (must be Qt::Widget, not a top-level window).
     m_dockHost = new QMainWindow(this);
@@ -670,6 +672,8 @@ void DashboardPage::setStudioMode(bool enabled)
         m_previewColumn->setVisible(enabled);
     if (m_transitions)
         m_transitions->setVisible(enabled);
+    if (m_contextBar)
+        m_contextBar->setVisible(enabled);
 }
 
 void DashboardPage::openDrawer()
