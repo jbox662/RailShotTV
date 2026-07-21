@@ -50,6 +50,7 @@
 #include <QMouseEvent>
 #include <QCursor>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 
 namespace railshot {
 
@@ -196,27 +197,36 @@ public:
     DockTitleBar(QDockWidget* dock, const QString& title, const QString& accent, QWidget* parent = nullptr)
         : QWidget(parent), m_dock(dock)
     {
-        setFixedHeight(28);
+        // Title row + separate rule widget (CSS border-bottom was bleeding into content).
+        setFixedHeight(30);
         setCursor(Qt::SizeAllCursor);
         setObjectName(QStringLiteral("dockTitleBar"));
-        // Chromatic Command panel header: accent bar + tinted gradient wash + hard bottom rule
+        setAttribute(Qt::WA_StyledBackground, true);
+        setAutoFillBackground(true);
         setStyleSheet(QStringLiteral(
             "QWidget#dockTitleBar {"
+            "  border: none;"
             "  border-left: 3px solid %1;"
             "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
             "    stop:0 %2, stop:0.5 #14181E);"
-            "  border-bottom: 2px solid #4A5060;"
             "}")
                           .arg(accent, tintForAccent(accent)));
 
-        auto* lay = new QHBoxLayout(this);
+        auto* root = new QVBoxLayout(this);
+        root->setContentsMargins(0, 0, 0, 0);
+        root->setSpacing(0);
+
+        auto* bar = new QWidget(this);
+        bar->setFixedHeight(28);
+        bar->setStyleSheet(QStringLiteral("background:transparent; border:none;"));
+        auto* lay = new QHBoxLayout(bar);
         lay->setContentsMargins(10, 0, 4, 0);
         lay->setSpacing(2);
 
-        auto* lab = new QLabel(title.toUpper(), this);
+        auto* lab = new QLabel(title.toUpper(), bar);
         lab->setStyleSheet(QStringLiteral(
             "color:#F0F0F0; font-family:'DM Sans','Segoe UI'; font-size:11px; font-weight:800;"
-            "letter-spacing:1.2px; background:transparent;"));
+            "letter-spacing:1.2px; background:transparent; border:none;"));
         lay->addWidget(lab, 1);
 
         const QString btnStyle = QStringLiteral(
@@ -225,7 +235,7 @@ public:
             "QPushButton:hover{color:#F8F8FF;background:rgba(255,255,255,0.08);border-color:#3A3D45;}")
                                      .arg(accent);
 
-        auto* floatBtn = new QPushButton(QStringLiteral("□"), this);
+        auto* floatBtn = new QPushButton(QStringLiteral("□"), bar);
         floatBtn->setFixedSize(20, 20);
         floatBtn->setCursor(Qt::PointingHandCursor);
         floatBtn->setToolTip(QStringLiteral("Float / dock"));
@@ -234,7 +244,7 @@ public:
             if (m_dock) m_dock->setFloating(!m_dock->isFloating());
         });
 
-        auto* hideBtn = new QPushButton(QStringLiteral("×"), this);
+        auto* hideBtn = new QPushButton(QStringLiteral("×"), bar);
         hideBtn->setFixedSize(20, 20);
         hideBtn->setCursor(Qt::PointingHandCursor);
         hideBtn->setToolTip(QStringLiteral("Hide panel"));
@@ -245,6 +255,15 @@ public:
 
         lay->addWidget(floatBtn);
         lay->addWidget(hideBtn);
+        root->addWidget(bar);
+
+        auto* rule = new QFrame(this);
+        rule->setObjectName(QStringLiteral("dockTitleRule"));
+        rule->setFixedHeight(2);
+        rule->setFrameShape(QFrame::NoFrame);
+        rule->setStyleSheet(QStringLiteral(
+            "QFrame#dockTitleRule{background:#4A5060; border:none; max-height:2px; min-height:2px;}"));
+        root->addWidget(rule);
     }
 
 protected:
@@ -338,8 +357,8 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
     scenesLay->setSpacing(0);
     auto* scenesTools = new QWidget(scenesCol);
     scenesTools->setObjectName(QStringLiteral("scenesTools"));
-    scenesTools->setFixedHeight(30);
-    // No top border — DockTitleBar already owns the separator (avoids double-rule overlap).
+    scenesTools->setFixedHeight(36);
+    scenesTools->setAttribute(Qt::WA_StyledBackground, true);
     scenesTools->setStyleSheet(QStringLiteral(
         "QWidget#scenesTools{"
         "  background:#0D0F12;"
@@ -347,35 +366,39 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         "  border-bottom:1px solid #2A2D35;"
         "}"));
     auto* scenesToolsLay = new QHBoxLayout(scenesTools);
-    scenesToolsLay->setContentsMargins(6, 4, 6, 4);
+    scenesToolsLay->setContentsMargins(8, 6, 8, 6);
     scenesToolsLay->setSpacing(4);
+    scenesToolsLay->setAlignment(Qt::AlignVCenter);
 
     const auto sceneToolStyle = QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #32363F,stop:1 #1A1E26);"
         "border:1px solid #5A5E68;color:#E0E2E8;font-family:'DM Sans';font-size:11px;"
-        "font-weight:800;border-radius:3px;padding:0;min-width:24px;max-width:28px;"
-        "min-height:20px;max-height:20px;}"
+        "font-weight:800;border-radius:3px;padding:0;margin:0;}"
         "QPushButton:hover{border-color:#4F9EFF;color:#FFFFFF;}"
         "QPushButton:disabled{color:#505860;border-color:#2A2D35;}");
 
-    auto* addScene = new QPushButton(QStringLiteral("+"), scenesTools);
-    addScene->setToolTip(QStringLiteral("Add scene"));
-    addScene->setCursor(Qt::PointingHandCursor);
-    addScene->setFixedSize(28, 20);
-    addScene->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1A3AFF);"
-        "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:12px;"
-        "font-weight:800;border-radius:3px;padding:0;min-height:20px;max-height:20px;}"
-        "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);}"));
+    auto makeSceneTool = [&](const QString& text, const QString& tip, const QString& style) {
+        auto* b = new QPushButton(text, scenesTools);
+        b->setToolTip(tip);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFixedSize(26, 22);
+        b->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        b->setStyleSheet(style);
+        return b;
+    };
+
+    auto* addScene = makeSceneTool(
+        QStringLiteral("+"), QStringLiteral("Add scene"),
+        QStringLiteral(
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #3A6AFF,stop:1 #1A3AFF);"
+            "border:1px solid #6B9AFF;color:#FFFFFF;font-family:'DM Sans';font-size:13px;"
+            "font-weight:800;border-radius:3px;padding:0;margin:0;}"
+            "QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4A7AFF,stop:1 #2A4AFF);}"));
     connect(addScene, &QPushButton::clicked, this, [this] {
         m_engine->sceneGraph()->mutate([](Project& p) { p.addScene(); });
     });
 
-    auto* remScene = new QPushButton(QStringLiteral("\u2212"), scenesTools);
-    remScene->setToolTip(QStringLiteral("Remove scene"));
-    remScene->setCursor(Qt::PointingHandCursor);
-    remScene->setFixedSize(28, 20);
-    remScene->setStyleSheet(sceneToolStyle);
+    auto* remScene = makeSceneTool(QStringLiteral("\u2212"), QStringLiteral("Remove scene"), sceneToolStyle);
     connect(remScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
         const QString id = m_sceneList->currentItem()->data(Qt::UserRole).toString();
@@ -383,11 +406,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         m_engine->sceneGraph()->mutate([&](Project& p) { p.removeScene(id); });
     });
 
-    auto* dupScene = new QPushButton(QStringLiteral("⧉"), scenesTools);
-    dupScene->setToolTip(QStringLiteral("Duplicate scene"));
-    dupScene->setCursor(Qt::PointingHandCursor);
-    dupScene->setFixedSize(28, 20);
-    dupScene->setStyleSheet(sceneToolStyle);
+    auto* dupScene = makeSceneTool(QStringLiteral("⧉"), QStringLiteral("Duplicate scene"), sceneToolStyle);
     connect(dupScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
         const QString id = m_sceneList->currentItem()->data(Qt::UserRole).toString();
@@ -395,11 +414,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         m_engine->sceneGraph()->mutate([&](Project& p) { p.duplicateScene(id); });
     });
 
-    auto* upScene = new QPushButton(QStringLiteral("↑"), scenesTools);
-    upScene->setToolTip(QStringLiteral("Move scene up"));
-    upScene->setCursor(Qt::PointingHandCursor);
-    upScene->setFixedSize(28, 20);
-    upScene->setStyleSheet(sceneToolStyle);
+    auto* upScene = makeSceneTool(QStringLiteral("↑"), QStringLiteral("Move scene up"), sceneToolStyle);
     connect(upScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
         const int row = m_sceneList->currentRow();
@@ -407,11 +422,7 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         m_engine->sceneGraph()->mutate([&](Project& p) { p.reorderScenes(row, row - 1); });
     });
 
-    auto* downScene = new QPushButton(QStringLiteral("↓"), scenesTools);
-    downScene->setToolTip(QStringLiteral("Move scene down"));
-    downScene->setCursor(Qt::PointingHandCursor);
-    downScene->setFixedSize(28, 20);
-    downScene->setStyleSheet(sceneToolStyle);
+    auto* downScene = makeSceneTool(QStringLiteral("↓"), QStringLiteral("Move scene down"), sceneToolStyle);
     connect(downScene, &QPushButton::clicked, this, [this] {
         if (!m_sceneList || !m_sceneList->currentItem()) return;
         const int row = m_sceneList->currentRow();
@@ -419,11 +430,11 @@ DashboardPage::DashboardPage(EngineController* engine, QWidget* parent)
         m_engine->sceneGraph()->mutate([&](Project& p) { p.reorderScenes(row, row + 1); });
     });
 
-    scenesToolsLay->addWidget(addScene);
-    scenesToolsLay->addWidget(remScene);
-    scenesToolsLay->addWidget(dupScene);
-    scenesToolsLay->addWidget(upScene);
-    scenesToolsLay->addWidget(downScene);
+    scenesToolsLay->addWidget(addScene, 0, Qt::AlignVCenter);
+    scenesToolsLay->addWidget(remScene, 0, Qt::AlignVCenter);
+    scenesToolsLay->addWidget(dupScene, 0, Qt::AlignVCenter);
+    scenesToolsLay->addWidget(upScene, 0, Qt::AlignVCenter);
+    scenesToolsLay->addWidget(downScene, 0, Qt::AlignVCenter);
     scenesToolsLay->addStretch();
     scenesLay->addWidget(scenesTools);
     m_sceneList = new SceneListWidget(engine, scenesCol);
@@ -600,11 +611,11 @@ QDockWidget* DashboardPage::makeDock(const QString& title, const QString& object
 {
     auto* dock = new QDockWidget(title, m_dockHost);
     dock->setObjectName(objectName);
-    // Frame content so each dock reads as its own card against the dark gutter.
+    // Inset under title so tool rows never paint into the header rule.
     auto* frame = new QFrame(dock);
     frame->setObjectName(QStringLiteral("dockContentFrame"));
     auto* frameLay = new QVBoxLayout(frame);
-    frameLay->setContentsMargins(0, 0, 0, 0);
+    frameLay->setContentsMargins(0, 6, 0, 0);
     frameLay->setSpacing(0);
     content->setParent(frame);
     frameLay->addWidget(content);

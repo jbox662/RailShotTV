@@ -69,7 +69,7 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
         "}"));
 
     auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(6, 4, 6, 4);
+    outer->setContentsMargins(8, 8, 8, 6);
     outer->setSpacing(4);
 
     // Toolbar — OBS Options / Adv Audio + global monitor

@@ -141,7 +141,7 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
         "QLabel{background:transparent;border:none;}"));
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
+    root->setContentsMargins(0, 4, 0, 0);
     root->setSpacing(0);
 
     m_scroll = new QScrollArea(this);

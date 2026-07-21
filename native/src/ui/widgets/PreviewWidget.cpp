@@ -980,12 +980,22 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     col->setSpacing(0);
 
     auto* header = new QWidget(this);
-    header->setFixedHeight(32);
+    header->setObjectName(QStringLiteral("monitorHeader"));
+    header->setFixedHeight(34);
+    header->setAttribute(Qt::WA_StyledBackground, true);
     header->setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
-        "border-bottom: 2px solid %1;")
-                              .arg(accent));
-    auto* h = new QHBoxLayout(header);
+        "QWidget#monitorHeader{"
+        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1E2228, stop:1 #12151A);"
+        "  border:none;"
+        "}"));
+    auto* headerCol = new QVBoxLayout(header);
+    headerCol->setContentsMargins(0, 0, 0, 0);
+    headerCol->setSpacing(0);
+
+    auto* headerRow = new QWidget(header);
+    headerRow->setFixedHeight(32);
+    headerRow->setStyleSheet(QStringLiteral("background:transparent; border:none;"));
+    auto* h = new QHBoxLayout(headerRow);
     h->setContentsMargins(10, 4, 10, 4);
     h->setSpacing(8);
     auto* title = new QLabel(program ? QStringLiteral("PROGRAM") : QStringLiteral("PREVIEW"), header);
@@ -1093,6 +1103,13 @@ PreviewWidget::PreviewWidget(EngineController* engine, bool program, QWidget* pa
     displayMenu->addAction(QStringLiteral("Fullscreen Projector"), this, &PreviewWidget::openProjectorFullscreen);
     displayBtn->setMenu(displayMenu);
     h->addWidget(displayBtn);
+
+    headerCol->addWidget(headerRow);
+    auto* headerRule = new QFrame(header);
+    headerRule->setFixedHeight(2);
+    headerRule->setFrameShape(QFrame::NoFrame);
+    headerRule->setStyleSheet(QStringLiteral("background:%1; border:none;").arg(accent));
+    headerCol->addWidget(headerRule);
 
     col->addWidget(header);
 
