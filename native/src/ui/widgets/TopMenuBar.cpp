@@ -89,14 +89,29 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     row->setContentsMargins(8, 3, 8, 3);
     row->setSpacing(3);
 
-    auto* brand = new QLabel(this);
+    auto* brandRow = new QWidget(this);
+    brandRow->setStyleSheet(QStringLiteral("background:transparent;border:none;"));
+    auto* brandLay = new QHBoxLayout(brandRow);
+    brandLay->setContentsMargins(0, 0, 0, 0);
+    brandLay->setSpacing(6);
+    auto* logo = new QLabel(brandRow);
+    logo->setFixedSize(22, 22);
+    logo->setScaledContents(false);
+    logo->setAlignment(Qt::AlignCenter);
+    logo->setStyleSheet(QStringLiteral("background:transparent;border:none;"));
+    const QPixmap logoPm = theme::appLogoPixmap(22);
+    if (!logoPm.isNull())
+        logo->setPixmap(logoPm);
+    brandLay->addWidget(logo);
+    auto* brand = new QLabel(brandRow);
     brand->setObjectName(QStringLiteral("brandWordmark"));
     brand->setText(QStringLiteral(
         "<span style='font-family:\"Bebas Neue\",\"Arial Narrow\",sans-serif; font-size:15px; letter-spacing:0.05em;'>"
         "<span style='color:#F8F8FF;font-weight:400;'>RAILSHOT</span>"
         "<span style='color:#FF5A2C;font-weight:400;'> TV</span></span>"));
     brand->setStyleSheet(QStringLiteral("background:transparent; border:none;"));
-    row->addWidget(brand);
+    brandLay->addWidget(brand);
+    row->addWidget(brandRow);
     row->addSpacing(8);
 
     auto* menuBar = new QMenuBar(this);

@@ -6,6 +6,8 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QIcon>
+#include <QPixmap>
 
 namespace railshot {
 namespace theme {
@@ -13,6 +15,46 @@ namespace theme {
 QColor color(const char* hex)
 {
     return QColor(QString::fromLatin1(hex));
+}
+
+QIcon appIcon()
+{
+    QIcon icon;
+    const QStringList paths = {
+        QStringLiteral(":/branding/appicon_32.png"),
+        QStringLiteral(":/branding/appicon_48.png"),
+        QStringLiteral(":/branding/appicon_64.png"),
+        QStringLiteral(":/branding/appicon_128.png"),
+        QStringLiteral(":/branding/appicon_256.png"),
+        QStringLiteral(":/branding/RailShotTV.ico"),
+    };
+    for (const auto& path : paths) {
+        if (QFile::exists(path))
+            icon.addFile(path);
+    }
+    if (icon.isNull())
+        icon.addFile(QStringLiteral(":/branding/appicon_256.png"));
+    return icon;
+}
+
+QPixmap appLogoPixmap(int sizePx)
+{
+    const int px = qMax(16, sizePx);
+    QString path = QStringLiteral(":/branding/appicon_256.png");
+    if (px <= 32)
+        path = QStringLiteral(":/branding/appicon_32.png");
+    else if (px <= 48)
+        path = QStringLiteral(":/branding/appicon_48.png");
+    else if (px <= 64)
+        path = QStringLiteral(":/branding/appicon_64.png");
+    else if (px <= 128)
+        path = QStringLiteral(":/branding/appicon_128.png");
+    QPixmap pm(path);
+    if (pm.isNull())
+        pm = QPixmap(QStringLiteral(":/branding/appicon_256.png"));
+    if (pm.isNull())
+        return {};
+    return pm.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 }
 
 void registerFonts()

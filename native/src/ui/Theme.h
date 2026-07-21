@@ -2,6 +2,8 @@
 
 #include <QString>
 #include <QColor>
+#include <QIcon>
+#include <QPixmap>
 #include <QWidget>
 
 class QLabel;
@@ -45,6 +47,10 @@ enum class PanelAccent { Brand, Blue, Violet, Emerald, Cyan, Amber, Pink };
 void registerFonts();
 QString loadStyleSheet();
 QColor color(const char* hex);
+/// Multi-size app icon from embedded branding assets.
+QIcon appIcon();
+/// Scaled logo pixmap for chrome (sidebar / menu bar).
+QPixmap appLogoPixmap(int sizePx);
 QString panelHeaderStyle(PanelAccent accent);
 void applyPanelHeader(QWidget* widget, PanelAccent accent);
 QWidget* makePageHeader(const QString& pageTitle, PanelAccent accent, QWidget* parent);

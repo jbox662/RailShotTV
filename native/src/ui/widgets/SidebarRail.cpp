@@ -14,35 +14,17 @@
 namespace railshot {
 
 namespace {
-class LogoBadge : public QWidget {
+class LogoBadge : public QLabel {
 public:
-    explicit LogoBadge(QWidget* parent = nullptr) : QWidget(parent) { setFixedSize(30, 30); }
-protected:
-    void paintEvent(QPaintEvent*) override
+    explicit LogoBadge(QWidget* parent = nullptr) : QLabel(parent)
     {
-        QPainter p(this);
-        p.setRenderHint(QPainter::Antialiasing);
-        QRadialGradient glow(15, 15, 20);
-        glow.setColorAt(0, QColor(255, 90, 44, 160));
-        glow.setColorAt(1, QColor(255, 90, 44, 0));
-        p.setPen(Qt::NoPen);
-        p.setBrush(glow);
-        p.drawEllipse(QRectF(-6, -6, 42, 42));
-
-        QLinearGradient g(0, 0, 30, 30);
-        g.setColorAt(0, QColor(QStringLiteral("#FF5A2C")));
-        g.setColorAt(1, QColor(QStringLiteral("#FF8C42")));
-        p.setBrush(g);
-        p.drawEllipse(0, 0, 30, 30);
-
-        p.setPen(QPen(QColor(255, 255, 255, 230), 1.5, Qt::SolidLine, Qt::RoundCap));
-        p.setBrush(QColor(255, 255, 255, 230));
-        p.drawEllipse(QPointF(15, 15), 3, 3);
-        p.drawLine(QPointF(1, 15), QPointF(6, 15));
-        p.drawLine(QPointF(10, 15), QPointF(15, 15));
-        p.drawLine(QPointF(1 + 9, 15), QPointF(6 + 9, 15));
-        p.drawLine(QPointF(15, 1), QPointF(15, 6));
-        p.drawLine(QPointF(15, 10), QPointF(15, 15));
+        setFixedSize(30, 30);
+        setAlignment(Qt::AlignCenter);
+        setStyleSheet(QStringLiteral("background:transparent;border:none;"));
+        const QPixmap pm = theme::appLogoPixmap(30);
+        if (!pm.isNull())
+            setPixmap(pm);
+        setToolTip(QStringLiteral("RailShotTV"));
     }
 };
 

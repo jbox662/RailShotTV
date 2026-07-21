@@ -88,6 +88,58 @@ void drawRoundRect(QPainter& p, const QRect& r, int radius, const QColor& fill, 
     p.drawRoundedRect(r, radius, radius);
 }
 
+/// Draw text clipped to `box`, shrinking from maxPx until it fits (no overflow).
+void drawTextInBox(QPainter& p, const QRect& box, const QString& text,
+                   const QString& family, int maxPx, int minPx,
+                   const QColor& color, int align = Qt::AlignCenter)
+{
+    if (box.width() < 2 || box.height() < 2 || text.isEmpty())
+        return;
+    p.save();
+    p.setClipRect(box);
+    p.setPen(color);
+    QFont f(family);
+    f.setBold(true);
+    f.setStyleStrategy(QFont::PreferAntialias);
+    int px = qMax(minPx, maxPx);
+    for (; px >= minPx; --px) {
+        f.setPixelSize(px);
+        p.setFont(f);
+        const QRect br = p.fontMetrics().boundingRect(box, align | Qt::TextSingleLine, text);
+        if (br.width() <= box.width() && br.height() <= box.height())
+            break;
+    }
+    if (px < minPx) {
+        f.setPixelSize(minPx);
+        p.setFont(f);
+    }
+    p.drawText(box, align | Qt::TextSingleLine, text);
+    p.restore();
+}
+
+/// Standard race tab: "RACE TO" label over a fitted race number — always inside `raceR`.
+void drawRaceToTab(QPainter& p, const QRect& raceR, int race,
+                   const QColor& labelColor, const QColor& numberColor,
+                   bool lightShell = false)
+{
+    if (raceR.height() < 20)
+        return;
+    if (lightShell) {
+        p.setBrush(QColor(248, 250, 252));
+        p.setPen(QPen(QColor(200, 205, 215), 1));
+        p.drawRoundedRect(raceR, 4, 4);
+    }
+    const int pad = 4;
+    const int labelH = qBound(12, raceR.height() / 3, 16);
+    const QRect labelR(raceR.left() + pad, raceR.top() + pad, raceR.width() - 2 * pad, labelH);
+    const QRect numR(raceR.left() + pad, labelR.bottom() + 1,
+                     raceR.width() - 2 * pad, raceR.bottom() - pad - (labelR.bottom() + 1));
+    drawTextInBox(p, labelR, QStringLiteral("RACE TO"), QStringLiteral("DM Sans"),
+                  11, 7, labelColor);
+    drawTextInBox(p, numR, QString::number(race), QStringLiteral("Bebas Neue"),
+                  qMin(28, numR.height()), 12, numberColor);
+}
+
 void drawBaseDiamond(QPainter& p, const QPointF& c, qreal size, bool occupied, const QColor& lit, const QColor& dim)
 {
     QPolygonF poly;
@@ -264,21 +316,12 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
     p.setPen(Qt::NoPen);
     p.drawRoundedRect(scoreAR, 3, 3);
     p.drawRoundedRect(scoreBR, 3, 3);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
 
-    p.setBrush(QColor(248, 250, 252));
-    p.setPen(QPen(QColor(200, 205, 215), 1));
-    p.drawRoundedRect(raceR, 4, 4);
-    p.setPen(QColor(30, 34, 42));
-    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 4, raceR.top() + 6, raceR.width() - 8, 14),
-               Qt::AlignCenter, QStringLiteral("RACE TO"));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 22, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 4, raceR.top() + 20, raceR.width() - 8, raceR.height() - 22),
-               Qt::AlignCenter, QString::number(race));
+    drawRaceToTab(p, raceR, race, QColor(30, 34, 42), QColor(30, 34, 42), true);
 
     p.setPen(Qt::white);
     p.setFont(QFont(QStringLiteral("DM Sans"), 15, QFont::Bold));
@@ -358,16 +401,11 @@ void renderBilliardsClean(QPainter& p, const QJsonObject& state, int W, int H)
     p.setFont(QFont(QStringLiteral("DM Sans"), 14, QFont::Bold));
     p.drawText(leftName, Qt::AlignCenter, a);
     p.drawText(rightName, Qt::AlignCenter, b);
-    p.setFont(QFont(QStringLiteral("DM Sans"), 9, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 2, raceR.top() + 10, raceR.width() - 4, 16),
-               Qt::AlignCenter, QStringLiteral("RACE TO"));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 20, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 2, raceR.top() + 28, raceR.width() - 4, 24),
-               Qt::AlignCenter, QString::number(race));
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 26, QFont::Bold));
-    p.drawText(scoreA, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreB, Qt::AlignCenter, QString::number(sb));
+    drawRaceToTab(p, raceR.adjusted(4, 4, -4, -4), race, Qt::white, Qt::white, false);
+    drawTextInBox(p, scoreA.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreB.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
 
     if (active == 1) {
         p.setBrush(Qt::white);
@@ -416,19 +454,17 @@ void renderBilliardsSnooker(QPainter& p, const QJsonObject& state, int W, int H)
     p.setBrush(Qt::white);
     p.drawRoundedRect(chipA, 3, 3);
     p.drawRoundedRect(chipB, 3, 3);
-    p.setPen(QColor(20, 22, 28));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 24, QFont::Bold));
-    p.drawText(chipA, Qt::AlignCenter, QString::number(sa));
-    p.drawText(chipB, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, chipA.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 24, 12, QColor(20, 22, 28));
+    drawTextInBox(p, chipB.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 24, 12, QColor(20, 22, 28));
+
+    drawTextInBox(p, QRect(raceMid.left(), raceMid.top() + 4, raceMid.width(), 14),
+                  QStringLiteral("RACE"), QStringLiteral("DM Sans"), 10, 7, fg);
+    drawTextInBox(p, QRect(raceMid.left(), raceMid.top() + 18, raceMid.width(), raceMid.height() - 22),
+                  QString::number(race), QStringLiteral("Bebas Neue"), 18, 11, fg);
 
     p.setPen(fg);
-    p.setFont(QFont(QStringLiteral("DM Sans"), 10, QFont::Bold));
-    p.drawText(QRect(raceMid.left(), raceMid.top() + 6, raceMid.width(), 14), Qt::AlignCenter,
-               QStringLiteral("RACE"));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 18, QFont::Bold));
-    p.drawText(QRect(raceMid.left(), raceMid.top() + 20, raceMid.width(), 22), Qt::AlignCenter,
-               QString::number(race));
-
     p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
     p.drawText(QRect(main.left() + 16, main.top(), chipA.left() - main.left() - 24, mainH),
                Qt::AlignVCenter | Qt::AlignLeft, a);
@@ -507,8 +543,8 @@ void renderBilliardsSlant(QPainter& p, const QJsonObject& state, int W, int H)
     p.setPen(Qt::white);
     p.setFont(QFont(QStringLiteral("DM Sans"), 8, QFont::Bold));
     p.drawText(QRect(sc.left(), sc.top() + 8, sc.width(), 12), Qt::AlignCenter, QStringLiteral("RACE"));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 18, QFont::Bold));
-    p.drawText(QRect(sc.left(), sc.top() + 22, sc.width(), 24), Qt::AlignCenter, QString::number(race));
+    drawTextInBox(p, QRect(sc.left() + 4, sc.top() + 20, sc.width() - 8, sc.height() - 28),
+                  QString::number(race), QStringLiteral("Bebas Neue"), 18, 11, Qt::white);
 
     // White score tiles
     const QRect scoreAR(leftR.right() - scoreBox - 10, leftR.top() + (leftR.height() - scoreBox) / 2,
@@ -518,10 +554,10 @@ void renderBilliardsSlant(QPainter& p, const QJsonObject& state, int W, int H)
     p.setBrush(Qt::white);
     p.drawRoundedRect(scoreAR, 3, 3);
     p.drawRoundedRect(scoreBR, 3, 3);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 26, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
 
     p.setPen(ink);
     p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
@@ -591,27 +627,25 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
     if (active == 2)
         p.fillRect(QRect(rightR.right() - 3, rightR.top(), 4, rightR.height()), accentB);
 
-    // Race pill — keep ALL text inside
+    // Race pill — label + fitted number only (no 8-ball; it stole height and overflowed).
     drawRoundRect(p, raceR, 6, QColor(0, 0, 0, 180), felt);
-    drawEightBall(p, QPointF(raceR.center().x(), raceR.top() + 16), 9.0);
-    p.setPen(felt.lighter(150));
-    p.setFont(QFont(QStringLiteral("DM Sans"), 8, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 4, raceR.top() + 26, raceR.width() - 8, 14),
-               Qt::AlignCenter, QStringLiteral("RACE TO"));
-    p.setPen(fg);
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 22, QFont::Bold));
-    p.drawText(QRect(raceR.left() + 4, raceR.top() + 40, raceR.width() - 8, 24),
-               Qt::AlignCenter, QString::number(race));
+    {
+        p.save();
+        p.setClipRect(raceR);
+        drawRaceToTab(p, raceR.adjusted(2, 2, -2, -2), race,
+                      felt.lighter(160), fg, false);
+        p.restore();
+    }
 
     // White score tiles
     p.setPen(Qt::NoPen);
     p.setBrush(Qt::white);
     p.drawRoundedRect(scoreAR, 4, 4);
     p.drawRoundedRect(scoreBR, 4, 4);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
 
     p.setPen(fg);
     p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
@@ -782,10 +816,10 @@ void renderBasketball(QPainter& p, const QJsonObject& state, int W, int H)
     p.setBrush(Qt::white);
     p.drawRoundedRect(scoreAR, 3, 3);
     p.drawRoundedRect(scoreBR, 3, 3);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
 
     p.setPen(accentA);
     p.setFont(QFont(QStringLiteral("DM Sans"), 11, QFont::Bold));
@@ -836,10 +870,10 @@ void renderSoccer(QPainter& p, const QJsonObject& state, int W, int H)
     p.setBrush(Qt::white);
     p.drawRoundedRect(scoreAR, 3, 3);
     p.drawRoundedRect(scoreBR, 3, 3);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 26, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 26, 14, QColor(15, 18, 24));
 
     p.setPen(fg);
     p.setFont(QFont(QStringLiteral("DM Sans"), 13, QFont::Bold));
@@ -941,10 +975,10 @@ void renderGeneric(QPainter& p, const QJsonObject& state, int W, int H)
     p.setBrush(Qt::white);
     p.drawRoundedRect(scoreAR, 3, 3);
     p.drawRoundedRect(scoreBR, 3, 3);
-    p.setPen(QColor(15, 18, 24));
-    p.setFont(QFont(QStringLiteral("Bebas Neue"), 28, QFont::Bold));
-    p.drawText(scoreAR, Qt::AlignCenter, QString::number(sa));
-    p.drawText(scoreBR, Qt::AlignCenter, QString::number(sb));
+    drawTextInBox(p, scoreAR.adjusted(2, 2, -2, -2), QString::number(sa),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
+    drawTextInBox(p, scoreBR.adjusted(2, 2, -2, -2), QString::number(sb),
+                  QStringLiteral("Bebas Neue"), 28, 14, QColor(15, 18, 24));
 
     p.setPen(fg);
     p.setFont(QFont(QStringLiteral("DM Sans"), 14, QFont::Bold));

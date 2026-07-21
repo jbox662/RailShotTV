@@ -39,6 +39,7 @@ MainWindow::MainWindow(EngineController* engine, QWidget* parent)
     : QMainWindow(parent), m_engine(engine)
 {
     setWindowTitle(QStringLiteral("RailShotTV"));
+    setWindowIcon(theme::appIcon());
     resize(1440, 900);
     setMinimumSize(1100, 700);
     setObjectName(QStringLiteral("AppRoot"));

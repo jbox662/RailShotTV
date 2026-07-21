@@ -8,5 +8,11 @@
     <file>fonts/DMSans-Variable.ttf</file>
     <file>fonts/JetBrainsMono-Regular.ttf</file>
     <file>fonts/JetBrainsMono-Medium.ttf</file>
+    <file>branding/RailShotTV.ico</file>
+    <file>branding/appicon_32.png</file>
+    <file>branding/appicon_48.png</file>
+    <file>branding/appicon_64.png</file>
+    <file>branding/appicon_128.png</file>
+    <file>branding/appicon_256.png</file>
   </qresource>
 </RCC>
