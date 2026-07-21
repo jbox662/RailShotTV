@@ -79,7 +79,9 @@ constexpr int kPresetCount = int(sizeof(kPresets) / sizeof(kPresets[0]));
 
 QString mapSportUiToModel(const QString& ui)
 {
-    if (ui == QLatin1String("Pool")) return QStringLiteral("8ball");
+    if (ui == QLatin1String("Pool") || ui == QLatin1String("8-Ball")) return QStringLiteral("8ball");
+    if (ui == QLatin1String("9-Ball")) return QStringLiteral("9ball");
+    if (ui == QLatin1String("10-Ball")) return QStringLiteral("10ball");
     if (ui == QLatin1String("Baseball")) return QStringLiteral("baseball");
     if (ui == QLatin1String("Basketball")) return QStringLiteral("basketball");
     if (ui == QLatin1String("Soccer")) return QStringLiteral("soccer");
@@ -89,9 +91,12 @@ QString mapSportUiToModel(const QString& ui)
 }
 QString mapSportModelToUi(const QString& model)
 {
+    if (model == QLatin1String("9ball")) return QStringLiteral("9-Ball");
+    if (model == QLatin1String("10ball")) return QStringLiteral("10-Ball");
     if (model == QLatin1String("8ball") || model == QLatin1String("pool")
-        || model == QLatin1String("9ball") || model == QLatin1String("snooker"))
-        return QStringLiteral("Pool");
+        || model == QLatin1String("snooker") || model == QLatin1String("straight")
+        || model == QLatin1String("onepocket") || model == QLatin1String("7ball"))
+        return QStringLiteral("8-Ball");
     if (model == QLatin1String("baseball")) return QStringLiteral("Baseball");
     if (model == QLatin1String("basketball")) return QStringLiteral("Basketball");
     if (model == QLatin1String("soccer")) return QStringLiteral("Soccer");
@@ -358,7 +363,7 @@ void ScoreboardSettingsDialog::filterPresetsBySport()
 
     auto matches = [&](const char* presetSport) -> bool {
         const QString ps = QString::fromUtf8(presetSport);
-        if (sportModel == QLatin1String("8ball"))
+        if (isPoolSport(sportModel))
             return ps == QLatin1String("8ball") || ps == QLatin1String("pool")
                    || ps == QLatin1String("9ball") || ps == QLatin1String("snooker");
         if (sportModel == QLatin1String("generic") || sportModel == QLatin1String("custom"))
@@ -655,7 +660,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     sportPanelLay->addWidget(sectionLabel(QStringLiteral("SPORT"), sportPanel));
     auto* sportGrid = new QGridLayout();
     sportGrid->setSpacing(5);
-    const QStringList sports = {QStringLiteral("Generic"), QStringLiteral("Pool"),
+    const QStringList sports = {QStringLiteral("Generic"), QStringLiteral("8-Ball"),
+                                QStringLiteral("9-Ball"), QStringLiteral("10-Ball"),
                                 QStringLiteral("Baseball"), QStringLiteral("Basketball"),
                                 QStringLiteral("Soccer"), QStringLiteral("Tennis")};
     m_sportGroup = new QButtonGroup(this);
@@ -844,6 +850,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         if (auto* checked = m_sportGroup->checkedButton())
             sportUi = checked->text();
         st.sport = mapSportUiToModel(sportUi);
+        if (isPoolSport(st.sport))
+            st.pocketedMask &= (1 << poolObjectBallCount(st.sport)) - 1;
         st.theme = mapThemeUiToModel(m_themeBox->currentText());
         st.layout = mapLayoutUiToModel(m_layoutBox->currentText());
         st.colorA = colorCss(m_colorA);

@@ -3,8 +3,31 @@
 #include "core/Types.h"
 #include <QObject>
 #include <QJsonObject>
+#include <QString>
 
 namespace railshot {
+
+/// True for any cue-sport scoreboard that uses race / rack controls.
+inline bool isPoolSport(const QString& sport)
+{
+    return sport == QLatin1String("8ball") || sport == QLatin1String("pool")
+           || sport == QLatin1String("9ball") || sport == QLatin1String("10ball")
+           || sport == QLatin1String("7ball") || sport == QLatin1String("snooker")
+           || sport == QLatin1String("straight") || sport == QLatin1String("onepocket");
+}
+
+/// Object balls used by the selected pool game (cue ball not shown on rack).
+inline int poolObjectBallCount(const QString& sport)
+{
+    if (sport == QLatin1String("9ball"))
+        return 9;
+    if (sport == QLatin1String("10ball"))
+        return 10;
+    if (sport == QLatin1String("7ball"))
+        return 7;
+    // 8-ball, straight pool, one-pocket, banks, legacy "pool", snooker approx
+    return 15;
+}
 
 struct ScoreboardState {
     QString sport = QStringLiteral("8ball");

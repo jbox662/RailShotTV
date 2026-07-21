@@ -1,4 +1,5 @@
 #include "capture/OverlayRenderer.h"
+#include "scoreboard/ScoreboardModel.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QLinearGradient>
@@ -167,12 +168,12 @@ void drawPoolBall(QPainter& p, const QPointF& c, qreal r, int number, bool pocke
     p.drawText(QRectF(c.x() - r, c.y() - r, r * 2, r * 2), Qt::AlignCenter, QString::number(number));
 }
 
-void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask)
+void drawBallRackStrip(QPainter& p, const QRect& strip, int pocketedMask, int ballCount = 15)
 {
+    const int n = qBound(1, ballCount, 15);
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(245, 247, 250));
     p.drawRoundedRect(strip, 2, 2);
-    const int n = 15;
     const qreal gap = 4;
     const qreal totalGaps = gap * (n + 1);
     const qreal ballD = qMin(strip.height() - 6.0, (strip.width() - totalGaps) / n);
@@ -209,6 +210,7 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
     const int race = state.value(QStringLiteral("raceTo")).toInt(7);
     const int active = state.value(QStringLiteral("activeSide")).toInt(1);
     const int pocketed = state.value(QStringLiteral("pocketedMask")).toInt();
+    const int ballCount = poolObjectBallCount(state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball")));
     QColor wingA(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#1B3A6B")));
     QColor wingB(state.value(QStringLiteral("colorB")).toString(QStringLiteral("#2A1F4D")));
     if (!wingA.isValid()) wingA = QColor(27, 58, 107);
@@ -289,7 +291,7 @@ void renderBilliardsMosconi(QPainter& p, const QJsonObject& state, int W, int H)
 
     if (showRack) {
         const QRect strip(main.left() + 10, main.bottom(), main.width() - 20, rackH);
-        drawBallRackStrip(p, strip.adjusted(0, 2, 0, -2), pocketed);
+        drawBallRackStrip(p, strip.adjusted(0, 2, 0, -2), pocketed, ballCount);
     }
 }
 
@@ -518,6 +520,7 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
     const int active = state.value(QStringLiteral("activeSide")).toInt(1);
     const int clock = state.value(QStringLiteral("clockSeconds")).toInt();
     const int pocketed = state.value(QStringLiteral("pocketedMask")).toInt();
+    const int ballCount = poolObjectBallCount(state.value(QStringLiteral("sport")).toString(QStringLiteral("8ball")));
     QColor accentA(state.value(QStringLiteral("colorA")).toString(QStringLiteral("#FF5A2C")));
     QColor accentB(state.value(QStringLiteral("colorB")).toString(QStringLiteral("#4F9EFF")));
     if (!accentA.isValid()) accentA = QColor(QStringLiteral("#FF5A2C"));
@@ -591,7 +594,8 @@ void renderBilliardsFelt(QPainter& p, const QJsonObject& state, int W, int H)
                    QStringLiteral("SHOT %1").arg(clockText(clock)));
     }
     if (showRack && rackH > 8) {
-        drawBallRackStrip(p, QRect(main.left() + 8, main.bottom() + 2, main.width() - 16, rackH - 4), pocketed);
+        drawBallRackStrip(p, QRect(main.left() + 8, main.bottom() + 2, main.width() - 16, rackH - 4),
+                          pocketed, ballCount);
     }
 }
 
@@ -965,7 +969,9 @@ QImage OverlayRenderer::renderScoreboard(const QJsonObject& state, int width, in
 
     const QString sport = state.value(QStringLiteral("sport")).toString(QStringLiteral("generic"));
     if (sport == QLatin1String("8ball") || sport == QLatin1String("pool") || sport == QLatin1String("9ball")
-        || sport == QLatin1String("snooker")) {
+        || sport == QLatin1String("10ball") || sport == QLatin1String("7ball")
+        || sport == QLatin1String("snooker") || sport == QLatin1String("straight")
+        || sport == QLatin1String("onepocket")) {
         renderBilliards(p, state, width, height);
     } else if (sport == QLatin1String("baseball")) {
         renderBaseball(p, state, width, height);
