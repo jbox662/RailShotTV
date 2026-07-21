@@ -1,57 +1,27 @@
 #include "ui/widgets/ScoreboardControlsWidget.h"
+#include "ui/widgets/ScoreboardSettingsDialog.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
 #include "core/Types.h"
 #include "scoreboard/ScoreboardModel.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QSpinBox>
-#include <QComboBox>
 #include <QCheckBox>
-#include <QButtonGroup>
-#include <QAbstractButton>
 #include <QTimer>
-#include <QScrollArea>
-#include <QFrame>
+#include <QSignalBlocker>
 #include <utility>
 
 namespace railshot {
-
-namespace {
-QString mapSportUiToModel(const QString& ui)
-{
-    if (ui == QLatin1String("Pool")) return QStringLiteral("8ball");
-    if (ui == QLatin1String("Basketball")) return QStringLiteral("basketball");
-    if (ui == QLatin1String("Soccer")) return QStringLiteral("soccer");
-    if (ui == QLatin1String("Tennis")) return QStringLiteral("tennis");
-    if (ui == QLatin1String("Custom")) return QStringLiteral("custom");
-    return QStringLiteral("generic");
-}
-QString mapThemeUiToModel(const QString& ui)
-{
-    if (ui == QLatin1String("Light")) return QStringLiteral("classic");
-    if (ui == QLatin1String("Team")) return QStringLiteral("broadcast");
-    if (ui == QLatin1String("Neon")) return QStringLiteral("neon");
-    return QStringLiteral("railshot");
-}
-QString mapLayoutUiToModel(const QString& ui)
-{
-    if (ui == QLatin1String("Center")) return QStringLiteral("standard");
-    if (ui == QLatin1String("Corner")) return QStringLiteral("compact");
-    if (ui == QLatin1String("Full")) return QStringLiteral("wide");
-    return QStringLiteral("standard");
-}
-} // namespace
 
 ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("scoreboardControls"));
-    setMinimumWidth(220);
+    setMinimumWidth(200);
     setStyleSheet(QStringLiteral(
         "QWidget#scoreboardControls {"
         "  background:#0A0C0F;"
@@ -62,81 +32,71 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         "  color:#22C55E; font-size:9px; font-weight:900; letter-spacing:1px;"
         "  background:transparent; border:none;"
         "}"
-        "QWidget#scoreboardControls QLineEdit, QWidget#scoreboardControls QSpinBox,"
-        "QWidget#scoreboardControls QComboBox {"
+        "QWidget#scoreboardControls QLineEdit, QWidget#scoreboardControls QSpinBox {"
         "  background:#12151A; border:1px solid #3A3D45; color:#E0E2E8;"
         "  border-radius:3px; padding:3px 6px; font-size:11px;"
         "}"
-        "QWidget#scoreboardControls QLineEdit:focus, QWidget#scoreboardControls QSpinBox:focus,"
-        "QWidget#scoreboardControls QComboBox:focus { border-color:#22C55E; }"));
+        "QWidget#scoreboardControls QLineEdit:focus, QWidget#scoreboardControls QSpinBox:focus {"
+        "  border-color:#22C55E;"
+        "}"
+        "QWidget#scoreboardControls QCheckBox {"
+        "  color:#A0A8B8; font-size:10px; font-weight:700; spacing:4px;"
+        "  background:transparent;"
+        "}"
+        "QWidget#scoreboardControls QCheckBox::indicator {"
+        "  width:14px; height:14px; border-radius:7px;"
+        "  border:1px solid #3A3D45; background:#1A1D22;"
+        "}"
+        "QWidget#scoreboardControls QCheckBox::indicator:checked {"
+        "  background:#22C55E; border-color:#86EFAC;"
+        "}"));
 
     auto* model = engine->scoreboard();
-    auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->setSpacing(0);
-
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(QStringLiteral("background:transparent; border:none;"));
-    auto* host = new QWidget(scroll);
-    host->setStyleSheet(QStringLiteral("background:transparent;"));
-    auto* lay = new QVBoxLayout(host);
+    auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(8, 8, 8, 8);
     lay->setSpacing(6);
 
-    auto* overlayBtn = new QPushButton(QStringLiteral("OVERLAY ON"), host);
+    // Compact quick controls: overlay toggle + settings
+    auto* topRow = new QHBoxLayout();
+    topRow->setSpacing(6);
+
+    auto* overlayBtn = new QPushButton(QStringLiteral("Overlay"), this);
     overlayBtn->setCheckable(true);
     overlayBtn->setChecked(true);
     overlayBtn->setCursor(Qt::PointingHandCursor);
+    overlayBtn->setFixedHeight(24);
+    overlayBtn->setToolTip(QStringLiteral("Show / hide scoreboard overlay on Program"));
     overlayBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
-        "border:1px solid #86EFAC;color:#04140A;font-weight:900;font-size:10px;border-radius:3px;padding:6px;}"
-        "QPushButton:!checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
-        "border:1px solid #3A3D45;color:#8892A4;}"));
-    lay->addWidget(overlayBtn);
+        "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#8892A4;"
+        "font-weight:800;font-size:10px;border-radius:3px;padding:2px 10px;}"
+        "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4ADE80,stop:1 #16A34A);"
+        "border:1px solid #86EFAC;color:#04140A;}"));
+    topRow->addWidget(overlayBtn);
 
-    auto* sportLab = new QLabel(QStringLiteral("SPORT"), host);
-    sportLab->setObjectName(QStringLiteral("sec"));
-    lay->addWidget(sportLab);
+    auto* settingsBtn = new QPushButton(QStringLiteral("Settings"), this);
+    settingsBtn->setCursor(Qt::PointingHandCursor);
+    settingsBtn->setFixedHeight(24);
+    settingsBtn->setToolTip(QStringLiteral("Sport, layout, theme…"));
+    settingsBtn->setStyleSheet(QStringLiteral(
+        "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#C8CAD0;"
+        "font-weight:700;font-size:10px;border-radius:3px;padding:2px 10px;}"
+        "QPushButton:hover{border-color:#22C55E;color:#FFFFFF;}"));
+    topRow->addWidget(settingsBtn);
+    topRow->addStretch(1);
+    lay->addLayout(topRow);
 
-    auto* sportGrid = new QGridLayout();
-    sportGrid->setSpacing(3);
-    const QStringList sports = {QStringLiteral("Generic"), QStringLiteral("Pool"),
-                                QStringLiteral("Basketball"), QStringLiteral("Soccer"),
-                                QStringLiteral("Tennis"), QStringLiteral("Custom")};
-    auto* sportGroup = new QButtonGroup(host);
-    sportGroup->setExclusive(true);
-    int si = 0;
-    for (const auto& sp : sports) {
-        auto* b = new QPushButton(sp, host);
-        b->setCheckable(true);
-        b->setCursor(Qt::PointingHandCursor);
-        b->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
-            "font-size:9px;font-weight:700;padding:4px 2px;border-radius:2px;}"
-            "QPushButton:checked{border:2px solid #F59E0B;color:#FBBF24;background:#2A2010;}"));
-        if (sp == QLatin1String("Pool"))
-            b->setChecked(true);
-        sportGroup->addButton(b);
-        sportGrid->addWidget(b, si / 3, si % 3);
-        ++si;
-    }
-    lay->addLayout(sportGrid);
-
-    auto* teamsLab = new QLabel(QStringLiteral("TEAMS"), host);
+    auto* teamsLab = new QLabel(QStringLiteral("TEAMS"), this);
     teamsLab->setObjectName(QStringLiteral("sec"));
     lay->addWidget(teamsLab);
 
-    auto* aName = new QLineEdit(model->state().playerA, host);
-    auto* bName = new QLineEdit(model->state().playerB, host);
+    auto* aName = new QLineEdit(model->state().playerA, this);
+    auto* bName = new QLineEdit(model->state().playerB, this);
     aName->setPlaceholderText(QStringLiteral("Player A"));
     bName->setPlaceholderText(QStringLiteral("Player B"));
     lay->addWidget(aName);
     lay->addWidget(bName);
 
-    auto* scoreRead = new QLabel(host);
+    auto* scoreRead = new QLabel(this);
     scoreRead->setAlignment(Qt::AlignCenter);
     scoreRead->setStyleSheet(QStringLiteral(
         "font-family:'Bebas Neue'; font-size:22px; color:#F0F0F0; background:#12151A;"
@@ -146,7 +106,7 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     auto* scoreRow = new QHBoxLayout();
     scoreRow->setSpacing(4);
     auto makeScoreBtn = [&](const QString& t, const QString& color) {
-        auto* b = new QPushButton(t, host);
+        auto* b = new QPushButton(t, this);
         b->setFixedHeight(28);
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
@@ -164,32 +124,27 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     scoreRow->addWidget(bPlus, 1);
     lay->addLayout(scoreRow);
 
+    auto* matchLab = new QLabel(QStringLiteral("MATCH"), this);
+    matchLab->setObjectName(QStringLiteral("sec"));
+    lay->addWidget(matchLab);
+
     auto* raceRow = new QHBoxLayout();
-    auto* raceLab = new QLabel(QStringLiteral("Race to"), host);
+    auto* raceLab = new QLabel(QStringLiteral("Race to"), this);
     raceLab->setStyleSheet(QStringLiteral("color:#8892A4; font-size:10px; background:transparent; border:none;"));
-    auto* raceTo = new QSpinBox(host);
+    auto* raceTo = new QSpinBox(this);
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
     raceRow->addWidget(raceLab);
     raceRow->addWidget(raceTo, 1);
     lay->addLayout(raceRow);
 
-    auto* layoutBox = new QComboBox(host);
-    layoutBox->addItems({QStringLiteral("Lower Third"), QStringLiteral("Center"),
-                         QStringLiteral("Corner"), QStringLiteral("Full")});
-    auto* themeBox = new QComboBox(host);
-    themeBox->addItems({QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("Team"),
-                        QStringLiteral("Neon")});
-    lay->addWidget(layoutBox);
-    lay->addWidget(themeBox);
-
     auto* clockRow = new QHBoxLayout();
-    auto* clockLbl = new QLabel(QStringLiteral("00:00"), host);
+    auto* clockLbl = new QLabel(QStringLiteral("00:00"), this);
     clockLbl->setStyleSheet(QStringLiteral(
         "font-family:'Bebas Neue'; font-size:18px; color:#22C55E; background:transparent; border:none;"));
-    auto* clockRun = new QCheckBox(QStringLiteral("Clock"), host);
+    auto* clockRun = new QCheckBox(QStringLiteral("Clock"), this);
     clockRun->setChecked(model->state().clockRunning);
-    auto* clockReset = new QPushButton(QStringLiteral("Reset"), host);
+    auto* clockReset = new QPushButton(QStringLiteral("Reset"), this);
     clockReset->setFixedHeight(22);
     clockReset->setCursor(Qt::PointingHandCursor);
     clockReset->setStyleSheet(QStringLiteral(
@@ -202,9 +157,9 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
 
     auto* actions = new QHBoxLayout();
     actions->setSpacing(4);
-    auto* reset = new QPushButton(QStringLiteral("Reset"), host);
-    auto* swap = new QPushButton(QStringLiteral("Swap"), host);
-    auto* push = new QPushButton(QStringLiteral("Push"), host);
+    auto* reset = new QPushButton(QStringLiteral("Reset"), this);
+    auto* swap = new QPushButton(QStringLiteral("Swap"), this);
+    auto* push = new QPushButton(QStringLiteral("Push"), this);
     for (auto* b : {reset, swap}) {
         b->setCursor(Qt::PointingHandCursor);
         b->setStyleSheet(QStringLiteral(
@@ -221,24 +176,16 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     lay->addLayout(actions);
     lay->addStretch(1);
 
-    scroll->setWidget(host);
-    outer->addWidget(scroll, 1);
+    connect(settingsBtn, &QPushButton::clicked, this, [this, engine] {
+        ScoreboardSettingsDialog dlg(engine, this);
+        dlg.exec();
+    });
 
-    auto applyMeta = [=] {
+    connect(raceTo, QOverload<int>::of(&QSpinBox::valueChanged), this, [model](int v) {
         auto st = model->state();
-        QString sportUi = QStringLiteral("Pool");
-        if (auto* checked = sportGroup->checkedButton())
-            sportUi = checked->text();
-        st.sport = mapSportUiToModel(sportUi);
-        st.theme = mapThemeUiToModel(themeBox->currentText());
-        st.layout = mapLayoutUiToModel(layoutBox->currentText());
-        st.raceTo = raceTo->value();
+        st.raceTo = v;
         model->setState(st);
-    };
-    connect(sportGroup, &QButtonGroup::buttonClicked, this, [applyMeta](QAbstractButton*) { applyMeta(); });
-    connect(themeBox, &QComboBox::currentTextChanged, this, [applyMeta](const QString&) { applyMeta(); });
-    connect(layoutBox, &QComboBox::currentTextChanged, this, [applyMeta](const QString&) { applyMeta(); });
-    connect(raceTo, QOverload<int>::of(&QSpinBox::valueChanged), this, [applyMeta](int) { applyMeta(); });
+    });
 
     connect(aPlus, &QPushButton::clicked, model, [model] { model->incrementA(1); });
     connect(aMinus, &QPushButton::clicked, model, [model] { model->incrementA(-1); });
@@ -272,7 +219,6 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
         model->setState(s);
     });
     connect(overlayBtn, &QPushButton::toggled, this, [=](bool on) {
-        overlayBtn->setText(on ? QStringLiteral("OVERLAY ON") : QStringLiteral("OVERLAY OFF"));
         engine->sceneGraph()->mutate([&](Project& p) {
             for (auto& scene : p.scenes) {
                 for (auto& src : scene.sources) {
@@ -303,6 +249,21 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
             raceTo->setValue(st.raceTo);
         if (clockRun->isChecked() != st.clockRunning)
             clockRun->setChecked(st.clockRunning);
+
+        bool anyVisible = false;
+        bool anyScoreboard = false;
+        const auto proj = engine->projectSnapshot();
+        for (const auto& scene : proj.scenes) {
+            for (const auto& src : scene.sources) {
+                if (src.type != SourceType::Scoreboard) continue;
+                anyScoreboard = true;
+                if (src.visible) anyVisible = true;
+            }
+        }
+        if (anyScoreboard && overlayBtn->isChecked() != anyVisible) {
+            QSignalBlocker b(overlayBtn);
+            overlayBtn->setChecked(anyVisible);
+        }
     };
     connect(model, &ScoreboardModel::changed, this, refresh);
     refresh(model->state());

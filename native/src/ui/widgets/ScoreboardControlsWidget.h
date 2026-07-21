@@ -4,7 +4,7 @@
 namespace railshot {
 class EngineController;
 
-/// Compact live scoreboard controls for the dashboard dock.
+/// Live scoreboard dock: teams, scores, match clock — Sport/theme via Settings.
 class ScoreboardControlsWidget : public QWidget {
     Q_OBJECT
 public:

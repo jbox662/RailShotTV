@@ -321,6 +321,8 @@ add_library(railshot_ui STATIC
     src/ui/widgets/AudioMixerWidget.cpp
     src/ui/widgets/ScoreboardControlsWidget.h
     src/ui/widgets/ScoreboardControlsWidget.cpp
+    src/ui/widgets/ScoreboardSettingsDialog.h
+    src/ui/widgets/ScoreboardSettingsDialog.cpp
     src/ui/widgets/TransitionPanel.h
     src/ui/widgets/TransitionPanel.cpp
     src/ui/widgets/TopMenuBar.h
