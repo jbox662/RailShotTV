@@ -23,7 +23,7 @@ public:
 
     enum class Phase { Idle, Out, In, Cross };
     Phase phase() const { return m_phase; }
-    bool isCrossfade() const { return m_type != TransitionType::Cut && m_type != TransitionType::FTB; }
+    bool isCrossfade() const { return transitionIsCrossfade(m_type); }
 
 signals:
     void finished();

@@ -33,6 +33,13 @@ struct alignas(16) CBData {
     float colorAdd[4];   // 64
 };
 
+struct alignas(16) TransCBData {
+    float progress;
+    float mode;
+    float aspect;
+    float wipeDir;
+};
+
 D3D11Compositor::D3D11Compositor(D3D11Device* device, QObject* parent)
     : QObject(parent), m_device(device)
 {
@@ -66,9 +73,26 @@ bool D3D11Compositor::createTargets(QString* error)
     };
     if (m_previewTex) { m_previewRtv->Release(); m_previewTex->Release(); m_previewTex = nullptr; m_previewRtv = nullptr; }
     if (m_programTex) { m_programRtv->Release(); m_programTex->Release(); m_programTex = nullptr; m_programRtv = nullptr; }
+    if (m_transScratch) { m_transScratch->Release(); m_transScratch = nullptr; }
     if (!makeTex(&m_previewTex, &m_previewRtv) || !makeTex(&m_programTex, &m_programRtv)) {
         if (error) *error = QStringLiteral("Failed to create compositor targets");
         return false;
+    }
+    // Scratch holds a copy of the new program during A/B blends (SRV only).
+    {
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = static_cast<UINT>(m_width);
+        desc.Height = static_cast<UINT>(m_height);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        if (FAILED(dev->CreateTexture2D(&desc, nullptr, &m_transScratch))) {
+            if (error) *error = QStringLiteral("Failed to create transition scratch");
+            return false;
+        }
     }
     return true;
 #else
@@ -94,8 +118,24 @@ bool D3D11Compositor::createPipeline(QString* error)
         if (error) *error = QStringLiteral("PS compile failed");
         return false;
     }
+    ComPtr<ID3DBlob> transPsBlob;
+    errBlob.Reset();
+    hr = D3DCompile(shaders::kPsTransition, strlen(shaders::kPsTransition), "PSTrans", nullptr, nullptr,
+                    "main", "ps_5_0", 0, 0, &transPsBlob, &errBlob);
+    if (FAILED(hr)) {
+        QString detail = QStringLiteral("Transition PS compile failed");
+        if (errBlob) {
+            detail += QStringLiteral(": ");
+            detail += QString::fromUtf8(static_cast<const char*>(errBlob->GetBufferPointer()),
+                                        int(errBlob->GetBufferSize()));
+        }
+        if (error) *error = detail;
+        Logger::error(detail);
+        return false;
+    }
     dev->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_vs);
     dev->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_ps);
+    dev->CreatePixelShader(transPsBlob->GetBufferPointer(), transPsBlob->GetBufferSize(), nullptr, &m_transPs);
 
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -123,6 +163,13 @@ bool D3D11Compositor::createPipeline(QString* error)
     cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     dev->CreateBuffer(&cbd, nullptr, &m_cb);
 
+    D3D11_BUFFER_DESC tcb{};
+    tcb.ByteWidth = sizeof(TransCBData);
+    tcb.Usage = D3D11_USAGE_DYNAMIC;
+    tcb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    tcb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    dev->CreateBuffer(&tcb, nullptr, &m_transCb);
+
     D3D11_SAMPLER_DESC sd{};
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -138,6 +185,11 @@ bool D3D11Compositor::createPipeline(QString* error)
     bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     dev->CreateBlendState(&bd, &m_blend);
+
+    D3D11_BLEND_DESC obd{};
+    obd.RenderTarget[0].BlendEnable = FALSE;
+    obd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    dev->CreateBlendState(&obd, &m_blendOpaque);
     return true;
 #else
     Q_UNUSED(error);
@@ -168,8 +220,10 @@ void D3D11Compositor::shutdown()
 {
 #ifdef _WIN32
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
-    rel(m_blend); rel(m_sampler); rel(m_cb); rel(m_vb); rel(m_layout); rel(m_ps); rel(m_vs);
-    rel(m_previewRtv); rel(m_programRtv); rel(m_previewTex); rel(m_programTex); rel(m_holdTex);
+    rel(m_blendOpaque); rel(m_blend); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
+    rel(m_layout); rel(m_transPs); rel(m_ps); rel(m_vs);
+    rel(m_previewRtv); rel(m_programRtv); rel(m_previewTex); rel(m_programTex);
+    rel(m_holdTex); rel(m_transScratch);
 #endif
 }
 
@@ -269,12 +323,13 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
 #endif
 }
 
-bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProgram, float transitionMix)
+bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProgram, float transitionMix,
+                              float clearR, float clearG, float clearB)
 {
 #ifdef _WIN32
     auto* rtv = toProgram ? m_programRtv : m_previewRtv;
     if (!rtv) return false;
-    clearTarget(rtv, 0.02f, 0.02f, 0.03f, 1.0f);
+    clearTarget(rtv, clearR, clearG, clearB, 1.0f);
     for (const auto& src : scene.sources) {
         if (!src.visible) continue;
         SourceItem drawn = src;
@@ -285,6 +340,7 @@ bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProg
     return true;
 #else
     Q_UNUSED(scene); Q_UNUSED(bus); Q_UNUSED(toProgram); Q_UNUSED(transitionMix);
+    Q_UNUSED(clearR); Q_UNUSED(clearG); Q_UNUSED(clearB);
     return false;
 #endif
 }
@@ -327,12 +383,23 @@ void D3D11Compositor::setWipeDirection(int direction)
 void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
 {
 #ifdef _WIN32
-    if (!m_holdTex || !m_programRtv || !m_device) return;
+    if (!m_holdTex || !m_programRtv || !m_device || !m_transScratch || !m_transPs || !m_transCb)
+        return;
+    const int mode = transitionShaderMode(type);
+    if (mode <= 0)
+        return;
     progress = std::clamp(progress, 0.0f, 1.0f);
     auto* ctx = m_device->context();
     auto* dev = m_device->device();
-    ComPtr<ID3D11ShaderResourceView> srv;
-    if (FAILED(dev->CreateShaderResourceView(m_holdTex, nullptr, &srv)))
+
+    // Snapshot the newly composed program so we can sample both A and B.
+    ctx->CopyResource(m_transScratch, m_programTex);
+
+    ComPtr<ID3D11ShaderResourceView> srvOld;
+    ComPtr<ID3D11ShaderResourceView> srvNew;
+    if (FAILED(dev->CreateShaderResourceView(m_holdTex, nullptr, &srvOld)))
+        return;
+    if (FAILED(dev->CreateShaderResourceView(m_transScratch, nullptr, &srvNew)))
         return;
 
     D3D11_VIEWPORT vp{};
@@ -341,99 +408,52 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
     vp.MaxDepth = 1.0f;
     ctx->RSSetViewports(1, &vp);
     ctx->OMSetRenderTargets(1, &m_programRtv, nullptr);
-    ctx->OMSetBlendState(m_blend, nullptr, 0xffffffff);
+    ctx->OMSetBlendState(m_blendOpaque, nullptr, 0xffffffff);
     ctx->IASetInputLayout(m_layout);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     UINT stride = 16, offset = 0;
     ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
     ctx->VSSetShader(m_vs, nullptr, 0);
-    ctx->PSSetShader(m_ps, nullptr, 0);
-    ctx->PSSetShaderResources(0, 1, srv.GetAddressOf());
+    ctx->PSSetShader(m_transPs, nullptr, 0);
+
+    ID3D11ShaderResourceView* srvs[2] = { srvOld.Get(), srvNew.Get() };
+    ctx->PSSetShaderResources(0, 2, srvs);
     ctx->PSSetSamplers(0, 1, &m_sampler);
 
+    // Fullscreen rect via the shared VS constant buffer.
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
         auto* cb = reinterpret_cast<CBData*>(mapped.pData);
-        if (type == TransitionType::Wipe) {
-            const float p = progress;
-            switch (m_wipeDirection) {
-            case 1: // to left
-                cb->rect[0] = 0.0f;
-                cb->rect[1] = 0.0f;
-                cb->rect[2] = 1.0f - p;
-                cb->rect[3] = 1.0f;
-                cb->cropMin[0] = 0.0f;
-                cb->cropMin[1] = 0.0f;
-                cb->cropMax[0] = 1.0f - p;
-                cb->cropMax[1] = 1.0f;
-                break;
-            case 2: // to bottom
-                cb->rect[0] = 0.0f;
-                cb->rect[1] = p;
-                cb->rect[2] = 1.0f;
-                cb->rect[3] = 1.0f - p;
-                cb->cropMin[0] = 0.0f;
-                cb->cropMin[1] = p;
-                cb->cropMax[0] = 1.0f;
-                cb->cropMax[1] = 1.0f;
-                break;
-            case 3: // to top
-                cb->rect[0] = 0.0f;
-                cb->rect[1] = 0.0f;
-                cb->rect[2] = 1.0f;
-                cb->rect[3] = 1.0f - p;
-                cb->cropMin[0] = 0.0f;
-                cb->cropMin[1] = 0.0f;
-                cb->cropMax[0] = 1.0f;
-                cb->cropMax[1] = 1.0f - p;
-                break;
-            default: // to right
-                cb->rect[0] = p;
-                cb->rect[1] = 0.0f;
-                cb->rect[2] = 1.0f - p;
-                cb->rect[3] = 1.0f;
-                cb->cropMin[0] = p;
-                cb->cropMin[1] = 0.0f;
-                cb->cropMax[0] = 1.0f;
-                cb->cropMax[1] = 1.0f;
-                break;
-            }
-            cb->opacity = 1.0f;
-        } else if (type == TransitionType::Merge) {
-            // Distinct from Fade: quadratic ease-in dissolve
-            cb->rect[0] = 0.0f;
-            cb->rect[1] = 0.0f;
-            cb->rect[2] = 1.0f;
-            cb->rect[3] = 1.0f;
-            cb->opacity = 1.0f - (progress * progress);
-            cb->cropMin[0] = 0.0f;
-            cb->cropMin[1] = 0.0f;
-            cb->cropMax[0] = 1.0f;
-            cb->cropMax[1] = 1.0f;
-        } else {
-            // Fade / CubeZoom (crossfade alias): linear dissolve
-            cb->rect[0] = 0.0f;
-            cb->rect[1] = 0.0f;
-            cb->rect[2] = 1.0f;
-            cb->rect[3] = 1.0f;
-            cb->opacity = 1.0f - progress;
-            cb->cropMin[0] = 0.0f;
-            cb->cropMin[1] = 0.0f;
-            cb->cropMax[0] = 1.0f;
-            cb->cropMax[1] = 1.0f;
-        }
+        cb->rect[0] = 0.0f;
+        cb->rect[1] = 0.0f;
+        cb->rect[2] = 1.0f;
+        cb->rect[3] = 1.0f;
+        cb->opacity = 1.0f;
         cb->rotation = 0.0f;
+        cb->cropMin[0] = 0.0f;
+        cb->cropMin[1] = 0.0f;
+        cb->cropMax[0] = 1.0f;
+        cb->cropMax[1] = 1.0f;
         cb->_padCrop[0] = 0.0f;
         cb->_padCrop[1] = 0.0f;
         cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
         cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
+    if (SUCCEEDED(ctx->Map(m_transCb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        auto* tcb = reinterpret_cast<TransCBData*>(mapped.pData);
+        tcb->progress = progress;
+        tcb->mode = static_cast<float>(mode);
+        tcb->aspect = m_height > 0 ? float(m_width) / float(m_height) : 1.0f;
+        tcb->wipeDir = static_cast<float>(m_wipeDirection);
+        ctx->Unmap(m_transCb, 0);
+    }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
-    ctx->PSSetConstantBuffers(0, 1, &m_cb);
+    ctx->PSSetConstantBuffers(0, 1, &m_transCb);
     ctx->Draw(4, 0);
-    ID3D11ShaderResourceView* nullSrv = nullptr;
-    ctx->PSSetShaderResources(0, 1, &nullSrv);
+
+    ID3D11ShaderResourceView* nullSrvs[2] = { nullptr, nullptr };
+    ctx->PSSetShaderResources(0, 2, nullSrvs);
 #else
     Q_UNUSED(progress); Q_UNUSED(type);
 #endif

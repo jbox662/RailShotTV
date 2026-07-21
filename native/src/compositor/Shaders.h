@@ -73,5 +73,260 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
 }
 )";
 
+/// Fullscreen A/B transition: t0 = old (hold), t1 = new. mode selects Wirecast-style effect.
+inline constexpr char kPsTransition[] = R"(
+Texture2D texOld : register(t0);
+Texture2D texNew : register(t1);
+SamplerState samp : register(s0);
+cbuffer TransCB : register(b0) {
+    float progress;
+    float mode;
+    float aspect;
+    float wipeDir;
+};
+
+float4 blur5(Texture2D tex, float2 uv, float radius) {
+    float4 acc = tex.Sample(samp, uv);
+    acc += tex.Sample(samp, uv + float2( radius, 0));
+    acc += tex.Sample(samp, uv + float2(-radius, 0));
+    acc += tex.Sample(samp, uv + float2(0,  radius));
+    acc += tex.Sample(samp, uv + float2(0, -radius));
+    return acc * 0.2;
+}
+
+float4 sampleSafe(Texture2D tex, float2 uv) {
+    if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
+        return float4(0, 0, 0, 1);
+    return tex.Sample(samp, uv);
+}
+
+float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    float p = saturate(progress);
+    int m = (int)(mode + 0.5);
+    float4 o = texOld.Sample(samp, uv);
+    float4 n = texNew.Sample(samp, uv);
+    const float soft = 0.04;
+
+    // 1 Cross dissolve / Fade
+    if (m == 1) {
+        return lerp(o, n, p);
+    }
+
+    // 2 Directional wipe
+    if (m == 2) {
+        float edge = 0;
+        if (wipeDir < 0.5) edge = uv.x;           // to right: new from left
+        else if (wipeDir < 1.5) edge = 1.0 - uv.x; // to left
+        else if (wipeDir < 2.5) edge = uv.y;       // to bottom
+        else edge = 1.0 - uv.y;                    // to top
+        float w = smoothstep(p - soft, p + soft, edge);
+        return lerp(n, o, w);
+    }
+
+    // 3 Merge (ease-in dissolve)
+    if (m == 3) {
+        float e = p * p;
+        return lerp(o, n, e);
+    }
+
+    // 4 CubeZoom — zoom out old / zoom in new
+    if (m == 4) {
+        float zo = 1.0 + p * 0.85;
+        float zn = 2.0 - p * 1.0;
+        float2 uo = (uv - 0.5) / zo + 0.5;
+        float2 un = (uv - 0.5) / zn + 0.5;
+        float4 a = sampleSafe(texOld, uo);
+        float4 b = sampleSafe(texNew, un);
+        return lerp(a, b, smoothstep(0.35, 0.65, p));
+    }
+
+    // 5 3D Plane — perspective tilt + dissolve
+    if (m == 5) {
+        float tilt = (p - 0.5) * 1.2;
+        float persp = 1.0 + (uv.y - 0.5) * tilt;
+        float2 uo = float2((uv.x - 0.5) / max(0.35, persp) + 0.5 + p * 0.15, uv.y);
+        float2 un = float2((uv.x - 0.5) / max(0.35, 1.0 - tilt * 0.5) + 0.5 - (1.0 - p) * 0.15, uv.y);
+        return lerp(sampleSafe(texOld, uo), sampleSafe(texNew, un), p);
+    }
+
+    // 6 Bands — horizontal band wipe
+    if (m == 6) {
+        float bands = 10.0;
+        float y = uv.y * bands;
+        float idx = floor(y);
+        float local = frac(y);
+        float thresh = saturate(p * (bands + 1.0) - idx);
+        float w = smoothstep(thresh - 0.08, thresh + 0.08, local);
+        return lerp(n, o, w);
+    }
+
+    // 7 Clock wipe
+    if (m == 7) {
+        float2 d = uv - 0.5;
+        float ang = atan2(d.x, -d.y); // 0 at top, clockwise-ish
+        float a = (ang + 3.14159265) / (6.2831853);
+        float w = smoothstep(p - soft, p + soft, a);
+        return lerp(n, o, w);
+    }
+
+    // 8 Cross blur
+    if (m == 8) {
+        float rad = (p < 0.5 ? p : 1.0 - p) * 0.045;
+        float4 bo = blur5(texOld, uv, rad);
+        float4 bn = blur5(texNew, uv, rad);
+        return lerp(bo, bn, p);
+    }
+
+    // 9 Crosshair — grow from center axes
+    if (m == 9) {
+        float hx = abs(uv.x - 0.5);
+        float hy = abs(uv.y - 0.5);
+        float arm = p * 0.55;
+        float on = (hx < arm * 0.08 + soft * 0.5) || (hy < arm * 0.08 + soft * 0.5) ? 1.0 : 0.0;
+        float grow = saturate((arm - max(hx, hy)) / soft);
+        float w = max(on * grow, saturate((p - 0.55) / 0.45));
+        // Expand cross then fill
+        float fill = smoothstep(0.0, 1.0, (p - max(hx, hy) * 1.2));
+        return lerp(o, n, saturate(max(w, fill)));
+    }
+
+    // 10 Radial wipe — iris open
+    if (m == 10) {
+        float2 d = (uv - 0.5) * float2(aspect, 1.0);
+        float r = length(d);
+        float w = smoothstep(p * 1.2 - soft, p * 1.2 + soft, r);
+        return lerp(n, o, w);
+    }
+
+    // 11 Swap — halves slide past each other
+    if (m == 11) {
+        float left = uv.x < 0.5;
+        float2 uo = uv;
+        float2 un = uv;
+        if (left) {
+            uo.x = uv.x - p;
+            un.x = uv.x + 1.0 - p;
+        } else {
+            uo.x = uv.x + p;
+            un.x = uv.x - 1.0 + p;
+        }
+        float4 a = sampleSafe(texOld, uo);
+        float4 b = sampleSafe(texNew, un);
+        return (p < 0.5) ? a : b;
+    }
+
+    // 12 Flip Over — vertical card flip
+    if (m == 12) {
+        float t = p * 3.14159265;
+        float c = cos(t);
+        float scaleX = max(0.05, abs(c));
+        float2 u = float2((uv.x - 0.5) / scaleX + 0.5, uv.y);
+        if (c >= 0.0)
+            return sampleSafe(texOld, u);
+        return sampleSafe(texNew, float2(1.0 - u.x, u.y));
+    }
+
+    // 13 Grid wipe
+    if (m == 13) {
+        float gx = 8.0, gy = 5.0;
+        float2 cell = float2(floor(uv.x * gx), floor(uv.y * gy));
+        float order = (cell.x + cell.y * gx) / (gx * gy);
+        float w = smoothstep(order, order + 0.12, p);
+        return lerp(o, n, w);
+    }
+
+    // 14 Curtain drop — top-down drape
+    if (m == 14) {
+        float wave = sin(uv.x * 12.0 + p * 6.0) * 0.03 * (1.0 - p);
+        float edge = uv.y + wave;
+        float w = smoothstep(p - soft, p + soft, edge);
+        return lerp(n, o, w);
+    }
+
+    // 15 Circle wipe
+    if (m == 15) {
+        float2 d = (uv - 0.5) * float2(aspect, 1.0);
+        float r = length(d);
+        float w = smoothstep(p * 0.85 - soft, p * 0.85 + soft, r);
+        return lerp(n, o, w);
+    }
+
+    // 16 Vacuum — suck old into center, reveal new
+    if (m == 16) {
+        float2 dir = uv - 0.5;
+        float pull = p * 1.4;
+        float2 uo = 0.5 + dir * (1.0 + pull);
+        float fade = saturate(1.0 - length(dir) * pull * 2.0);
+        float4 a = sampleSafe(texOld, uo) * fade;
+        return lerp(a, n, smoothstep(0.25, 0.85, p));
+    }
+
+    // 17 Wave wipe
+    if (m == 17) {
+        float wave = sin(uv.y * 18.0 + p * 8.0) * 0.06;
+        float edge = uv.x + wave;
+        float w = smoothstep(p - soft, p + soft, edge);
+        return lerp(n, o, w);
+    }
+
+    // 18 Push — slide
+    if (m == 18) {
+        float2 uOld = uv;
+        float2 uNew = uv;
+        bool useNew = false;
+        if (wipeDir < 0.5) {
+            uOld.x = uv.x + p;
+            uNew.x = uv.x + p - 1.0;
+            useNew = uv.x < p;
+        } else if (wipeDir < 1.5) {
+            uOld.x = uv.x - p;
+            uNew.x = uv.x - p + 1.0;
+            useNew = uv.x > 1.0 - p;
+        } else if (wipeDir < 2.5) {
+            uOld.y = uv.y + p;
+            uNew.y = uv.y + p - 1.0;
+            useNew = uv.y < p;
+        } else {
+            uOld.y = uv.y - p;
+            uNew.y = uv.y - p + 1.0;
+            useNew = uv.y > 1.0 - p;
+        }
+        return useNew ? sampleSafe(texNew, uNew) : sampleSafe(texOld, uOld);
+    }
+
+    // 19 Windshield wipe — angled pivoting blade
+    if (m == 19) {
+        float2 d = uv - float2(0.5, 1.0);
+        float ang = atan2(d.x, -d.y);
+        float a = saturate((ang + 1.2) / 2.4);
+        float w = smoothstep(p - soft, p + soft, a);
+        return lerp(n, o, w);
+    }
+
+    // 20 Fly Over — new slides down from above
+    if (m == 20) {
+        float2 mapNew = float2(uv.x, uv.y - (p - 1.0));
+        bool over = mapNew.y >= 0.0 && mapNew.y <= 1.0;
+        return over ? sampleSafe(texNew, mapNew) : o;
+    }
+
+    // 21 RGB Channels — prism split then recombine to new
+    if (m == 21) {
+        float split = (p < 0.5 ? p : 1.0 - p) * 0.08;
+        float4 mid = float4(
+            lerp(texOld.Sample(samp, uv + float2(split, 0)).r,
+                 texNew.Sample(samp, uv + float2(split, 0)).r, p),
+            lerp(texOld.Sample(samp, uv).g,
+                 texNew.Sample(samp, uv).g, p),
+            lerp(texOld.Sample(samp, uv - float2(split, 0)).b,
+                 texNew.Sample(samp, uv - float2(split, 0)).b, p),
+            1.0);
+        return lerp(mid, n, smoothstep(0.55, 1.0, p));
+    }
+
+    return lerp(o, n, p);
+}
+)";
+
 } // namespace shaders
 } // namespace railshot

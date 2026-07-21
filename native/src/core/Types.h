@@ -42,8 +42,35 @@ enum class TransitionType {
     Wipe,
     Merge,
     CubeZoom,
-    FTB
+    FTB,
+    // Wirecast-style catalog (each has a dedicated compositor path)
+    Plane3D,
+    Bands,
+    ClockWipe,
+    CrossBlur,
+    CrossDissolve,
+    Crosshair,
+    RadialWipe,
+    Swap,
+    FlipOver,
+    GridWipe,
+    CurtainDrop,
+    FadeToWhite,
+    CircleWipe,
+    Vacuum,
+    WaveWipe,
+    Push,
+    WindshieldWipe,
+    FlyOver,
+    RgbChannels
 };
+
+/// True for two-phase fade-through-color takes (black or white).
+bool transitionIsFtbStyle(TransitionType t);
+/// True for single-pass A/B blends that use the program hold buffer.
+bool transitionIsCrossfade(TransitionType t);
+/// Shader mode id consumed by the transition pixel shader (0 = unused / Cut).
+int transitionShaderMode(TransitionType t);
 
 enum class EngineState {
     Idle,

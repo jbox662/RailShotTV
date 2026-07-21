@@ -24,32 +24,31 @@ namespace {
 struct TransEffect {
     const char* name;
     TransitionType type;
-    int wipeDir; // -1 = unused
+    int wipeDir; // -1 = leave engine wipe direction unchanged
 };
 
-/// Wirecast-style catalog. Many map to closest built-in engine type until dedicated shaders ship.
+/// Wirecast-style catalog — each type has a dedicated dual-texture shader path.
 constexpr TransEffect kEffects[] = {
-    {"Smooth", TransitionType::Fade, -1},
-    {"3D Plane", TransitionType::CubeZoom, -1},
-    {"Bands", TransitionType::Wipe, 0},
-    {"Clock Wipe", TransitionType::Wipe, 0},
-    {"Cross Blur", TransitionType::Fade, -1},
-    {"Cross Dissolve", TransitionType::Fade, -1},
-    {"Crosshair", TransitionType::Wipe, 2},
-    {"Radial Wipe", TransitionType::Wipe, 0},
-    {"Swap", TransitionType::Merge, -1},
-    {"Flip Over", TransitionType::CubeZoom, -1},
-    {"Grid Wipe", TransitionType::Wipe, 0},
-    {"Curtain Drop Wipe", TransitionType::Wipe, 2},
+    {"3D Plane", TransitionType::Plane3D, -1},
+    {"Bands", TransitionType::Bands, -1},
+    {"Clock Wipe", TransitionType::ClockWipe, -1},
+    {"Cross Blur", TransitionType::CrossBlur, -1},
+    {"Cross Dissolve", TransitionType::CrossDissolve, -1},
+    {"Crosshair", TransitionType::Crosshair, -1},
+    {"Radial Wipe", TransitionType::RadialWipe, -1},
+    {"Swap", TransitionType::Swap, -1},
+    {"Flip Over", TransitionType::FlipOver, -1},
+    {"Grid Wipe", TransitionType::GridWipe, -1},
+    {"Curtain Drop Wipe", TransitionType::CurtainDrop, -1},
     {"Fade to Black", TransitionType::FTB, -1},
-    {"Fade to White", TransitionType::FTB, -1},
-    {"Circle Wipe", TransitionType::Wipe, 0},
-    {"Vacuum", TransitionType::Merge, -1},
-    {"Wave Wipe", TransitionType::Wipe, 1},
-    {"Push", TransitionType::Wipe, 0},
-    {"Windshield Wipe", TransitionType::Wipe, 0},
-    {"Fly Over", TransitionType::CubeZoom, -1},
-    {"RGB Channels", TransitionType::Merge, -1},
+    {"Fade to White", TransitionType::FadeToWhite, -1},
+    {"Circle Wipe", TransitionType::CircleWipe, -1},
+    {"Vacuum", TransitionType::Vacuum, -1},
+    {"Wave Wipe", TransitionType::WaveWipe, -1},
+    {"Push", TransitionType::Push, 0},
+    {"Windshield Wipe", TransitionType::WindshieldWipe, -1},
+    {"Fly Over", TransitionType::FlyOver, -1},
+    {"RGB Channels", TransitionType::RgbChannels, -1},
 };
 
 constexpr int kEffectCount = int(sizeof(kEffects) / sizeof(kEffects[0]));
@@ -60,7 +59,7 @@ const TransEffect* findEffect(const QString& name)
         if (name == QLatin1String(kEffects[i].name))
             return &kEffects[i];
     }
-    return &kEffects[5]; // Cross Dissolve
+    return &kEffects[4]; // Cross Dissolve
 }
 
 QString wirecastMenuStyle()
@@ -260,6 +259,9 @@ TransitionType TransitionPanel::takeType() const
 {
     if (m_mode == QLatin1String("Cut"))
         return TransitionType::Cut;
+    // Smooth with no exotic pick still dissolves
+    if (m_mode == QLatin1String("Smooth") && m_effect.isEmpty())
+        return TransitionType::CrossDissolve;
     return findEffect(m_effect)->type;
 }
 
@@ -357,11 +359,8 @@ void TransitionPanel::showEffectMenu()
     addItem(QStringLiteral("Cut"), false);
     addItem(QStringLiteral("Smooth"), false);
     menu.addSeparator();
-    for (int i = 0; i < kEffectCount; ++i) {
-        if (QLatin1String(kEffects[i].name) == QLatin1String("Smooth"))
-            continue; // already above separator
+    for (int i = 0; i < kEffectCount; ++i)
         addItem(QString::fromUtf8(kEffects[i].name), true);
-    }
     menu.exec(m_effectBtn->mapToGlobal(QPoint(0, m_effectBtn->height())));
 }
 

@@ -186,7 +186,16 @@ bool EngineController::initialize(QString* error)
             // Crossfade: compose new program at full, then blend hold on top
             const bool cross = m_transition && m_transition->isActive() && m_transition->isCrossfade()
                                && m_compositor->hasProgramHold();
-            m_compositor->compose(*program, m_capture->frameBus(), true, cross ? 1.0f : mix);
+            float clearR = 0.02f, clearG = 0.02f, clearB = 0.03f;
+            if (m_transition && m_transition->isActive() && transitionIsFtbStyle(activeType)) {
+                if (activeType == TransitionType::FadeToWhite) {
+                    clearR = clearG = clearB = 1.0f;
+                } else {
+                    clearR = clearG = clearB = 0.0f;
+                }
+            }
+            m_compositor->compose(*program, m_capture->frameBus(), true, cross ? 1.0f : mix,
+                                  clearR, clearG, clearB);
             if (cross)
                 m_compositor->blendProgramHold(mix, activeType);
         }
@@ -340,7 +349,7 @@ void EngineController::go(TransitionType type)
             }, Qt::SingleShotConnection);
             m_transition->start();
         } else {
-            // FTB: fade out old, swap, fade in new
+            // FTB / Fade to White: fade out old, swap, fade in new
             const QString target = p.previewSceneId;
             connect(m_transition, &TransitionEngine::phaseChanged, this, [this, target](TransitionEngine::Phase phase) {
                 if (phase == TransitionEngine::Phase::In)

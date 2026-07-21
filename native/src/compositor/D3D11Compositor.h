@@ -35,13 +35,14 @@ public:
 
     /// Compose a scene into the given bus (preview or program).
     bool compose(const SceneItem& scene, FrameBus& bus, bool toProgram,
-                 float transitionMix = 1.0f);
+                 float transitionMix = 1.0f, float clearR = 0.02f, float clearG = 0.02f,
+                 float clearB = 0.03f);
 
     /// Snapshot current program into hold buffer for A/B transitions.
     bool captureProgramHold();
     void clearProgramHold();
     bool hasProgramHold() const { return m_holdTex != nullptr; }
-    /// After compose of new program, blend hold over it (crossfade / wipe).
+    /// After compose of new program, blend hold over it with the selected effect.
     void blendProgramHold(float progress, TransitionType type);
     /// 0=to right, 1=to left, 2=to bottom, 3=to top.
     void setWipeDirection(int direction);
@@ -72,16 +73,20 @@ private:
     ID3D11Texture2D* m_previewTex = nullptr;
     ID3D11Texture2D* m_programTex = nullptr;
     ID3D11Texture2D* m_holdTex = nullptr;
+    ID3D11Texture2D* m_transScratch = nullptr;
     ID3D11RenderTargetView* m_previewRtv = nullptr;
     ID3D11RenderTargetView* m_programRtv = nullptr;
 
     ID3D11VertexShader* m_vs = nullptr;
     ID3D11PixelShader* m_ps = nullptr;
+    ID3D11PixelShader* m_transPs = nullptr;
     ID3D11InputLayout* m_layout = nullptr;
     ID3D11Buffer* m_vb = nullptr;
     ID3D11Buffer* m_cb = nullptr;
+    ID3D11Buffer* m_transCb = nullptr;
     ID3D11SamplerState* m_sampler = nullptr;
     ID3D11BlendState* m_blend = nullptr;
+    ID3D11BlendState* m_blendOpaque = nullptr;
     int m_wipeDirection = 0;
 };
 
