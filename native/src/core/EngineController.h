@@ -66,7 +66,7 @@ public:
     void setSourceName(const QString& sourceId, const QString& name);
     void setSourceLocked(const QString& sourceId, bool locked);
     void moveSourceZOrder(const QString& sourceId, int delta);
-    void updateSourceTransform(const QString& sourceId, const Transform& t);
+    void updateSourceTransform(const QString& sourceId, const Transform& t, bool notify = true);
     void updateSourceSettings(const QString& sourceId, const QJsonObject& settings);
 
     QString selectedSourceId() const { return m_selectedSourceId; }

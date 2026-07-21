@@ -442,12 +442,19 @@ std::optional<SourceItem> EngineController::selectedSource() const
     return std::nullopt;
 }
 
-void EngineController::updateSourceTransform(const QString& sourceId, const Transform& t)
+void EngineController::updateSourceTransform(const QString& sourceId, const Transform& t, bool notify)
 {
-    m_sceneGraph->mutate([&](Project& p) {
-        if (auto* s = p.findSourceAnywhere(sourceId))
-            s->transform = t;
-    });
+    if (notify) {
+        m_sceneGraph->mutate([&](Project& p) {
+            if (auto* s = p.findSourceAnywhere(sourceId))
+                s->transform = t;
+        });
+    } else {
+        m_sceneGraph->mutateSilent([&](Project& p) {
+            if (auto* s = p.findSourceAnywhere(sourceId))
+                s->transform = t;
+        });
+    }
 }
 
 void EngineController::updateSourceSettings(const QString& sourceId, const QJsonObject& settings)

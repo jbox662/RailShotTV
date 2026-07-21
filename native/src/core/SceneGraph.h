@@ -17,6 +17,9 @@ public:
     Project snapshot() const;
     void replace(const Project& project);
     void mutate(const std::function<void(Project&)>& fn);
+    /// Mutate without emitting projectChanged (live preview drag — OBS-smooth).
+    void mutateSilent(const std::function<void(Project&)>& fn);
+    void notifyProjectChanged() { emit projectChanged(); }
 
     QString previewSceneId() const;
     QString programSceneId() const;

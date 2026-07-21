@@ -385,23 +385,28 @@ public:
             return handlePress(static_cast<QMouseEvent*>(event));
         case QEvent::MouseMove:
             handleMove(static_cast<QMouseEvent*>(event));
-            return m_dragging;
-        case QEvent::MouseButtonRelease:
-            if (event->type() == QEvent::MouseButtonRelease) {
-                auto* me = static_cast<QMouseEvent*>(event);
-                if (me->button() == Qt::RightButton)
-                    return handleContextMenu(me);
-                if (m_dragging && me->button() == Qt::LeftButton) {
-                    m_dragging = false;
-                    m_cropping = false;
-                    m_handle = Handle::None;
-                    if (m_surface)
-                        m_surface->unsetCursor();
-                    refreshChrome();
-                    return true;
+            return true; // always consume — keep scroll area from stealing drags
+        case QEvent::MouseButtonRelease: {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton)
+                return handleContextMenu(me);
+            if (me->button() == Qt::LeftButton) {
+                const bool wasDragging = m_dragging;
+                m_dragging = false;
+                m_cropping = false;
+                m_handle = Handle::None;
+                if (m_surface) {
+                    m_surface->releaseMouse();
+                    m_surface->unsetCursor();
                 }
+                // One projectChanged after live drag so docks refresh once (OBS-smooth).
+                if (wasDragging && m_engine && m_engine->sceneGraph())
+                    m_engine->sceneGraph()->notifyProjectChanged();
+                refreshChrome();
+                return true;
             }
             break;
+        }
         case QEvent::KeyPress:
             return handleKey(static_cast<QKeyEvent*>(event));
         default:
@@ -707,10 +712,12 @@ private:
         m_startAngle = src->transform.rotation;
         const QRectF rr = transformToNormRect(src->transform);
         m_startCenter = rr.center();
-        if (m_surface)
+        if (m_surface) {
+            m_surface->grabMouse();
             m_surface->setCursor(m_cropping ? Qt::CrossCursor
                                             : (hit == Handle::Rotate ? Qt::ClosedHandCursor
                                                                      : cursorForHandle(hit)));
+        }
         return true;
     }
 
@@ -766,14 +773,14 @@ private:
             if (!ctrl && std::abs((a1 - a0)) < 5.0 && !shift)
                 deg = m_startAngle;
             t.rotation = deg;
-            m_engine->updateSourceTransform(src->id, t);
+            m_engine->updateSourceTransform(src->id, t, false);
             refreshChrome();
             return;
         }
 
         if (m_cropping) {
             applyCrop(t, d);
-            m_engine->updateSourceTransform(src->id, t);
+            m_engine->updateSourceTransform(src->id, t, false);
             refreshChrome();
             return;
         }
@@ -868,7 +875,7 @@ private:
             t = snapped;
         }
 
-        m_engine->updateSourceTransform(src->id, t);
+        m_engine->updateSourceTransform(src->id, t, false);
         refreshChrome();
     }
 
@@ -1242,26 +1249,10 @@ void PreviewWidget::applyDisplayLayout()
     if (!m_scroll || !m_stackHost || !m_surface)
         return;
     if (m_displayMode == PreviewDisplayMode::FitWindow) {
-        // Aspect-correct fit: surface keeps canvas AR; stage/scroll supplies letterbox bars.
-        m_scroll->setWidgetResizable(false);
-        const QSize vp = m_scroll->viewport() ? m_scroll->viewport()->size() : size();
-        const int cw = canvasWidth();
-        const int ch = canvasHeight();
-        int fitW = std::max(160, vp.width());
-        int fitH = std::max(90, vp.height());
-        if (cw > 0 && ch > 0 && vp.width() > 0 && vp.height() > 0) {
-            const double canvasAr = double(cw) / double(ch);
-            const double viewAr = double(vp.width()) / double(vp.height());
-            if (viewAr > canvasAr) {
-                fitH = vp.height();
-                fitW = std::max(160, int(std::lround(fitH * canvasAr)));
-            } else {
-                fitW = vp.width();
-                fitH = std::max(90, int(std::lround(fitW / canvasAr)));
-            }
-        }
-        m_stackHost->setFixedSize(fitW, fitH);
-        m_surface->setFixedSize(fitW, fitH);
+        // Fill the stage; mouse mapping uses full-surface coords matching DXGI stretch.
+        m_scroll->setWidgetResizable(true);
+        m_stackHost->setMinimumSize(0, 0);
+        m_stackHost->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         m_surface->setMinimumSize(160, 90);
         m_surface->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     } else {

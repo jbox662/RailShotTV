@@ -189,7 +189,9 @@ void PreviewSurface::drawEditChrome()
     if (x1 <= x0 + 2 || y1 <= y0 + 2)
         return;
 
-    constexpr int kLine = 2;
+    // Scale line thickness with canvas so handles stay visible when preview is scaled down.
+    const int kLine = std::max(2, W / 480);
+    const int kHs = std::max(5, W / 320);
     clearRect(ctx1.Get(), m_rtv, lineCol, x0, y0, x1, y0 + kLine, W, H);
     clearRect(ctx1.Get(), m_rtv, lineCol, x0, y1 - kLine, x1, y1, W, H);
     clearRect(ctx1.Get(), m_rtv, lineCol, x0, y0, x0 + kLine, y1, W, H);
@@ -197,15 +199,14 @@ void PreviewSurface::drawEditChrome()
 
     // Crop edge emphasis (thicker inner marks)
     if (m_chrome.cropLeft > 0.001)
-        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x0 + 4, y1, W, H);
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x0 + kLine * 2, y1, W, H);
     if (m_chrome.cropRight > 0.001)
-        clearRect(ctx1.Get(), m_rtv, cropCol, x1 - 4, y0, x1, y1, W, H);
+        clearRect(ctx1.Get(), m_rtv, cropCol, x1 - kLine * 2, y0, x1, y1, W, H);
     if (m_chrome.cropTop > 0.001)
-        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x1, y0 + 4, W, H);
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y0, x1, y0 + kLine * 2, W, H);
     if (m_chrome.cropBottom > 0.001)
-        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y1 - 4, x1, y1, W, H);
+        clearRect(ctx1.Get(), m_rtv, cropCol, x0, y1 - kLine * 2, x1, y1, W, H);
 
-    constexpr int kHs = 5;
     const float cx = (x0 + x1) * 0.5f;
     const float cy = (y0 + y1) * 0.5f;
     fillHandle(ctx1.Get(), m_rtv, accent, float(x0), float(y0), kHs, W, H);
@@ -218,7 +219,7 @@ void PreviewSurface::drawEditChrome()
     fillHandle(ctx1.Get(), m_rtv, accent, float(x1), float(y1), kHs, W, H);
 
     // Rotate knob above top-center
-    const float rotY = float(y0) - 28.0f;
+    const float rotY = float(y0) - float(std::max(28, W / 64));
     clearRect(ctx1.Get(), m_rtv, accent, int(cx) - 1, int(rotY) + 6, int(cx) + 1, y0, W, H);
     fillHandle(ctx1.Get(), m_rtv, accent, cx, rotY, kHs + 1, W, H);
 #else
@@ -242,7 +243,7 @@ void PreviewSurface::presentTexture(ID3D11Texture2D* texture)
 
     m_device->context()->CopyResource(back.Get(), texture);
     drawEditChrome();
-    if (FAILED(m_swap->Present(1, 0)))
+    if (FAILED(m_swap->Present(0, 0)))
         return;
     if (!m_hasFrame) {
         m_hasFrame = true;

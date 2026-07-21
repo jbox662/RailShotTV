@@ -17,7 +17,7 @@ namespace railshot {
 class EngineController;
 
 enum class PreviewDisplayMode {
-    FitWindow = 0,  // aspect-correct fit inside stage (default)
+    FitWindow = 0,  // fill stage; DXGI stretch (default)
     FixedScale = 1, // pixel zoom with scroll
 };
 

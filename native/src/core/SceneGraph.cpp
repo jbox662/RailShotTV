@@ -33,6 +33,12 @@ void SceneGraph::mutate(const std::function<void(Project&)>& fn)
     emit projectChanged();
 }
 
+void SceneGraph::mutateSilent(const std::function<void(Project&)>& fn)
+{
+    QMutexLocker lock(&m_mutex);
+    fn(m_project);
+}
+
 QString SceneGraph::previewSceneId() const
 {
     QMutexLocker lock(&m_mutex);
