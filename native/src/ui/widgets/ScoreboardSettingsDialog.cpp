@@ -10,7 +10,9 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QButtonGroup>
+#include <QAbstractButton>
 #include <QDialogButtonBox>
+#include <QSignalBlocker>
 #include <QColorDialog>
 #include <QFrame>
 #include <QPixmap>
@@ -330,10 +332,51 @@ void ScoreboardSettingsDialog::rescalePresetThumbs()
         return;
     const int w = qMax(220, m_presetScroll->viewport()->width() - 4);
     for (int i = 0; i < m_presetThumbs.size() && i < kPresetCount; ++i) {
+        if (i < m_presetCards.size() && m_presetCards[i] && !m_presetCards[i]->isVisible())
+            continue;
         const QPixmap pm = makePresetThumb(kPresets[i], w);
         m_presetThumbs[i]->setPixmap(pm);
         m_presetThumbs[i]->setFixedHeight(pm.height());
     }
+}
+
+void ScoreboardSettingsDialog::filterPresetsBySport()
+{
+    QString sportModel = QStringLiteral("generic");
+    if (m_sportGroup && m_sportGroup->checkedButton())
+        sportModel = mapSportUiToModel(m_sportGroup->checkedButton()->text());
+
+    auto matches = [&](const char* presetSport) -> bool {
+        const QString ps = QString::fromUtf8(presetSport);
+        if (sportModel == QLatin1String("8ball"))
+            return ps == QLatin1String("8ball") || ps == QLatin1String("pool")
+                   || ps == QLatin1String("9ball") || ps == QLatin1String("snooker");
+        if (sportModel == QLatin1String("generic") || sportModel == QLatin1String("custom"))
+            return ps == QLatin1String("generic") || ps == QLatin1String("custom");
+        return ps == sportModel;
+    };
+
+    int visible = 0;
+    bool selectedStillVisible = false;
+    for (int i = 0; i < m_presetCards.size() && i < kPresetCount; ++i) {
+        const bool show = matches(kPresets[i].sport);
+        m_presetCards[i]->setVisible(show);
+        if (show) {
+            ++visible;
+            if (i == m_selectedPreset)
+                selectedStillVisible = true;
+        }
+    }
+    if (!selectedStillVisible) {
+        m_selectedPreset = -1;
+        for (auto* card : m_presetCards) {
+            card->setProperty("selected", false);
+            card->setStyleSheet(QStringLiteral(
+                "QFrame#presetCard{background:#0E1116; border:1px solid #3A3D45;}"));
+        }
+    }
+    if (m_presetEmpty)
+        m_presetEmpty->setVisible(visible == 0);
 }
 
 void ScoreboardSettingsDialog::setSelectedPreset(int index)
@@ -379,10 +422,12 @@ void ScoreboardSettingsDialog::setSelectedPreset(int index)
     const QString sportUi = mapSportModelToUi(QString::fromUtf8(pr.sport));
     for (auto* b : m_sportGroup->buttons()) {
         if (b->text() == sportUi) {
+            QSignalBlocker block(m_sportGroup);
             b->setChecked(true);
             break;
         }
     }
+    filterPresetsBySport();
     refreshPreview();
 }
 
@@ -637,7 +682,7 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     auto* presetHead = new QHBoxLayout();
     presetHead->addWidget(sectionLabel(QStringLiteral("PRESETS"), right));
     presetHead->addStretch(1);
-    auto* presetHint = new QLabel(QStringLiteral("Click a look to apply"), right);
+    auto* presetHint = new QLabel(QStringLiteral("Filtered by sport"), right);
     presetHint->setObjectName(QStringLiteral("hint"));
     presetHead->addWidget(presetHint);
     rightLay->addLayout(presetHead);
@@ -653,6 +698,12 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     presetList->setSpacing(8);
     m_presetScroll->setWidget(presetBody);
 
+    m_presetEmpty = new QLabel(QStringLiteral("No presets for this sport yet."), presetBody);
+    m_presetEmpty->setObjectName(QStringLiteral("hint"));
+    m_presetEmpty->setAlignment(Qt::AlignCenter);
+    m_presetEmpty->setVisible(false);
+    presetList->addWidget(m_presetEmpty);
+
     for (int i = 0; i < kPresetCount; ++i) {
         const auto& pr = kPresets[i];
         auto* card = new QFrame(presetBody);
@@ -660,6 +711,7 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         card->setCursor(Qt::PointingHandCursor);
         card->setToolTip(QString::fromUtf8(pr.blurb));
         card->setProperty("presetIndex", i);
+        card->setProperty("presetSport", QString::fromUtf8(pr.sport));
         card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         card->setStyleSheet(QStringLiteral(
             "QFrame#presetCard{background:#0E1116; border:1px solid #3A3D45;}"));
@@ -673,7 +725,6 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         thumb->setAlignment(Qt::AlignCenter);
         thumb->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         thumb->setScaledContents(false);
-        // Temporary placeholder — resized on show
         thumb->setFixedHeight(64);
         thumb->setStyleSheet(QStringLiteral("background:#080A0C; border:none;"));
 
@@ -697,6 +748,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
     }
     presetList->addStretch(1);
     rightLay->addWidget(m_presetScroll, 1);
+
+    filterPresetsBySport();
 
     mainLay->addWidget(left, 0);
     mainLay->addWidget(right, 1);
@@ -770,6 +823,8 @@ ScoreboardSettingsDialog::ScoreboardSettingsDialog(EngineController* engine, QWi
         refreshPreview();
     });
     connect(m_sportGroup, &QButtonGroup::buttonClicked, this, [this](QAbstractButton*) {
+        filterPresetsBySport();
+        QTimer::singleShot(0, this, [this] { rescalePresetThumbs(); });
         refreshPreview();
     });
 

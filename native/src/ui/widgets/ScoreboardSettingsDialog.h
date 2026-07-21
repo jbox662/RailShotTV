@@ -30,6 +30,7 @@ private:
     void refreshPreview();
     void paintPreviewLabel();
     void rescalePresetThumbs();
+    void filterPresetsBySport();
     void setSelectedPreset(int index);
     void styleSwatch(QPushButton* btn, const QColor& c);
     void syncHexLabels();
@@ -52,6 +53,7 @@ private:
     QLabel* m_bgHex = nullptr;
     QVector<QFrame*> m_presetCards;
     QVector<QLabel*> m_presetThumbs;
+    QLabel* m_presetEmpty = nullptr;
     int m_selectedPreset = -1;
     QColor m_colorA;
     QColor m_colorB;
