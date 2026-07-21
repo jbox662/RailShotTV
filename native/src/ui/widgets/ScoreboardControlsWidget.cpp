@@ -298,11 +298,34 @@ ScoreboardControlsWidget::ScoreboardControlsWidget(EngineController* engine, QWi
     raceTo->setRange(1, 25);
     raceTo->setValue(model->state().raceTo);
     raceTo->setAlignment(Qt::AlignCenter);
-    raceTo->setFixedWidth(56);
-    raceTo->setButtonSymbols(QAbstractSpinBox::UpDownArrows);
+    raceTo->setFixedWidth(36);
+    raceTo->setButtonSymbols(QAbstractSpinBox::NoButtons); // use explicit +/- (spin arrows looked broken)
     raceTo->setToolTip(QStringLiteral("Race to"));
+    auto makeRaceStep = [&](const QString& t) {
+        auto* b = new QPushButton(t, raceGame);
+        b->setFixedSize(24, 26);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setStyleSheet(QStringLiteral(
+            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#86EFAC;"
+            "font-weight:900;font-size:12px;border-radius:3px;padding:0;}"
+            "QPushButton:hover{border-color:#22C55E;color:#BBF7D0;background:#0F1A14;}"
+            "QPushButton:pressed{background:#122018;}"));
+        return b;
+    };
+    auto* raceMinus = makeRaceStep(QStringLiteral("−"));
+    auto* racePlus = makeRaceStep(QStringLiteral("+"));
+    raceMinus->setToolTip(QStringLiteral("Decrease race to"));
+    racePlus->setToolTip(QStringLiteral("Increase race to"));
+    connect(raceMinus, &QPushButton::clicked, this, [raceTo] {
+        raceTo->setValue(raceTo->value() - 1);
+    });
+    connect(racePlus, &QPushButton::clicked, this, [raceTo] {
+        raceTo->setValue(raceTo->value() + 1);
+    });
     raceGameLay->addWidget(raceLab);
+    raceGameLay->addWidget(raceMinus);
     raceGameLay->addWidget(raceTo);
+    raceGameLay->addWidget(racePlus);
 
     auto* gameLab = makeFieldLab(QStringLiteral("Game"), raceGame);
     auto* gameCombo = new QComboBox(raceGame);
