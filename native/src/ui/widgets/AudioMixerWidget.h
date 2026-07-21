@@ -1,12 +1,13 @@
 #pragma once
 #include <QWidget>
-#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 class QPushButton;
 
 namespace railshot {
 class EngineController;
 
+/// OBS-style bottom mixer: horizontal channel rows (no fat vertical strips).
 class AudioMixerWidget : public QWidget {
     Q_OBJECT
 public:
@@ -24,7 +25,7 @@ private:
     void updateStripValues();
 
     EngineController* m_engine = nullptr;
-    QHBoxLayout* m_row = nullptr;
+    QVBoxLayout* m_list = nullptr;
     QPushButton* m_monitorBtn = nullptr;
     QPushButton* m_advBtn = nullptr;
     QStringList m_stripIds;

@@ -13,10 +13,10 @@
 #include <QScrollArea>
 #include <QFrame>
 #include <QMenu>
-#include <QContextMenuEvent>
 #include <QCursor>
 #include <QAction>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <cmath>
 #include <algorithm>
 
@@ -28,10 +28,15 @@ float peakToDb(float peak)
     if (peak <= 0.000001f) return -60.f;
     return std::max(-60.f, 20.f * std::log10(peak));
 }
+float volumeToDb(float vol)
+{
+    if (vol <= 0.000001f) return -60.f;
+    return std::max(-60.f, 20.f * std::log10(std::clamp(vol, 0.f, 20.f)));
+}
 QString formatDb(float db)
 {
-    if (db <= -59.5f) return QStringLiteral("-inf");
-    return QStringLiteral("%1").arg(db, 0, 'f', 1);
+    if (db <= -59.5f) return QStringLiteral("-inf dB");
+    return QStringLiteral("%1 dB").arg(db, 0, 'f', 1);
 }
 } // namespace
 
@@ -39,86 +44,80 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
     : QWidget(parent), m_engine(engine)
 {
     setObjectName(QStringLiteral("audioMixer"));
-    setMinimumWidth(200);
-    setMinimumHeight(140);
+    setMinimumWidth(280);
+    setMinimumHeight(120);
     setContextMenuPolicy(Qt::CustomContextMenu);
     setStyleSheet(QStringLiteral(
         "QWidget#audioMixer {"
         "  background:#0D0F12;"
-        "  border-top: 3px solid #A855F7;"
-        "  border-left: 2px solid #A855F7;"
-        "  border-right: 1px solid #3A3D45;"
+        "  border-top:2px solid #A855F7;"
+        "}"
+        "QWidget#audioMixer QLabel#mixerHint {"
+        "  color:#6B7280; font-size:9px; font-weight:600;"
+        "  background:transparent; border:none;"
+        "}"
+        "QWidget#audioMixer QPushButton#mixerToolBtn {"
+        "  background:#1A1D22; border:1px solid #3A3D45; border-radius:3px;"
+        "  color:#C8CAD0; font-size:10px; font-weight:700; padding:3px 10px;"
+        "  min-height:22px; max-height:24px;"
+        "}"
+        "QWidget#audioMixer QPushButton#mixerToolBtn:hover {"
+        "  border-color:#4F9EFF; color:#FFFFFF;"
+        "}"
+        "QWidget#audioMixer QPushButton#mixerToolBtn:checked {"
+        "  background:#4C1D95; border-color:#C084FC; color:#F5E8FF;"
         "}"));
 
-    auto* outer = new QHBoxLayout(this);
-    outer->setContentsMargins(6, 6, 6, 6);
-    outer->setSpacing(6);
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(6, 4, 6, 4);
+    outer->setSpacing(4);
 
-    auto* outputsLab = new QLabel(QStringLiteral("O\nU\nT\nP\nU\nT\nS"), this);
-    outputsLab->setAlignment(Qt::AlignCenter);
-    outputsLab->setFixedWidth(18);
-    outputsLab->setStyleSheet(QStringLiteral(
-        "color:#7AB8FF; font-size:8px; font-weight:900; letter-spacing:1px;"
-        "background:rgba(58,106,255,0.22); border:1px solid #3A6AFF66; border-radius:3px;"));
-    outer->addWidget(outputsLab);
+    // Toolbar — OBS Options / Adv Audio + global monitor
+    auto* tools = new QHBoxLayout();
+    tools->setSpacing(6);
+    auto* hint = new QLabel(QStringLiteral("Mixer"), this);
+    hint->setObjectName(QStringLiteral("mixerHint"));
+    tools->addWidget(hint);
+    tools->addStretch(1);
 
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(QStringLiteral("background:transparent; border:none;"));
-    auto* host = new QWidget(scroll);
-    m_row = new QHBoxLayout(host);
-    m_row->setContentsMargins(0, 0, 0, 0);
-    m_row->setSpacing(6);
-    scroll->setWidget(host);
-    outer->addWidget(scroll, 1);
-
-    auto* inputsLab = new QLabel(QStringLiteral("I\nN\nP\nU\nT\nS"), this);
-    inputsLab->setAlignment(Qt::AlignCenter);
-    inputsLab->setFixedWidth(18);
-    inputsLab->setStyleSheet(QStringLiteral(
-        "color:#C084FC; font-size:8px; font-weight:900; letter-spacing:1px;"
-        "background:rgba(168,85,247,0.22); border:1px solid #A855F766; border-radius:3px;"));
-    outer->addWidget(inputsLab);
-
-    auto* side = new QVBoxLayout();
-    side->setSpacing(4);
-    auto* title = new QLabel(QStringLiteral("MIX"), this);
-    title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(QStringLiteral(
-        "color:#C084FC; font-size:10px; font-weight:900; letter-spacing:1px; background:transparent;"));
-    m_monitorBtn = new QPushButton(QStringLiteral("MON"), this);
+    m_monitorBtn = new QPushButton(QStringLiteral("Monitor"), this);
+    m_monitorBtn->setObjectName(QStringLiteral("mixerToolBtn"));
     m_monitorBtn->setCheckable(true);
     m_monitorBtn->setChecked(true);
-    m_monitorBtn->setFixedHeight(22);
-    m_monitorBtn->setToolTip(QStringLiteral("Headphone / speaker monitor master"));
-    m_monitorBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
-        "border:1px solid #A855F7;color:#C084FC;font-size:9px;font-weight:800;border-radius:3px;}"
-        "QPushButton:checked{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #6D28D9,stop:1 #4C1D95);"
-        "color:#F5E8FF;border-color:#C084FC;}"
-        "QPushButton:hover{border-color:#E9D5FF;}"));
+    m_monitorBtn->setCursor(Qt::PointingHandCursor);
+    m_monitorBtn->setToolTip(QStringLiteral("Enable headphone / speaker monitoring"));
     connect(m_monitorBtn, &QPushButton::toggled, this, [this](bool on) {
         if (m_engine && m_engine->audio())
             m_engine->audio()->setMonitorEnabled(on);
     });
+    tools->addWidget(m_monitorBtn);
 
-    m_advBtn = new QPushButton(QStringLiteral("ADV"), this);
-    m_advBtn->setFixedHeight(22);
-    m_advBtn->setToolTip(QStringLiteral("Advanced Audio Properties"));
-    m_advBtn->setStyleSheet(QStringLiteral(
-        "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
-        "border:1px solid #3A6AFF;color:#7AB8FF;font-size:9px;font-weight:800;border-radius:3px;}"
-        "QPushButton:hover{border-color:#8AB4FF;color:#fff;}"));
+    m_advBtn = new QPushButton(QStringLiteral("Advanced Audio…"), this);
+    m_advBtn->setObjectName(QStringLiteral("mixerToolBtn"));
+    m_advBtn->setCursor(Qt::PointingHandCursor);
+    m_advBtn->setToolTip(QStringLiteral("Advanced Audio Properties (balance, sync, tracks, monitoring)"));
     connect(m_advBtn, &QPushButton::clicked, this, &AudioMixerWidget::openAdvAudio);
+    tools->addWidget(m_advBtn);
+    outer->addLayout(tools);
 
-    side->addWidget(title);
-    side->addWidget(m_monitorBtn);
-    side->addWidget(m_advBtn);
-    side->addStretch();
-    outer->addLayout(side);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setStyleSheet(QStringLiteral(
+        "QScrollArea{background:transparent; border:none;}"
+        "QScrollBar:vertical{width:8px; background:#0A0C0F;}"
+        "QScrollBar::handle:vertical{background:#3A3D45; border-radius:3px; min-height:24px;}"));
+    auto* host = new QWidget(scroll);
+    host->setObjectName(QStringLiteral("mixerHost"));
+    host->setStyleSheet(QStringLiteral("QWidget#mixerHost{background:transparent;}"));
+    m_list = new QVBoxLayout(host);
+    m_list->setContentsMargins(0, 0, 0, 0);
+    m_list->setSpacing(2);
+    m_list->setAlignment(Qt::AlignTop);
+    scroll->setWidget(host);
+    outer->addWidget(scroll, 1);
 
     connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu menu(this);
@@ -135,7 +134,7 @@ AudioMixerWidget::AudioMixerWidget(EngineController* engine, QWidget* parent)
 
     auto* timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &AudioMixerWidget::refreshMeters);
-    timer->start(60);
+    timer->start(50);
     refreshMeters();
 }
 
@@ -148,7 +147,7 @@ void AudioMixerWidget::openAdvAudio()
 
 void AudioMixerWidget::rebuildStrips()
 {
-    while (QLayoutItem* child = m_row->takeAt(0)) {
+    while (QLayoutItem* child = m_list->takeAt(0)) {
         if (child->widget()) child->widget()->deleteLater();
         delete child;
     }
@@ -159,14 +158,15 @@ void AudioMixerWidget::rebuildStrips()
         const bool master = ch.id == QLatin1String("master");
         m_stripIds.append(ch.id);
 
-        auto* strip = new QWidget(this);
-        strip->setObjectName(QStringLiteral("mixStrip_") + ch.id);
-        strip->setProperty("channelId", ch.id);
-        strip->setFixedWidth(master ? 80 : 72);
-        strip->setContextMenuPolicy(Qt::CustomContextMenu);
-        strip->setStyleSheet(QStringLiteral(
-            "QWidget{background:#12151A; border:1px solid #3A3D45; border-radius:4px;}"));
-        connect(strip, &QWidget::customContextMenuRequested, this, [this, id = ch.id](const QPoint& pos) {
+        auto* row = new QWidget(this);
+        row->setObjectName(QStringLiteral("mixRow_") + ch.id);
+        row->setProperty("channelId", ch.id);
+        row->setFixedHeight(30);
+        row->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        row->setContextMenuPolicy(Qt::CustomContextMenu);
+        row->setStyleSheet(QStringLiteral(
+            "QWidget{background:#12151A; border:1px solid #2A2D35; border-radius:3px;}"));
+        connect(row, &QWidget::customContextMenuRequested, this, [this, id = ch.id](const QPoint&) {
             QMenu menu(this);
             menu.addAction(QStringLiteral("Advanced Audio Properties…"), this, &AudioMixerWidget::openAdvAudio);
             if (id != QLatin1String("master")) {
@@ -181,99 +181,87 @@ void AudioMixerWidget::rebuildStrips()
                     m_stripIds.clear();
                     rebuildStrips();
                 });
+                menu.addSeparator();
+                auto* monOff = menu.addAction(QStringLiteral("Monitor Off"));
+                auto* monBoth = menu.addAction(QStringLiteral("Monitor and Output"));
+                auto* monOnly = menu.addAction(QStringLiteral("Monitor Only (mute output)"));
+                connect(monOff, &QAction::triggered, this, [this, id] {
+                    auto s = m_engine->audio()->channelState(id);
+                    s.monitoring = AudioMonitoringType::None;
+                    m_engine->audio()->setChannelState(id, s);
+                });
+                connect(monBoth, &QAction::triggered, this, [this, id] {
+                    auto s = m_engine->audio()->channelState(id);
+                    s.monitoring = AudioMonitoringType::MonitorAndOutput;
+                    m_engine->audio()->setChannelState(id, s);
+                });
+                connect(monOnly, &QAction::triggered, this, [this, id] {
+                    auto s = m_engine->audio()->channelState(id);
+                    s.monitoring = AudioMonitoringType::MonitorOnly;
+                    m_engine->audio()->setChannelState(id, s);
+                });
             }
             menu.exec(QCursor::pos());
-            Q_UNUSED(pos);
         });
 
-        auto* col = new QVBoxLayout(strip);
-        col->setContentsMargins(4, 4, 4, 4);
-        col->setSpacing(3);
+        auto* lay = new QHBoxLayout(row);
+        lay->setContentsMargins(6, 2, 4, 2);
+        lay->setSpacing(6);
 
-        auto* badge = new QLabel(master ? QStringLiteral("MASTER") : ch.name.left(10), strip);
-        badge->setObjectName(QStringLiteral("stripName"));
-        badge->setAlignment(Qt::AlignCenter);
-        badge->setToolTip(ch.name);
-        if (master) {
-            badge->setStyleSheet(QStringLiteral(
-                "font-size:8px; font-weight:900; color:#04140A;"
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4ADE80,stop:1 #22C55E);"
-                "border:1px solid #86EFAC; border-radius:3px; padding:2px 4px;"));
-        } else {
-            badge->setStyleSheet(QStringLiteral(
-                "font-size:8px; font-weight:800; color:%1; background:#1A1D22;"
-                "border:1px solid #2A2D35; border-radius:3px; padding:2px 4px;")
-                                     .arg(ch.muted ? QStringLiteral("#EF4444")
-                                                   : QStringLiteral("#C8CAD0")));
-        }
-        col->addWidget(badge);
+        auto* name = new QLabel(master ? QStringLiteral("Master") : ch.name, row);
+        name->setObjectName(QStringLiteral("stripName"));
+        name->setFixedWidth(108);
+        name->setToolTip(ch.name);
+        const QString nameColor = master ? QStringLiteral("#4ADE80")
+                                         : (ch.muted ? QStringLiteral("#EF4444")
+                                                     : QStringLiteral("#E5E7EB"));
+        name->setStyleSheet(QStringLiteral(
+            "font-family:'DM Sans','Segoe UI'; font-size:11px; font-weight:700;"
+            "color:%1; background:transparent; border:none;")
+                                .arg(nameColor));
+        name->setText(name->fontMetrics().elidedText(name->text(), Qt::ElideRight, 108));
+        lay->addWidget(name);
 
-        auto* meterRow = new QHBoxLayout();
-        meterRow->setSpacing(2);
-        meterRow->setContentsMargins(0, 0, 0, 0);
-        auto makeBar = [&](const QString& suffix) {
-            auto* meter = new QProgressBar(strip);
+        // Compact stereo meters (OBS-like horizontal)
+        auto* meterCol = new QVBoxLayout();
+        meterCol->setContentsMargins(0, 0, 0, 0);
+        meterCol->setSpacing(1);
+        auto makeMeter = [&](const QString& suffix) {
+            auto* meter = new QProgressBar(row);
             meter->setObjectName(ch.id + suffix);
-            meter->setOrientation(Qt::Vertical);
+            meter->setOrientation(Qt::Horizontal);
             meter->setRange(0, 100);
             meter->setValue(0);
             meter->setTextVisible(false);
-            meter->setFixedSize(8, 72);
-            const QString base = ch.id.contains(QLatin1String("mic"), Qt::CaseInsensitive)
-                                     ? QStringLiteral("#22C55E")
-                                     : QStringLiteral("#4F9EFF");
+            meter->setFixedHeight(5);
+            meter->setMinimumWidth(72);
+            meter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
             meter->setStyleSheet(QStringLiteral(
-                "QProgressBar{background:#0A0E1A;border:1px solid rgba(255,255,255,0.08);border-radius:2px;}"
-                "QProgressBar::chunk{background:qlineargradient(x1:0,y1:1,x2:0,y2:0,"
-                "stop:0 %1, stop:0.4 #84CC16, stop:0.7 #FBBF24, stop:1 #EF4444);}")
-                                     .arg(base));
+                "QProgressBar{background:#0A0C0F;border:1px solid #1F2937;border-radius:1px;}"
+                "QProgressBar::chunk{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 #22C55E, stop:0.55 #84CC16, stop:0.8 #FBBF24, stop:1 #EF4444);}"));
             return meter;
         };
-        meterRow->addStretch();
-        meterRow->addWidget(makeBar(QStringLiteral("_L")));
-        meterRow->addWidget(makeBar(QStringLiteral("_R")));
-        meterRow->addStretch();
-        col->addLayout(meterRow);
+        meterCol->addWidget(makeMeter(QStringLiteral("_L")));
+        meterCol->addWidget(makeMeter(QStringLiteral("_R")));
+        lay->addLayout(meterCol, 2);
 
-        auto* db = new QLabel(QStringLiteral("-inf"), strip);
-        db->setObjectName(QStringLiteral("dbLabel"));
-        db->setAlignment(Qt::AlignCenter);
-        db->setStyleSheet(QStringLiteral(
-            "font-family:'JetBrains Mono'; font-size:8px; color:#8892A4; background:transparent;"));
-        col->addWidget(db);
-
-        // Balance (skip for master)
-        if (!master) {
-            auto* bal = new QSlider(Qt::Horizontal, strip);
-            bal->setObjectName(QStringLiteral("balSlider"));
-            bal->setRange(-100, 100);
-            bal->setValue(int(ch.pan * 100));
-            bal->setFixedHeight(14);
-            bal->setToolTip(QStringLiteral("Balance L/R"));
-            bal->setStyleSheet(QStringLiteral(
-                "QSlider::groove:horizontal{background:#1A1D22;height:4px;border:1px solid #3A3D45;border-radius:2px;}"
-                "QSlider::handle:horizontal{background:#7AB8FF;width:8px;margin:-4px 0;border-radius:4px;}"));
-            connect(bal, &QSlider::valueChanged, this, [this, id = ch.id](int v) {
-                auto state = m_engine->audio()->channelState(id);
-                if (state.locked) return;
-                state.pan = v / 100.f;
-                m_engine->audio()->setChannelState(id, state);
-            });
-            col->addWidget(bal);
-        }
-
-        auto* fader = new QSlider(Qt::Vertical, strip);
+        auto* fader = new QSlider(Qt::Horizontal, row);
         fader->setObjectName(QStringLiteral("volSlider"));
         fader->setRange(0, 100);
         fader->setValue(int(std::clamp(ch.volume, 0.f, 1.f) * 100));
-        fader->setFixedHeight(64);
+        fader->setFixedHeight(18);
+        fader->setMinimumWidth(90);
+        fader->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         fader->setEnabled(!ch.locked || master);
+        fader->setToolTip(QStringLiteral("Volume"));
         fader->setStyleSheet(QStringLiteral(
-            "QSlider::groove:vertical{background:#1A1D22;width:6px;border:1px solid #3A3D45;border-radius:3px;}"
-            "QSlider::handle:vertical{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #EC4899,stop:1 #A855F7);"
-            "height:12px;width:14px;margin:-2px -4px;border-radius:3px;border:1px solid #F9A8D4;}"
-            "QSlider::handle:vertical:hover{background:#F472B6;}"
-            "QSlider:disabled{opacity:0.45;}"));
+            "QSlider::groove:horizontal{background:#1A1D22;height:4px;border:1px solid #3A3D45;border-radius:2px;}"
+            "QSlider::sub-page:horizontal{background:#6366F1;border-radius:2px;}"
+            "QSlider::handle:horizontal{background:#E5E7EB;width:10px;height:14px;margin:-6px 0;"
+            "border:1px solid #9CA3AF;border-radius:2px;}"
+            "QSlider::handle:horizontal:hover{background:#FFFFFF;border-color:#A855F7;}"
+            "QSlider:disabled{opacity:0.4;}"));
         connect(fader, &QSlider::valueChanged, this, [this, id = ch.id, master](int v) {
             if (!m_engine || !m_engine->audio()) return;
             if (master) {
@@ -285,21 +273,44 @@ void AudioMixerWidget::rebuildStrips()
             state.volume = v / 100.f;
             m_engine->audio()->setChannelState(id, state);
         });
-        col->addWidget(fader, 0, Qt::AlignHCenter);
+        lay->addWidget(fader, 3);
 
-        auto* btnRow = new QHBoxLayout();
-        btnRow->setSpacing(2);
-        auto* mute = new QPushButton(QStringLiteral("M"), strip);
+        auto* volDb = new QLabel(formatDb(volumeToDb(ch.volume)), row);
+        volDb->setObjectName(QStringLiteral("volDbLabel"));
+        volDb->setFixedWidth(58);
+        volDb->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        volDb->setStyleSheet(QStringLiteral(
+            "font-family:'JetBrains Mono','Consolas',monospace; font-size:9px; color:#9CA3AF;"
+            "background:transparent; border:none;"));
+        lay->addWidget(volDb);
+
+        auto* peakDb = new QLabel(formatDb(peakToDb(std::max(ch.peakL, ch.peakR))), row);
+        peakDb->setObjectName(QStringLiteral("dbLabel"));
+        peakDb->setFixedWidth(58);
+        peakDb->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        peakDb->setToolTip(QStringLiteral("Peak level"));
+        peakDb->setStyleSheet(QStringLiteral(
+            "font-family:'JetBrains Mono','Consolas',monospace; font-size:9px; color:#6B7280;"
+            "background:transparent; border:none;"));
+        lay->addWidget(peakDb);
+
+        auto makeCtrl = [&](const QString& text, const QString& tip) {
+            auto* b = new QPushButton(text, row);
+            b->setCheckable(true);
+            b->setCursor(Qt::PointingHandCursor);
+            b->setFixedSize(22, 20);
+            b->setToolTip(tip);
+            b->setStyleSheet(QStringLiteral(
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
+                "font-size:9px;font-weight:800;border-radius:2px;}"
+                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
+                "QPushButton:checked{background:#B91C1C;color:#FFFFFF;border-color:#EF4444;}"));
+            return b;
+        };
+
+        auto* mute = makeCtrl(QStringLiteral("M"), QStringLiteral("Mute"));
         mute->setObjectName(QStringLiteral("muteBtn"));
-        mute->setFixedSize(22, 18);
-        mute->setCheckable(true);
         mute->setChecked(ch.muted);
-        mute->setToolTip(QStringLiteral("Mute"));
-        mute->setStyleSheet(QStringLiteral(
-            "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
-            "font-size:9px;font-weight:800;border-radius:3px;}"
-            "QPushButton:checked{background:#EF4444;color:white;border-color:#F87171;}"
-            "QPushButton:hover{border-color:#8892A4;}"));
         connect(mute, &QPushButton::clicked, this, [this, id = ch.id, master] {
             if (master) {
                 m_engine->audio()->setMasterMuted(!m_engine->audio()->masterMuted());
@@ -309,38 +320,32 @@ void AudioMixerWidget::rebuildStrips()
             state.muted = !state.muted;
             m_engine->audio()->setChannelState(id, state);
         });
-        btnRow->addWidget(mute);
+        lay->addWidget(mute);
 
         if (!master) {
-            auto* solo = new QPushButton(QStringLiteral("S"), strip);
+            auto* solo = makeCtrl(QStringLiteral("S"), QStringLiteral("Solo"));
             solo->setObjectName(QStringLiteral("soloBtn"));
-            solo->setFixedSize(22, 18);
-            solo->setCheckable(true);
             solo->setChecked(ch.solo);
-            solo->setToolTip(QStringLiteral("Solo"));
             solo->setStyleSheet(QStringLiteral(
-                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
-                "font-size:9px;font-weight:800;border-radius:3px;}"
-                "QPushButton:checked{background:#FBBF24;color:#111;border-color:#FDE68A;}"
-                "QPushButton:hover{border-color:#8892A4;}"));
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
+                "font-size:9px;font-weight:800;border-radius:2px;}"
+                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
+                "QPushButton:checked{background:#CA8A04;color:#111;border-color:#FBBF24;}"));
             connect(solo, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
                 state.solo = !state.solo;
                 m_engine->audio()->setChannelState(id, state);
             });
-            btnRow->addWidget(solo);
+            lay->addWidget(solo);
 
-            auto* mon = new QPushButton(QStringLiteral("H"), strip);
+            auto* mon = makeCtrl(QStringLiteral("H"), QStringLiteral("Monitor (cycle)"));
             mon->setObjectName(QStringLiteral("monBtn"));
-            mon->setFixedSize(22, 18);
-            mon->setCheckable(true);
             mon->setChecked(ch.monitoring != AudioMonitoringType::None);
-            mon->setToolTip(QStringLiteral("Headphones / monitor"));
             mon->setStyleSheet(QStringLiteral(
-                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#A0A8B8;"
-                "font-size:9px;font-weight:800;border-radius:3px;}"
-                "QPushButton:checked{background:#3A6AFF;color:white;border-color:#7AB8FF;}"
-                "QPushButton:hover{border-color:#8892A4;}"));
+                "QPushButton{background:#1A1D22;border:1px solid #3A3D45;color:#9CA3AF;"
+                "font-size:9px;font-weight:800;border-radius:2px;}"
+                "QPushButton:hover{border-color:#6B7280;color:#E5E7EB;}"
+                "QPushButton:checked{background:#1D4ED8;color:#FFFFFF;border-color:#60A5FA;}"));
             connect(mon, &QPushButton::clicked, this, [this, id = ch.id] {
                 auto state = m_engine->audio()->channelState(id);
                 if (state.monitoring == AudioMonitoringType::None)
@@ -350,16 +355,13 @@ void AudioMixerWidget::rebuildStrips()
                 else
                     state.monitoring = AudioMonitoringType::None;
                 m_engine->audio()->setChannelState(id, state);
-                // Rebuild to refresh check state styling
-                m_stripIds.clear();
-                rebuildStrips();
             });
-            btnRow->addWidget(mon);
+            lay->addWidget(mon);
         }
-        col->addLayout(btnRow);
-        m_row->addWidget(strip);
+
+        m_list->addWidget(row);
     }
-    m_row->addStretch();
+    m_list->addStretch(1);
 }
 
 void AudioMixerWidget::refreshMeters()
@@ -380,46 +382,52 @@ void AudioMixerWidget::refreshMeters()
 void AudioMixerWidget::updateStripValues()
 {
     const auto channels = m_engine->audioChannels();
-    for (int i = 0; i < channels.size() && i < m_row->count(); ++i) {
-        auto* item = m_row->itemAt(i);
+    for (int i = 0; i < channels.size() && i < m_list->count(); ++i) {
+        auto* item = m_list->itemAt(i);
         if (!item || !item->widget()) continue;
-        auto* strip = item->widget();
+        auto* row = item->widget();
         const auto& ch = channels[i];
-        if (auto* barL = strip->findChild<QProgressBar*>(ch.id + QStringLiteral("_L")))
+        const bool master = ch.id == QLatin1String("master");
+
+        if (auto* barL = row->findChild<QProgressBar*>(ch.id + QStringLiteral("_L")))
             barL->setValue(int(std::clamp(ch.peakL, 0.f, 1.f) * 100));
-        if (auto* barR = strip->findChild<QProgressBar*>(ch.id + QStringLiteral("_R")))
+        if (auto* barR = row->findChild<QProgressBar*>(ch.id + QStringLiteral("_R")))
             barR->setValue(int(std::clamp(ch.peakR, 0.f, 1.f) * 100));
-        if (auto* db = strip->findChild<QLabel*>(QStringLiteral("dbLabel"))) {
-            const float peak = std::max(ch.peakL, ch.peakR);
-            db->setText(formatDb(peakToDb(peak)));
+        if (auto* db = row->findChild<QLabel*>(QStringLiteral("dbLabel")))
+            db->setText(formatDb(peakToDb(std::max(ch.peakL, ch.peakR))));
+        if (auto* volDb = row->findChild<QLabel*>(QStringLiteral("volDbLabel")))
+            volDb->setText(formatDb(volumeToDb(ch.volume)));
+        if (auto* name = row->findChild<QLabel*>(QStringLiteral("stripName"))) {
+            const QString nameColor = master ? QStringLiteral("#4ADE80")
+                                             : (ch.muted ? QStringLiteral("#EF4444")
+                                                         : QStringLiteral("#E5E7EB"));
+            name->setStyleSheet(QStringLiteral(
+                "font-family:'DM Sans','Segoe UI'; font-size:11px; font-weight:700;"
+                "color:%1; background:transparent; border:none;")
+                                    .arg(nameColor));
         }
-        if (auto* mute = strip->findChild<QPushButton*>(QStringLiteral("muteBtn"))) {
+        if (auto* mute = row->findChild<QPushButton*>(QStringLiteral("muteBtn"))) {
             QSignalBlocker b(mute);
             mute->setChecked(ch.muted);
         }
-        if (auto* solo = strip->findChild<QPushButton*>(QStringLiteral("soloBtn"))) {
+        if (auto* solo = row->findChild<QPushButton*>(QStringLiteral("soloBtn"))) {
             QSignalBlocker b(solo);
             solo->setChecked(ch.solo);
         }
-        if (auto* mon = strip->findChild<QPushButton*>(QStringLiteral("monBtn"))) {
+        if (auto* mon = row->findChild<QPushButton*>(QStringLiteral("monBtn"))) {
             QSignalBlocker b(mon);
             mon->setChecked(ch.monitoring != AudioMonitoringType::None);
             mon->setToolTip(ch.monitoring == AudioMonitoringType::MonitorOnly
                                 ? QStringLiteral("Monitor Only (muted in stream)")
                                 : ch.monitoring == AudioMonitoringType::MonitorAndOutput
                                       ? QStringLiteral("Monitor and Output")
-                                      : QStringLiteral("Monitor Off"));
+                                      : QStringLiteral("Monitor Off — click to cycle"));
         }
-        if (auto* fader = strip->findChild<QSlider*>(QStringLiteral("volSlider"))) {
+        if (auto* fader = row->findChild<QSlider*>(QStringLiteral("volSlider"))) {
             if (!fader->isSliderDown()) {
                 QSignalBlocker b(fader);
                 fader->setValue(int(std::clamp(ch.volume, 0.f, 1.f) * 100));
-            }
-        }
-        if (auto* bal = strip->findChild<QSlider*>(QStringLiteral("balSlider"))) {
-            if (!bal->isSliderDown()) {
-                QSignalBlocker b(bal);
-                bal->setValue(int(ch.pan * 100));
+                fader->setEnabled(!ch.locked || master);
             }
         }
     }

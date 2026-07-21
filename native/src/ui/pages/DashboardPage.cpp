@@ -642,7 +642,7 @@ void DashboardPage::applyDefaultDockLayout()
 
     // Scenes | Sources | Mixer | Scoreboard
     m_dockHost->resizeDocks({m_scenesDock, m_sourcesDock, m_mixerDock, m_scoreboardDock},
-                            {180, 360, 240, 220}, Qt::Horizontal);
+                            {200, 280, 420, 220}, Qt::Horizontal);
 }
 
 void DashboardPage::scheduleSaveDockState()
