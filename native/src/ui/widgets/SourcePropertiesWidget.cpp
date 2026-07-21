@@ -449,10 +449,21 @@ void SourcePropertiesWidget::rebuild()
                 m_sourcePanel->deleteLater();
                 m_sourcePanel = nullptr;
             }
+            // Drop leftover stretch spacers from previous panel mounts.
+            while (m_sourceTabLay->count() > 0) {
+                QLayoutItem* item = m_sourceTabLay->takeAt(0);
+                if (!item) break;
+                if (QWidget* w = item->widget()) {
+                    w->deleteLater();
+                }
+                delete item;
+            }
             m_panelType = src->type;
             m_sourcePanel = createSourcePropertiesPanel(src->type, m_engine, m_sourceTab);
             if (m_sourcePanel) {
-                m_sourceTabLay->addWidget(m_sourcePanel, 1);
+                // Stretch 0 on the form; spacer fills leftover height (OBS preview lives in the dialog).
+                m_sourceTabLay->addWidget(m_sourcePanel, 0);
+                m_sourceTabLay->addStretch(1);
                 connect(m_sourcePanel, &SourcePropertiesPanel::settingsEdited, this, [this] {
                     if (m_block || !m_engine || !m_sourcePanel) return;
                     auto cur = m_engine->selectedSource();

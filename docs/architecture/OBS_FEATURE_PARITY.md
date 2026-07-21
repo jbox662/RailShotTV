@@ -44,7 +44,7 @@ Last updated: Wave 7 (Screenshots, Missing Files, VCam config, Multiview).
 | OBS | Status | RailShot |
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
-| OBSBasicProperties | partial | `SourcePropertiesDialog` |
+| OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
 | OBSBasicFilters | partial | `FiltersDialog` |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |

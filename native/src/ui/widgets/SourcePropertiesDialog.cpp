@@ -1,5 +1,8 @@
 #include "ui/widgets/SourcePropertiesDialog.h"
 #include "ui/widgets/SourcePropertiesWidget.h"
+#include "compositor/PreviewSurface.h"
+#include "capture/CaptureManager.h"
+#include "capture/IVideoSource.h"
 #include "core/EngineController.h"
 #include "core/Types.h"
 #include <QVBoxLayout>
@@ -9,6 +12,7 @@
 #include <QLabel>
 #include <QFrame>
 #include <QJsonObject>
+#include <QTimer>
 
 namespace railshot {
 
@@ -19,8 +23,8 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     setObjectName(QStringLiteral("sourcePropertiesDialog"));
     setModal(true);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
-    resize(560, 680);
-    setMinimumSize(480, 520);
+    resize(560, 760);
+    setMinimumSize(480, 560);
 
     if (m_engine)
         m_engine->setSelectedSourceId(sourceId);
@@ -54,6 +58,36 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
         "stop:0 #4F9EFF, stop:0.5 #A855F7, stop:1 #FF5A2C); border:none;"));
     root->addWidget(accent);
 
+    // OBS BasicProperties: live source preview sits above the property form.
+    m_previewHost = new QWidget(this);
+    m_previewHost->setObjectName(QStringLiteral("sourcePropsPreviewHost"));
+    m_previewHost->setStyleSheet(QStringLiteral(
+        "QWidget#sourcePropsPreviewHost {"
+        "  background:#0A0C10; border-bottom:1px solid #2A2D35;"
+        "}"));
+    auto* previewLay = new QVBoxLayout(m_previewHost);
+    previewLay->setContentsMargins(10, 8, 10, 10);
+    previewLay->setSpacing(6);
+
+    m_previewCaption = new QLabel(QStringLiteral("PREVIEW"), m_previewHost);
+    m_previewCaption->setStyleSheet(QStringLiteral(
+        "color:#4F9EFF; font-size:9px; font-weight:900; letter-spacing:1.5px;"
+        "font-family:'DM Sans'; background:transparent; border:none;"));
+    previewLay->addWidget(m_previewCaption);
+
+    m_preview = new PreviewSurface(m_previewHost);
+    m_preview->setMinimumHeight(200);
+    m_preview->setEmptyMessage(QStringLiteral("No Signal"));
+    if (m_engine && m_engine->graphicsDevice())
+        m_preview->setDevice(m_engine->graphicsDevice());
+    previewLay->addWidget(m_preview, 1);
+    root->addWidget(m_previewHost, 0);
+
+    const bool showPreview = sourceHasVideoPreview();
+    m_previewHost->setVisible(showPreview);
+    if (!showPreview && m_preview)
+        m_preview->setEmptyMessage(QStringLiteral("Audio source — no video preview"));
+
     m_props = new SourcePropertiesWidget(m_engine, this);
     m_props->setDialogMode(true);
     root->addWidget(m_props, 1);
@@ -75,7 +109,6 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     box->button(QDialogButtonBox::Ok)->setDefault(true);
     box->button(QDialogButtonBox::Ok)->setCursor(Qt::PointingHandCursor);
     box->button(QDialogButtonBox::Cancel)->setCursor(Qt::PointingHandCursor);
-    // Cancel keeps dialog chrome; style cancel quieter
     box->button(QDialogButtonBox::Cancel)->setStyleSheet(QStringLiteral(
         "QPushButton{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2A2D35,stop:1 #1A1D22);"
         "border:1px solid #3A3D45;color:#C8CAD0;}"));
@@ -90,16 +123,59 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     root->addWidget(foot);
 
     refreshTitle();
+
+    m_previewTimer = new QTimer(this);
+    connect(m_previewTimer, &QTimer::timeout, this, &SourcePropertiesDialog::tickPreview);
+    if (showPreview)
+        m_previewTimer->start(33);
+}
+
+bool SourcePropertiesDialog::sourceHasVideoPreview() const
+{
+    if (!m_engine) return false;
+    const auto* src = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId);
+    if (!src) return true;
+    return src->type != SourceType::AudioInput && src->type != SourceType::AudioOutput;
+}
+
+void SourcePropertiesDialog::tickPreview()
+{
+    if (!m_engine || !m_preview || !m_previewHost || !m_previewHost->isVisible())
+        return;
+    if (m_engine->graphicsDevice())
+        m_preview->setDevice(m_engine->graphicsDevice());
+
+    CaptureManager* cap = m_engine->capture();
+    if (!cap)
+        return;
+
+    // Prefer the frame bus (same path as the compositor) so we don't race capture threads.
+    if (const auto frame = cap->frameBus().latest(m_sourceId)) {
+        if (frame->texture) {
+            m_preview->presentTexture(frame->texture);
+            return;
+        }
+    }
+
+    if (IVideoSource* src = cap->source(m_sourceId)) {
+        VideoFrame vf;
+        if (src->acquireLatest(vf) && vf.texture)
+            m_preview->presentTexture(vf.texture);
+    }
 }
 
 void SourcePropertiesDialog::refreshTitle()
 {
     QString name = QStringLiteral("Source");
     if (m_engine) {
-        if (const auto src = m_engine->selectedSource())
+        if (const auto* src = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId))
             name = src->name;
+        else if (const auto sel = m_engine->selectedSource())
+            name = sel->name;
     }
     setWindowTitle(QStringLiteral("Properties for '%1'").arg(name));
+    if (m_preview)
+        m_preview->setLabel(name, QColor(0x4F, 0x9E, 0xFF));
 }
 
 void SourcePropertiesDialog::onOk()
@@ -114,7 +190,7 @@ void SourcePropertiesDialog::onDefaults()
 {
     if (!m_engine) return;
     Transform t;
-    const auto src = m_engine->selectedSource();
+    const auto* src = m_engine->projectSnapshot().findSourceAnywhere(m_sourceId);
     if (src && (src->type == SourceType::Display || src->type == SourceType::Window
                 || src->type == SourceType::Game))
         t = {0, 0, 1, 1};
