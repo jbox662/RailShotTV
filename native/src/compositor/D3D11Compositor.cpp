@@ -348,8 +348,16 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     ID3D11ShaderResourceView* maskSrv = nullptr;
     if (maskOpacity > 0.001f && !maskPath.isEmpty())
         maskSrv = ensureMaskSrv(maskPath);
-    ID3D11ShaderResourceView* srvs[2] = { srv.Get(), maskSrv };
-    ctx->PSSetShaderResources(0, 2, srvs);
+
+    const QString lutPath = src.settings.value(QStringLiteral("lutPath")).toString();
+    const float lutAmount = static_cast<float>(
+        std::clamp(src.settings.value(QStringLiteral("lutAmount")).toDouble(0.0), 0.0, 100.0) / 100.0);
+    ID3D11ShaderResourceView* lutSrv = nullptr;
+    if (lutAmount > 0.001f && !lutPath.isEmpty())
+        lutSrv = ensureMaskSrv(lutPath); // same QImage→Texture2D cache
+
+    ID3D11ShaderResourceView* srvs[3] = { srv.Get(), maskSrv, lutSrv };
+    ctx->PSSetShaderResources(0, 3, srvs);
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -417,7 +425,7 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
         cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
         cb->_padCrop[0] = (maskSrv && maskInvert) ? 1.0f : 0.0f;
-        cb->_padCrop[1] = 0.0f;
+        cb->_padCrop[1] = lutSrv ? lutAmount : 0.0f;
 
         // Key filters: mode 0=off 1=chroma 2=color 3=luma
         const int keyMode = src.settings.value(QStringLiteral("keyMode")).toInt(0);
@@ -453,8 +461,8 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     ctx->PSSetConstantBuffers(0, 1, &m_cb);
     ctx->Draw(4, 0);
 
-    ID3D11ShaderResourceView* nullSrvs[2] = { nullptr, nullptr };
-    ctx->PSSetShaderResources(0, 2, nullSrvs);
+    ID3D11ShaderResourceView* nullSrvs[3] = { nullptr, nullptr, nullptr };
+    ctx->PSSetShaderResources(0, 3, nullSrvs);
 #else
     Q_UNUSED(src); Q_UNUSED(bus); Q_UNUSED(rtv);
 #endif

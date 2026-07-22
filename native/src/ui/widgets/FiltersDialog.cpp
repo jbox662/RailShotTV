@@ -33,6 +33,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("color_key")) return QStringLiteral("Color Key");
     if (type == QLatin1String("luma_key")) return QStringLiteral("Luma Key");
     if (type == QLatin1String("mask_alpha")) return QStringLiteral("Image Mask");
+    if (type == QLatin1String("apply_lut")) return QStringLiteral("Apply LUT");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
@@ -78,6 +79,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
+    QString lutPath;
+    int lutAmount = 0;
 
     for (const auto& v : filters) {
         const auto o = v.toObject();
@@ -104,6 +107,9 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             maskPath = o.value(QStringLiteral("path")).toString();
             maskOpacity = o.value(QStringLiteral("opacity")).toInt(100);
             maskInvert = o.value(QStringLiteral("invert")).toBool(false);
+        } else if (type == QLatin1String("apply_lut")) {
+            lutPath = o.value(QStringLiteral("path")).toString();
+            lutAmount = o.value(QStringLiteral("amount")).toInt(100);
         } else if (type == QLatin1String("blur")) {
             blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
         } else if (type == QLatin1String("color_correction")) {
@@ -134,6 +140,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("maskPath"), maskPath);
     settings.insert(QStringLiteral("maskOpacity"), maskOpacity);
     settings.insert(QStringLiteral("maskInvert"), maskInvert);
+    settings.insert(QStringLiteral("lutPath"), lutPath);
+    settings.insert(QStringLiteral("lutAmount"), lutAmount);
     settings.insert(QStringLiteral("blur"), blur);
     settings.insert(QStringLiteral("brightness"), bri);
     settings.insert(QStringLiteral("contrast"), con);
@@ -296,6 +304,37 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_maskPage);
 
+    m_lutPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_lutPage);
+        m_lutEnabled = new QCheckBox(QStringLiteral("Enabled"), m_lutPage);
+        m_lutPath = new QLineEdit(m_lutPage);
+        m_lutPath->setPlaceholderText(QStringLiteral("512×512 PNG LUT (OBS 8×8 tiles)…"));
+        m_lutPath->setReadOnly(true);
+        auto* browse = new QPushButton(QStringLiteral("Browse…"), m_lutPage);
+        connect(browse, &QPushButton::clicked, this, [this] {
+            const QString path = QFileDialog::getOpenFileName(
+                this, QStringLiteral("Apply LUT"), QString(),
+                QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All (*.*)"));
+            if (path.isEmpty()) return;
+            m_lutPath->setText(path);
+            saveCurrent();
+        });
+        auto* pathRow = new QWidget(m_lutPage);
+        auto* pathLay = new QHBoxLayout(pathRow);
+        pathLay->setContentsMargins(0, 0, 0, 0);
+        pathLay->addWidget(m_lutPath, 1);
+        pathLay->addWidget(browse);
+        m_lutAmount = new QSlider(Qt::Horizontal, m_lutPage);
+        m_lutAmount->setRange(0, 100);
+        m_lutAmount->setValue(100);
+        form->addRow(m_lutEnabled);
+        form->addRow(QStringLiteral("LUT Image"), pathRow);
+        form->addRow(QStringLiteral("Amount"), m_lutAmount);
+        form->addRow(new QLabel(QStringLiteral("Use OBS-style 512×512 PNG (8×8 of 64×64)."), m_lutPage));
+    }
+    m_stack->addWidget(m_lutPage);
+
     m_blurPage = new QWidget(m_stack);
     {
         auto* form = new QFormLayout(m_blurPage);
@@ -393,13 +432,13 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     });
 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
-                         m_blurEnabled, m_colorEnabled,
+                         m_lutEnabled, m_blurEnabled, m_colorEnabled,
                          m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
-                       m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_blurAmount, m_brightness, m_contrast,
-                       m_saturation, m_cropL, m_cropR, m_cropT, m_cropB, m_scrollX, m_scrollY,
-                       m_sharpenAmount})
+                       m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
+                       m_brightness, m_contrast, m_saturation, m_cropL, m_cropR, m_cropT, m_cropB,
+                       m_scrollX, m_scrollY, m_sharpenAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
@@ -571,6 +610,7 @@ void FiltersDialog::onAddFilter()
     auto* colorKey = menu.addAction(QStringLiteral("Color Key"));
     auto* luma = menu.addAction(QStringLiteral("Luma Key"));
     auto* mask = menu.addAction(QStringLiteral("Image Mask"));
+    auto* lut = menu.addAction(QStringLiteral("Apply LUT"));
     auto* blur = menu.addAction(QStringLiteral("Blur"));
     menu.addSeparator();
     auto* crop = menu.addAction(QStringLiteral("Crop/Pad"));
@@ -609,6 +649,10 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("path"), QString());
         f.insert(QStringLiteral("opacity"), 100);
         f.insert(QStringLiteral("invert"), false);
+    } else if (chosen == lut) {
+        f.insert(QStringLiteral("type"), QStringLiteral("apply_lut"));
+        f.insert(QStringLiteral("path"), QString());
+        f.insert(QStringLiteral("amount"), 100);
     } else if (chosen == blur) {
         f.insert(QStringLiteral("type"), QStringLiteral("blur"));
         f.insert(QStringLiteral("amount"), 25);
@@ -755,6 +799,11 @@ void FiltersDialog::onSelectionChanged()
         m_maskOpacity->setValue(f.value(QStringLiteral("opacity")).toInt(100));
         m_maskInvert->setChecked(f.value(QStringLiteral("invert")).toBool(false));
         m_stack->setCurrentWidget(m_maskPage);
+    } else if (type == QLatin1String("apply_lut")) {
+        m_lutEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_lutPath->setText(f.value(QStringLiteral("path")).toString());
+        m_lutAmount->setValue(f.value(QStringLiteral("amount")).toInt(100));
+        m_stack->setCurrentWidget(m_lutPage);
     } else if (type == QLatin1String("blur")) {
         m_blurEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_blurAmount->setValue(f.value(QStringLiteral("amount")).toInt(0));
@@ -824,6 +873,10 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("path"), m_maskPath->text());
                     o.insert(QStringLiteral("opacity"), m_maskOpacity->value());
                     o.insert(QStringLiteral("invert"), m_maskInvert->isChecked());
+                } else if (type == QLatin1String("apply_lut")) {
+                    o.insert(QStringLiteral("enabled"), m_lutEnabled->isChecked());
+                    o.insert(QStringLiteral("path"), m_lutPath->text());
+                    o.insert(QStringLiteral("amount"), m_lutAmount->value());
                 } else if (type == QLatin1String("blur")) {
                     o.insert(QStringLiteral("enabled"), m_blurEnabled->isChecked());
                     o.insert(QStringLiteral("amount"), m_blurAmount->value());

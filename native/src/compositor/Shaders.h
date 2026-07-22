@@ -38,6 +38,7 @@ VSOut main(VSIn i) {
 inline constexpr char kPsMain[] = R"(
 Texture2D tex : register(t0);
 Texture2D maskTex : register(t1);
+Texture2D lutTex : register(t2);
 SamplerState samp : register(s0);
 cbuffer CB : register(b0) {
     float4 rect;
@@ -45,7 +46,7 @@ cbuffer CB : register(b0) {
     float rotation;
     float2 cropMin;
     float2 cropMax;
-    float2 _padCrop; // .x = mask invert
+    float2 _padCrop; // .x = mask invert, .y = lut amount
     float4 colorMul;
     float4 colorAdd;
     float4 fxParams;
@@ -56,6 +57,23 @@ float2 rgbToCbCr(float3 rgb) {
     float cb = dot(rgb, float3(-0.100644, -0.338572, 0.439216)) + 0.501961;
     float cr = dot(rgb, float3( 0.439216, -0.398942,-0.040274)) + 0.501961;
     return float2(cb, cr);
+}
+// OBS-compatible 512×512 PNG LUT (8×8 tiles of 64×64 for 64³ clut)
+float3 sampleLut512(float3 color) {
+    const float size = 64.0;
+    const float tiles = 8.0;
+    float3 c = saturate(color);
+    float blue = c.b * (size - 1.0);
+    float slice0 = floor(blue);
+    float slice1 = min(slice0 + 1.0, size - 1.0);
+    float f = frac(blue);
+    float2 q0 = float2(fmod(slice0, tiles), floor(slice0 / tiles));
+    float2 q1 = float2(fmod(slice1, tiles), floor(slice1 / tiles));
+    float2 uv0 = (q0 * size + 0.5 + c.rg * (size - 1.0)) / (tiles * size);
+    float2 uv1 = (q1 * size + 0.5 + c.rg * (size - 1.0)) / (tiles * size);
+    float3 a = lutTex.Sample(samp, uv0).rgb;
+    float3 b = lutTex.Sample(samp, uv1).rgb;
+    return lerp(a, b, f);
 }
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float2 suv = frac(uv + fxParams.xy);
@@ -90,7 +108,6 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         float sim = keyParams.x;
         float sm = max(0.001, keyParams.y);
         if (mode < 1.5) {
-            // Chroma key (Cb/Cr distance + spill suppress)
             float dist = distance(rgbToCbCr(c.rgb), rgbToCbCr(keyColor.rgb));
             float mask = pow(saturate((dist - sim) / sm), 1.5);
             float spill = pow(saturate((dist - sim) / max(sm, 0.05)), 1.5);
@@ -98,11 +115,9 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
             c.rgb = lerp(float3(desat, desat, desat), c.rgb, spill);
             c.a *= mask;
         } else if (mode < 2.5) {
-            // Color key (RGB distance)
             float dist = distance(c.rgb, keyColor.rgb);
             c.a *= saturate(max(dist - sim, 0.0) / sm);
         } else {
-            // Luma key — keep mid luminance band
             float luma = dot(c.rgb, float3(0.2126, 0.7152, 0.0722));
             float lo = keyParams.z;
             float hi = keyParams.w;
@@ -111,7 +126,11 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
             c.a *= clo * chi;
         }
     }
-    // Image Mask (alpha) — OBS mask_alpha style
+    float lutAmt = _padCrop.y;
+    if (lutAmt > 0.001) {
+        float3 graded = sampleLut512(c.rgb);
+        c.rgb = lerp(c.rgb, graded, saturate(lutAmt));
+    }
     float maskAmt = fxParams.w;
     if (maskAmt > 0.001) {
         float4 m = maskTex.Sample(samp, suv);

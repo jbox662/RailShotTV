@@ -49,6 +49,7 @@ private:
     QWidget* m_colorKeyPage = nullptr;
     QWidget* m_lumaPage = nullptr;
     QWidget* m_maskPage = nullptr;
+    QWidget* m_lutPage = nullptr;
     QWidget* m_blurPage = nullptr;
     QWidget* m_colorPage = nullptr;
     QWidget* m_cropPage = nullptr;
@@ -79,6 +80,10 @@ private:
     QLineEdit* m_maskPath = nullptr;
     QSlider* m_maskOpacity = nullptr;
     QCheckBox* m_maskInvert = nullptr;
+
+    QCheckBox* m_lutEnabled = nullptr;
+    QLineEdit* m_lutPath = nullptr;
+    QSlider* m_lutAmount = nullptr;
 
     QCheckBox* m_blurEnabled = nullptr;
     QSlider* m_blurAmount = nullptr;
