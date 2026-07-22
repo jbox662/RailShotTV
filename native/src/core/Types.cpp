@@ -87,6 +87,7 @@ QString transitionTypeToString(TransitionType t)
     case TransitionType::FlyOver: return QStringLiteral("FlyOver");
     case TransitionType::RgbChannels: return QStringLiteral("RgbChannels");
     case TransitionType::Swipe: return QStringLiteral("Swipe");
+    case TransitionType::LumaWipe: return QStringLiteral("LumaWipe");
     }
     return QStringLiteral("Cut");
 }
@@ -125,6 +126,7 @@ TransitionType transitionTypeFromString(const QString& s)
     if (s == QLatin1String("RgbChannels") || s == QLatin1String("RGB Channels"))
         return TransitionType::RgbChannels;
     if (s == QLatin1String("Swipe")) return TransitionType::Swipe;
+    if (s == QLatin1String("LumaWipe") || s == QLatin1String("Luma Wipe")) return TransitionType::LumaWipe;
     return TransitionType::Cut;
 }
 
@@ -171,6 +173,7 @@ int transitionShaderMode(TransitionType t)
     case TransitionType::FlyOver: return 20;
     case TransitionType::RgbChannels: return 21;
     case TransitionType::Swipe: return 22;
+    case TransitionType::LumaWipe: return 23;
     case TransitionType::FTB:
     case TransitionType::FadeToWhite: return 0;
     }
@@ -339,6 +342,10 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("expRatio"), double(expRatio)},
         {QStringLiteral("expAttackMs"), double(expAttackMs)},
         {QStringLiteral("expReleaseMs"), double(expReleaseMs)},
+        {QStringLiteral("echoEnabled"), echoEnabled},
+        {QStringLiteral("echoDelayMs"), double(echoDelayMs)},
+        {QStringLiteral("echoDecay"), double(echoDecay)},
+        {QStringLiteral("echoWet"), double(echoWet)},
         {QStringLiteral("eqLowDb"), double(eqLowDb)},
         {QStringLiteral("eqMidDb"), double(eqMidDb)},
         {QStringLiteral("eqHighDb"), double(eqHighDb)},
@@ -383,6 +390,10 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.expRatio = float(o.value(QStringLiteral("expRatio")).toDouble(2.0));
     s.expAttackMs = float(o.value(QStringLiteral("expAttackMs")).toDouble(10.0));
     s.expReleaseMs = float(o.value(QStringLiteral("expReleaseMs")).toDouble(100.0));
+    s.echoEnabled = o.value(QStringLiteral("echoEnabled")).toBool(false);
+    s.echoDelayMs = float(o.value(QStringLiteral("echoDelayMs")).toDouble(250.0));
+    s.echoDecay = float(o.value(QStringLiteral("echoDecay")).toDouble(0.45));
+    s.echoWet = float(o.value(QStringLiteral("echoWet")).toDouble(0.35));
     s.eqLowDb = float(o.value(QStringLiteral("eqLowDb")).toDouble(0.0));
     s.eqMidDb = float(o.value(QStringLiteral("eqMidDb")).toDouble(0.0));
     s.eqHighDb = float(o.value(QStringLiteral("eqHighDb")).toDouble(0.0));

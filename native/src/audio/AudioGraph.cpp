@@ -238,6 +238,7 @@ void AudioGraph::removeChannel(const QString& id)
         m_pending.remove(id);
         m_meters.remove(id);
         m_delayLines.remove(id);
+        m_echoLines.remove(id);
         m_nsEnv.remove(id);
         m_nsHpZL.remove(id);
         m_nsHpZR.remove(id);
@@ -331,6 +332,10 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.expRatio = s.expRatio;
                 cur.expAttackMs = s.expAttackMs;
                 cur.expReleaseMs = s.expReleaseMs;
+                cur.echoEnabled = s.echoEnabled;
+                cur.echoDelayMs = s.echoDelayMs;
+                cur.echoDecay = s.echoDecay;
+                cur.echoWet = s.echoWet;
                 cur.eqLowDb = s.eqLowDb;
                 cur.eqMidDb = s.eqMidDb;
                 cur.eqHighDb = s.eqHighDb;
@@ -591,6 +596,38 @@ void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelSta
             buf.samples[size_t(i) * bch] = l * gain;
             if (bch > 1)
                 buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
+
+    if (ch.echoEnabled) {
+        auto& line = m_echoLines[channelId];
+        const int delayMs = std::clamp(int(std::lround(ch.echoDelayMs)), 1, 1000);
+        const int delayFrames = std::max(1, int(std::lround(float(delayMs) * 0.001f * sr)));
+        const int delaySamples = delayFrames * 2;
+        const float decay = std::clamp(ch.echoDecay, 0.f, 0.95f);
+        const float wet = std::clamp(ch.echoWet, 0.f, 1.f);
+        const float dry = 1.f - wet;
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            float dL = 0.f, dR = 0.f;
+            if (int(line.size()) >= delaySamples) {
+                const int idx = int(line.size()) - delaySamples;
+                dL = line[size_t(idx)];
+                dR = line[size_t(idx + 1)];
+            }
+            line.push_back(l + dL * decay);
+            line.push_back(r + dR * decay);
+            const int maxKeep = delaySamples + 64;
+            while (int(line.size()) > maxKeep) {
+                line.pop_front();
+                line.pop_front();
+            }
+            buf.samples[size_t(i) * bch] = l * dry + dL * wet;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * dry + dR * wet;
+            else
+                Q_UNUSED(dR);
         }
     }
 }

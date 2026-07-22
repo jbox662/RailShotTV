@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 22 (Media restart/end-action + Adv Audio Expander).
+Last updated: Wave 23 (Audio Echo + procedural Luma Wipe).
 
 ## Design rules
 
@@ -24,7 +24,7 @@ Last updated: Wave 22 (Media restart/end-action + Adv Audio Expander).
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe/Luma Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override |
 | Groups / Scene | Scene-as-source + Groups | partial | `SourceType::Scene` / `Group`; nested compose + `childIds` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
@@ -51,7 +51,7 @@ Last updated: Wave 22 (Media restart/end-action + Adv Audio Expander).
 | OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter, Echo) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -81,3 +81,4 @@ Last updated: Wave 22 (Media restart/end-action + Adv Audio Expander).
 - [x] Wave 20 — Color Correction Hue/Gamma/Opacity + per-scene Transition Overrides (Show/Hide deferred)
 - [x] Wave 21 — Color Correction Multiply/Add + Swipe transition (OBS-style; Show/Hide still deferred)
 - [x] Wave 22 — Media Restart/End Action + Adv Audio Expander (Show/Hide still deferred)
+- [x] Wave 23 — Adv Audio Echo/Delay FX + procedural Luma Wipe (image-luma / Show/Hide deferred)

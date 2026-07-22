@@ -147,8 +147,9 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(10, QStringLiteral("Expander"));
     mk(11, QStringLiteral("EQ L/M/H"));
     mk(12, QStringLiteral("Limiter"));
-    mk(13, QStringLiteral("Audio Monitoring"));
-    mk(14, QStringLiteral("Tracks"));
+    mk(13, QStringLiteral("Echo"));
+    mk(14, QStringLiteral("Audio Monitoring"));
+    mk(15, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
@@ -399,13 +400,45 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     limLay->addWidget(w.limRelease);
     grid->addWidget(limHost, row, 12);
 
+    auto* echoHost = new QWidget(m_rowsHost);
+    auto* echoLay = new QHBoxLayout(echoHost);
+    echoLay->setContentsMargins(0, 0, 0, 0);
+    echoLay->setSpacing(4);
+    w.echoOn = new QCheckBox(echoHost);
+    w.echoOn->setChecked(ch.echoEnabled);
+    w.echoOn->setToolTip(QStringLiteral("Echo / Delay FX (not Sync Offset)"));
+    w.echoDelay = new QSpinBox(echoHost);
+    w.echoDelay->setRange(1, 1000);
+    w.echoDelay->setSuffix(QStringLiteral(" ms"));
+    w.echoDelay->setValue(int(std::lround(ch.echoDelayMs)));
+    w.echoDelay->setFixedWidth(78);
+    w.echoDecay = new QDoubleSpinBox(echoHost);
+    w.echoDecay->setRange(0.0, 0.95);
+    w.echoDecay->setDecimals(2);
+    w.echoDecay->setSingleStep(0.05);
+    w.echoDecay->setValue(ch.echoDecay);
+    w.echoDecay->setFixedWidth(64);
+    w.echoDecay->setToolTip(QStringLiteral("Feedback / decay"));
+    w.echoWet = new QDoubleSpinBox(echoHost);
+    w.echoWet->setRange(0.0, 1.0);
+    w.echoWet->setDecimals(2);
+    w.echoWet->setSingleStep(0.05);
+    w.echoWet->setValue(ch.echoWet);
+    w.echoWet->setFixedWidth(56);
+    w.echoWet->setToolTip(QStringLiteral("Wet mix"));
+    echoLay->addWidget(w.echoOn);
+    echoLay->addWidget(w.echoDelay);
+    echoLay->addWidget(w.echoDecay);
+    echoLay->addWidget(w.echoWet);
+    grid->addWidget(echoHost, row, 13);
+
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
     w.monitoring->addItem(QStringLiteral("Monitor Only (MUTE)"), int(AudioMonitoringType::MonitorOnly));
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 13);
+    grid->addWidget(w.monitoring, row, 14);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -416,7 +449,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 14);
+    grid->addWidget(trackHost, row, 15);
 
     m_rows.insert(channelId, w);
 
@@ -445,6 +478,10 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     connect(w.limOn, &QCheckBox::toggled, this, wire);
     connect(w.limThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.limRelease, qOverload<int>(&QSpinBox::valueChanged), this, wire);
+    connect(w.echoOn, &QCheckBox::toggled, this, wire);
+    connect(w.echoDelay, qOverload<int>(&QSpinBox::valueChanged), this, wire);
+    connect(w.echoDecay, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.echoWet, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.monitoring, qOverload<int>(&QComboBox::currentIndexChanged), this, wire);
     for (int t = 0; t < 6; ++t)
         connect(w.tracks[t], &QCheckBox::toggled, this, wire);
@@ -499,6 +536,10 @@ void AdvAudioDialog::applyChannel(const QString& id)
     if (w.limOn) state.limiterEnabled = w.limOn->isChecked();
     if (w.limThresh) state.limiterThresholdDb = float(w.limThresh->value());
     if (w.limRelease) state.limiterReleaseMs = float(w.limRelease->value());
+    if (w.echoOn) state.echoEnabled = w.echoOn->isChecked();
+    if (w.echoDelay) state.echoDelayMs = float(w.echoDelay->value());
+    if (w.echoDecay) state.echoDecay = float(w.echoDecay->value());
+    if (w.echoWet) state.echoWet = float(w.echoWet->value());
     if (w.monitoring)
         state.monitoring = AudioMonitoringType(w.monitoring->currentData().toInt());
     quint8 mask = 0;

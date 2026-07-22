@@ -413,6 +413,21 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         return texOld.Sample(samp, suv);
     }
 
+    // 23 Luma Wipe — procedural luma (no wipe image); soft edge
+    if (m == 23) {
+        float luma = uv.x;
+        if (wipeDir < 0.5) luma = uv.x;
+        else if (wipeDir < 1.5) luma = 1.0 - uv.x;
+        else if (wipeDir < 2.5) luma = uv.y;
+        else luma = 1.0 - uv.y;
+        // Slight vignette variation so it isn't a hard bar wipe
+        float2 d = uv - 0.5;
+        luma = saturate(luma * 0.85 + (1.0 - length(d) * 0.5) * 0.15);
+        float soft = 0.07;
+        float w = smoothstep(p - soft, p + soft, luma);
+        return lerp(n, o, w);
+    }
+
     // 19 Windshield wipe — angled pivoting blade
     if (m == 19) {
         float2 d = uv - float2(0.5, 1.0);

@@ -136,9 +136,9 @@ SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
                 const TransitionType catalog[] = {
                     TransitionType::Fade, TransitionType::CrossDissolve, TransitionType::Wipe,
                     TransitionType::Merge, TransitionType::Push, TransitionType::Swipe,
-                    TransitionType::Cut, TransitionType::FTB, TransitionType::FadeToWhite,
-                    TransitionType::Stinger, TransitionType::CubeZoom, TransitionType::Swap,
-                    TransitionType::FlyOver,
+                    TransitionType::LumaWipe, TransitionType::Cut, TransitionType::FTB,
+                    TransitionType::FadeToWhite, TransitionType::Stinger, TransitionType::CubeZoom,
+                    TransitionType::Swap, TransitionType::FlyOver,
                 };
                 for (auto t : catalog)
                     typeBox->addItem(transitionTypeToString(t), int(t));

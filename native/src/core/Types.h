@@ -66,7 +66,8 @@ enum class TransitionType {
     WindshieldWipe,
     FlyOver,
     RgbChannels,
-    Swipe
+    Swipe,
+    LumaWipe
 };
 
 /// True for two-phase fade-through-color takes (black or white).
@@ -183,6 +184,11 @@ struct AudioChannelState {
     float expRatio = 2.f;
     float expAttackMs = 10.f;
     float expReleaseMs = 100.f;
+
+    bool echoEnabled = false;
+    float echoDelayMs = 250.f;        // 1..1000
+    float echoDecay = 0.45f;          // feedback 0..0.95
+    float echoWet = 0.35f;            // wet mix 0..1
 
     // OBS 3-Band EQ (Low ~800 Hz / High ~5 kHz splits); gains in dB
     float eqLowDb = 0.f;

@@ -93,6 +93,7 @@ private:
     QHash<QString, AudioBuffer> m_pending;
     QHash<QString, AudioMeter> m_meters;
     QHash<QString, std::deque<float>> m_delayLines; // interleaved stereo delay ring
+    QHash<QString, std::deque<float>> m_echoLines;  // wet echo FX ring (stereo)
     QHash<QString, float> m_nsEnv;    // noise suppress envelope (linear)
     QHash<QString, float> m_nsHpZL;   // HPF z^-1 left
     QHash<QString, float> m_nsHpZR;   // HPF z^-1 right

@@ -64,6 +64,10 @@ private:
         QCheckBox* limOn = nullptr;
         QDoubleSpinBox* limThresh = nullptr;
         QSpinBox* limRelease = nullptr;
+        QCheckBox* echoOn = nullptr;
+        QSpinBox* echoDelay = nullptr;
+        QDoubleSpinBox* echoDecay = nullptr;
+        QDoubleSpinBox* echoWet = nullptr;
         QComboBox* monitoring = nullptr;
         QCheckBox* tracks[6] = {};
     };
