@@ -58,6 +58,8 @@ QString HotkeyDispatcher::labelForAction(const QString& action)
         {QStringLiteral("fullscreen"), QStringLiteral("Toggle Fullscreen (UI)")},
         {QStringLiteral("screenshotPreview"), QStringLiteral("Screenshot Preview")},
         {QStringLiteral("screenshotProgram"), QStringLiteral("Screenshot Program")},
+        {QStringLiteral("undo"), QStringLiteral("Undo")},
+        {QStringLiteral("redo"), QStringLiteral("Redo")},
     };
     return kLabels.value(action, action);
 }
@@ -77,6 +79,7 @@ QStringList HotkeyDispatcher::orderedActions()
         QStringLiteral("scene7"), QStringLiteral("scene8"),
         QStringLiteral("fullscreen"),
         QStringLiteral("screenshotPreview"), QStringLiteral("screenshotProgram"),
+        QStringLiteral("undo"), QStringLiteral("redo"),
     };
 }
 
@@ -173,6 +176,14 @@ void HotkeyDispatcher::dispatch(const QString& action)
     if (action == QLatin1String("screenshotProgram")) {
         QString err;
         m_engine->takeScreenshot(true, nullptr, &err);
+        return;
+    }
+    if (action == QLatin1String("undo")) {
+        m_engine->undo();
+        return;
+    }
+    if (action == QLatin1String("redo")) {
+        m_engine->redo();
         return;
     }
     if (action == QLatin1String("muteMic")) {

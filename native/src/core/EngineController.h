@@ -47,6 +47,11 @@ public:
     bool saveProject(const QString& path, QString* error = nullptr);
     bool newProject();
 
+    bool undo();
+    bool redo();
+    bool canUndo() const;
+    bool canRedo() const;
+
     void setPreviewScene(const QString& sceneId);
     void setProgramScene(const QString& sceneId);
     /// OBS Studio Mode: swap Preview ↔ Program scene assignments.
@@ -117,6 +122,7 @@ signals:
     void selectedSourceChanged(const QString& sourceId);
     void studioModeChanged(bool enabled);
     void replayBufferEnabledChanged(bool enabled);
+    void historyChanged();
 
 private slots:
     void onTelemetryTick();

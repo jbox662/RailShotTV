@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 14 (Color Key, Luma Key, Chroma key color + smoothness).
+Last updated: Wave 15 (Undo/Redo project history).
 
 ## Design rules
 
@@ -36,6 +36,7 @@ Last updated: Wave 14 (Color Key, Luma Key, Chroma key color + smoothness).
 | OBSBasic_Docks | Dock layout | partial | Nested QMainWindow docks |
 | OBSBasic_Profiles / _SceneCollections | Profiles/collections | partial | `ProfilesDialog` / `SceneCollectionsDialog` |
 | OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard + Filters clipboard |
+| Undo / Redo | Edit history | partial | `UndoStack` + Edit menu + Ctrl+Z/Y (project snapshots) |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
 | Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
@@ -72,3 +73,4 @@ Last updated: Wave 14 (Color Key, Luma Key, Chroma key color + smoothness).
 - [x] Wave 12 — Scene-as-source, Groups, Stinger transition (media + point-of-take)
 - [x] Wave 13 — Adv Audio 3-Band EQ + Limiter
 - [x] Wave 14 — Color Key + Luma Key; Chroma Key color type / smoothness
+- [x] Wave 15 — Undo/Redo (project snapshots, coalesced edits, Edit menu + hotkeys)

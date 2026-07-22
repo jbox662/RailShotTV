@@ -115,6 +115,8 @@ ShortcutsOverlay::ShortcutsOverlay(EngineController* engine, QWidget* parent)
          HotkeyDispatcher::labelForAction(QStringLiteral("fullscreen"))},
         {QStringLiteral("Ctrl+S"), QStringLiteral("Save project")},
         {QStringLiteral("Ctrl+O"), QStringLiteral("Open project")},
+        {QStringLiteral("Ctrl+Z"), QStringLiteral("Undo")},
+        {QStringLiteral("Ctrl+Y"), QStringLiteral("Redo")},
         {QStringLiteral("Esc"), QStringLiteral("Close overlay / dialogs")},
     }, body));
     lay->addStretch();

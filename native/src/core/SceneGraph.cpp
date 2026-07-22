@@ -14,29 +14,130 @@ Project SceneGraph::snapshot() const
     return m_project;
 }
 
+void SceneGraph::applyLocked(const Project& project)
+{
+    m_project = project;
+    m_project.ensureDefaults();
+    m_silentActive = false;
+}
+
 void SceneGraph::replace(const Project& project)
 {
     {
         QMutexLocker lock(&m_mutex);
-        m_project = project;
-        m_project.ensureDefaults();
+        applyLocked(project);
+        m_history.clear();
+    }
+    emit historyChanged();
+    emit projectChanged();
+}
+
+void SceneGraph::applySnapshot(const Project& project)
+{
+    {
+        QMutexLocker lock(&m_mutex);
+        applyLocked(project);
     }
     emit projectChanged();
 }
 
 void SceneGraph::mutate(const std::function<void(Project&)>& fn)
 {
+    bool histChanged = false;
     {
         QMutexLocker lock(&m_mutex);
+        // If a silent drag was in progress, commit its undo point first.
+        if (m_silentActive) {
+            m_history.pushBefore(m_silentBefore);
+            m_silentActive = false;
+            histChanged = true;
+        }
+        const Project before = m_project;
         fn(m_project);
+        m_history.pushBefore(before);
+        histChanged = true;
     }
+    if (histChanged)
+        emit historyChanged();
     emit projectChanged();
 }
 
 void SceneGraph::mutateSilent(const std::function<void(Project&)>& fn)
 {
     QMutexLocker lock(&m_mutex);
+    if (!m_silentActive) {
+        m_silentBefore = m_project;
+        m_silentActive = true;
+    }
     fn(m_project);
+}
+
+void SceneGraph::notifyProjectChanged()
+{
+    bool histChanged = false;
+    {
+        QMutexLocker lock(&m_mutex);
+        if (m_silentActive) {
+            m_history.pushBefore(m_silentBefore);
+            m_silentActive = false;
+            histChanged = true;
+        }
+    }
+    if (histChanged)
+        emit historyChanged();
+    emit projectChanged();
+}
+
+bool SceneGraph::canUndo() const
+{
+    QMutexLocker lock(&m_mutex);
+    return m_history.canUndo();
+}
+
+bool SceneGraph::canRedo() const
+{
+    QMutexLocker lock(&m_mutex);
+    return m_history.canRedo();
+}
+
+void SceneGraph::clearHistory()
+{
+    {
+        QMutexLocker lock(&m_mutex);
+        m_history.clear();
+        m_silentActive = false;
+    }
+    emit historyChanged();
+}
+
+bool SceneGraph::undo()
+{
+    Project next;
+    {
+        QMutexLocker lock(&m_mutex);
+        if (!m_history.canUndo())
+            return false;
+        next = m_history.undo(m_project);
+        applyLocked(next);
+    }
+    emit historyChanged();
+    emit projectChanged();
+    return true;
+}
+
+bool SceneGraph::redo()
+{
+    Project next;
+    {
+        QMutexLocker lock(&m_mutex);
+        if (!m_history.canRedo())
+            return false;
+        next = m_history.redo(m_project);
+        applyLocked(next);
+    }
+    emit historyChanged();
+    emit projectChanged();
+    return true;
 }
 
 QString SceneGraph::previewSceneId() const

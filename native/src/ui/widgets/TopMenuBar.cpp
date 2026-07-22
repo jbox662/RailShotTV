@@ -14,6 +14,8 @@
 #include <QStyle>
 #include <QFont>
 #include <QFontMetrics>
+#include <QKeySequence>
+#include <QAction>
 
 namespace railshot {
 
@@ -134,10 +136,27 @@ TopMenuBar::TopMenuBar(EngineController* engine, QWidget* parent)
     fileMenu->addAction(QStringLiteral("Scene Collections…"), this, &TopMenuBar::openCollections);
 
     auto* editMenu = menuBar->addMenu(QStringLiteral("Edit"));
+    m_undoAct = editMenu->addAction(QStringLiteral("Undo"), this, [this] {
+        if (m_engine) m_engine->undo();
+    });
+    m_redoAct = editMenu->addAction(QStringLiteral("Redo"), this, [this] {
+        if (m_engine) m_engine->redo();
+    });
+    // Shortcuts live in HotkeyDispatcher (Ctrl+Z / Ctrl+Y) so Settings can remap them.
+    editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("Advanced Audio Properties…"), this, &TopMenuBar::openAdvAudio);
     editMenu->addSeparator();
     editMenu->addAction(QStringLiteral("Remux Recordings…"), this, &TopMenuBar::openRemux);
     editMenu->addAction(QStringLiteral("Missing Files…"), this, &TopMenuBar::openMissingFiles);
+
+    if (m_engine) {
+        auto refreshHist = [this] {
+            if (m_undoAct) m_undoAct->setEnabled(m_engine && m_engine->canUndo());
+            if (m_redoAct) m_redoAct->setEnabled(m_engine && m_engine->canRedo());
+        };
+        connect(m_engine, &EngineController::historyChanged, this, refreshHist);
+        refreshHist();
+    }
 
     auto* viewMenu = menuBar->addMenu(QStringLiteral("View"));
     viewMenu->addAction(QStringLiteral("Preview Projector (Windowed)"), this, [this] {

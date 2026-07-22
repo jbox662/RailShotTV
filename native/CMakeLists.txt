@@ -38,6 +38,8 @@ add_library(railshot_core STATIC
     src/core/Project.cpp
     src/core/SceneGraph.h
     src/core/SceneGraph.cpp
+    src/core/UndoStack.h
+    src/core/UndoStack.cpp
     src/core/SettingsStore.h
     src/core/SettingsStore.cpp
     src/core/SecretStore.h

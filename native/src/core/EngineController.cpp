@@ -275,6 +275,9 @@ bool EngineController::initialize(QString* error)
     m_autosaveTimer.start(30000);
     m_initialized = true;
     m_state = EngineState::Previewing;
+    if (m_sceneGraph) {
+        connect(m_sceneGraph.get(), &SceneGraph::historyChanged, this, &EngineController::historyChanged);
+    }
     rebuildSourcesForActiveScenes();
     syncMixerChannelsFromProject();
     if (m_compositor)
@@ -339,7 +342,7 @@ bool EngineController::saveProject(const QString& path, QString* error)
             m_settings->setAudioChannels(m_audio->channelsToJson());
     }
     if (!p.saveToFile(path, error)) return false;
-    m_sceneGraph->replace(p);
+    m_sceneGraph->applySnapshot(p);
     m_settings->setLastProjectPath(path);
     emit projectSaved(path);
     return true;
@@ -352,6 +355,34 @@ bool EngineController::newProject()
     if (m_capture) m_capture->detachAll();
     if (m_iso) m_iso->stopAll();
     m_sceneGraph->replace(p);
+    rebuildSourcesForActiveScenes();
+    syncMixerChannelsFromProject();
+    return true;
+}
+
+bool EngineController::canUndo() const
+{
+    return m_sceneGraph && m_sceneGraph->canUndo();
+}
+
+bool EngineController::canRedo() const
+{
+    return m_sceneGraph && m_sceneGraph->canRedo();
+}
+
+bool EngineController::undo()
+{
+    if (!m_sceneGraph || !m_sceneGraph->undo())
+        return false;
+    rebuildSourcesForActiveScenes();
+    syncMixerChannelsFromProject();
+    return true;
+}
+
+bool EngineController::redo()
+{
+    if (!m_sceneGraph || !m_sceneGraph->redo())
+        return false;
     rebuildSourcesForActiveScenes();
     syncMixerChannelsFromProject();
     return true;

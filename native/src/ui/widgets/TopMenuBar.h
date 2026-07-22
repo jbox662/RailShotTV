@@ -3,6 +3,7 @@
 class QLabel;
 class QPushButton;
 class QMenu;
+class QAction;
 
 namespace railshot {
 class EngineController;
@@ -47,6 +48,8 @@ private:
     QPushButton* m_basic = nullptr;
     QPushButton* m_help = nullptr;
     QMenu* m_docksMenu = nullptr;
+    QAction* m_undoAct = nullptr;
+    QAction* m_redoAct = nullptr;
     bool m_fullscreenOn = false;
     bool m_inputsPaused = false;
     bool m_basicMode = false;
