@@ -53,6 +53,8 @@ void CaptureManager::wireSourceAudio(IVideoSource* src, const SourceItem& source
     };
     if (auto* media = dynamic_cast<MediaSource*>(src)) {
         media->setAudioCallback(forward);
+        const QString mid = id;
+        media->setOnEnded([this, mid] { emit mediaEnded(mid); });
         return;
     }
     if (auto* ndi = dynamic_cast<NdiSource*>(src)) {
@@ -323,6 +325,17 @@ void CaptureManager::syncWithScenes(const QVector<const SceneItem*>& scenes)
     for (const auto& id : existing) {
         if (!wanted.contains(id))
             detachSource(id);
+    }
+}
+
+void CaptureManager::restartMediaOnActivate(const SceneItem& scene)
+{
+    for (const auto& src : scene.sources) {
+        if (src.type != SourceType::Media || !src.visible) continue;
+        if (!src.settings.value(QStringLiteral("restartOnActivate")).toBool(false))
+            continue;
+        if (auto* media = dynamic_cast<MediaSource*>(source(src.id)))
+            media->requestRestart();
     }
 }
 

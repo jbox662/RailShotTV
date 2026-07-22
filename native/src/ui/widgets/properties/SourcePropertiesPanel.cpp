@@ -509,10 +509,14 @@ public:
         m_loop = new QCheckBox(QStringLiteral("Loop"), this);
         m_loop->setChecked(true);
         m_restart = new QCheckBox(QStringLiteral("Restart when activated"), this);
+        m_endAction = new QComboBox(this);
+        m_endAction->addItem(QStringLiteral("None (freeze last frame)"), QStringLiteral("none"));
+        m_endAction->addItem(QStringLiteral("Hide source"), QStringLiteral("hide"));
         m_audio = new QCheckBox(QStringLiteral("Audio track"), this);
         m_audio->setChecked(true);
         form->addRow(m_loop);
         form->addRow(m_restart);
+        form->addRow(QStringLiteral("End Action"), m_endAction);
         form->addRow(m_audio);
 
         auto* hint = new QLabel(
@@ -527,6 +531,7 @@ public:
         wireChanged(this, m_ffopts);
         wireChanged(this, m_loop);
         wireChanged(this, m_restart);
+        wireChanged(this, m_endAction);
         wireChanged(this, m_audio);
         syncLocalMode(true);
     }
@@ -541,6 +546,9 @@ public:
         m_ffopts->setText(src.settings.value(QStringLiteral("ffmpegOptions")).toString());
         m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(local));
         m_restart->setChecked(src.settings.value(QStringLiteral("restartOnActivate")).toBool(false));
+        const int endIdx = m_endAction->findData(
+            src.settings.value(QStringLiteral("endAction")).toString(QStringLiteral("none")));
+        m_endAction->setCurrentIndex(endIdx >= 0 ? endIdx : 0);
         m_audio->setChecked(src.settings.value(QStringLiteral("audioTrack")).toBool(true));
     }
 
@@ -551,6 +559,7 @@ public:
         s.insert(QStringLiteral("ffmpegOptions"), m_ffopts->text().trimmed());
         s.insert(QStringLiteral("loop"), m_loop->isChecked());
         s.insert(QStringLiteral("restartOnActivate"), m_restart->isChecked());
+        s.insert(QStringLiteral("endAction"), m_endAction->currentData().toString());
         s.insert(QStringLiteral("audioTrack"), m_audio->isChecked());
     }
 
@@ -561,6 +570,7 @@ public:
         s.insert(QStringLiteral("ffmpegOptions"), QString());
         s.insert(QStringLiteral("loop"), true);
         s.insert(QStringLiteral("restartOnActivate"), false);
+        s.insert(QStringLiteral("endAction"), QStringLiteral("none"));
         s.insert(QStringLiteral("audioTrack"), true);
     }
 
@@ -587,6 +597,7 @@ private:
     QLineEdit* m_ffopts = nullptr;
     QCheckBox* m_loop = nullptr;
     QCheckBox* m_restart = nullptr;
+    QComboBox* m_endAction = nullptr;
     QCheckBox* m_audio = nullptr;
 };
 

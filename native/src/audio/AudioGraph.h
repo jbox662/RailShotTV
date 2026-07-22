@@ -99,6 +99,7 @@ private:
     QHash<QString, float> m_gateEnv;  // 0..1 open amount
     QHash<QString, float> m_gateHold; // samples remaining
     QHash<QString, float> m_compEnv;  // envelope follower linear
+    QHash<QString, float> m_expEnv;   // expander envelope
     QHash<QString, EqBandState> m_eqL; // per-channel left EQ state
     QHash<QString, EqBandState> m_eqR; // per-channel right EQ state
     QHash<QString, float> m_limEnv;   // limiter envelope (linear)

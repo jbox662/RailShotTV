@@ -131,6 +131,7 @@ private slots:
 
 private:
     void rebuildSourcesForActiveScenes();
+    void restartMediaOnSceneActivate(const QString& sceneId);
     void updateEngineState();
     void tickIsoRecorders(qint64 ptsUs);
     void syncSourceAudioToGraph(const QString& sourceId, const QString& name, const QJsonObject& settings);

@@ -170,6 +170,14 @@ bool EngineController::initialize(QString* error)
             return;
         m_audio->removeChannel(id);
     });
+    connect(m_capture.get(), &CaptureManager::mediaEnded, this, [this](const QString& id) {
+        if (!m_sceneGraph) return;
+        const auto* src = m_sceneGraph->snapshot().findSourceAnywhere(id);
+        if (!src || src->type != SourceType::Media) return;
+        const QString action = src->settings.value(QStringLiteral("endAction")).toString(QStringLiteral("none"));
+        if (action == QLatin1String("hide"))
+            setSourceVisible(id, false);
+    });
 
     m_transition = new TransitionEngine(this);
     m_replay->setCapacitySeconds(30);
@@ -391,11 +399,15 @@ bool EngineController::redo()
 void EngineController::setPreviewScene(const QString& sceneId)
 {
     m_sceneGraph->setPreviewSceneId(sceneId);
+    rebuildSourcesForActiveScenes();
+    restartMediaOnSceneActivate(sceneId);
 }
 
 void EngineController::setProgramScene(const QString& sceneId)
 {
     m_sceneGraph->setProgramSceneId(sceneId);
+    rebuildSourcesForActiveScenes();
+    restartMediaOnSceneActivate(sceneId);
 }
 
 void EngineController::swapPreviewProgram()
@@ -449,6 +461,8 @@ void EngineController::go(TransitionType type)
             stopStingerMedia();
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
             if (m_compositor) m_compositor->clearProgramHold();
+            rebuildSourcesForActiveScenes();
+            restartMediaOnSceneActivate(p.previewSceneId);
             emit transitionFinished();
         } else if (transitionIsStinger(effective)) {
             stopStingerMedia();
@@ -486,6 +500,8 @@ void EngineController::go(TransitionType type)
             // Snapshot current program, switch immediately, blend hold → new
             if (m_compositor) m_compositor->captureProgramHold();
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
+            rebuildSourcesForActiveScenes();
+            restartMediaOnSceneActivate(p.previewSceneId);
             connect(m_transition, &TransitionEngine::finished, this, [this] {
                 if (m_compositor) m_compositor->clearProgramHold();
                 emit transitionFinished();
@@ -496,14 +512,19 @@ void EngineController::go(TransitionType type)
             // FTB / Fade to White: fade out old, swap, fade in new
             const QString target = p.previewSceneId;
             connect(m_transition, &TransitionEngine::phaseChanged, this, [this, target](TransitionEngine::Phase phase) {
-                if (phase == TransitionEngine::Phase::In)
+                if (phase == TransitionEngine::Phase::In) {
                     m_sceneGraph->setProgramSceneId(target);
+                    rebuildSourcesForActiveScenes();
+                    restartMediaOnSceneActivate(target);
+                }
             }, Qt::SingleShotConnection);
             connect(m_transition, &TransitionEngine::finished, this, &EngineController::transitionFinished, Qt::SingleShotConnection);
             m_transition->start();
         }
     } else {
         m_sceneGraph->setProgramSceneId(p.previewSceneId);
+        rebuildSourcesForActiveScenes();
+        restartMediaOnSceneActivate(p.previewSceneId);
     }
 }
 
@@ -637,6 +658,15 @@ void EngineController::setSourceVisible(const QString& sourceId, bool visible)
         if (auto* s = p.findSourceAnywhere(sourceId))
             s->visible = visible;
     });
+    rebuildSourcesForActiveScenes();
+    if (visible && m_capture) {
+        const auto* src = m_sceneGraph->snapshot().findSourceAnywhere(sourceId);
+        if (src && src->type == SourceType::Media
+            && src->settings.value(QStringLiteral("restartOnActivate")).toBool(false)) {
+            if (auto* media = dynamic_cast<MediaSource*>(m_capture->source(sourceId)))
+                media->requestRestart();
+        }
+    }
 }
 
 void EngineController::setSourceName(const QString& sourceId, const QString& name)
@@ -1026,6 +1056,13 @@ void EngineController::rebuildSourcesForActiveScenes()
     }
     collectNestedScenes(project, scenes);
     m_capture->syncWithScenes(scenes);
+}
+
+void EngineController::restartMediaOnSceneActivate(const QString& sceneId)
+{
+    if (!m_capture || !m_sceneGraph || sceneId.isEmpty()) return;
+    if (const auto* sc = m_sceneGraph->snapshot().findScene(sceneId))
+        m_capture->restartMediaOnActivate(*sc);
 }
 
 void EngineController::tickIsoRecorders(qint64 ptsUs)

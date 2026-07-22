@@ -55,6 +55,9 @@ private:
         QDoubleSpinBox* compThresh = nullptr;
         QDoubleSpinBox* compRatio = nullptr;
         QDoubleSpinBox* compMakeup = nullptr;
+        QCheckBox* expOn = nullptr;
+        QDoubleSpinBox* expThresh = nullptr;
+        QDoubleSpinBox* expRatio = nullptr;
         QDoubleSpinBox* eqLow = nullptr;
         QDoubleSpinBox* eqMid = nullptr;
         QDoubleSpinBox* eqHigh = nullptr;

@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 21 (Color Multiply/Add + Swipe transition).
+Last updated: Wave 22 (Media restart/end-action + Adv Audio Expander).
 
 ## Design rules
 
@@ -38,7 +38,7 @@ Last updated: Wave 21 (Color Multiply/Add + Swipe transition).
 | OBSBasic_Clipboard | Copy/paste transforms | partial | `TransformDialog` clipboard + Filters clipboard |
 | Undo / Redo | Edit history | partial | `UndoStack` + Edit menu + Ctrl+Z/Y (project snapshots) |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
-| Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options |
+| Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options; Restart on activate + End Action |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
 | ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 
@@ -51,7 +51,7 @@ Last updated: Wave 21 (Color Multiply/Add + Swipe transition).
 | OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, 3-Band EQ, Limiter) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -80,3 +80,4 @@ Last updated: Wave 21 (Color Multiply/Add + Swipe transition).
 - [x] Wave 19 — Image Mask Blend modes + Adv Audio Noise Suppress (HPF + soft expand; RNNoise deferred)
 - [x] Wave 20 — Color Correction Hue/Gamma/Opacity + per-scene Transition Overrides (Show/Hide deferred)
 - [x] Wave 21 — Color Correction Multiply/Add + Swipe transition (OBS-style; Show/Hide still deferred)
+- [x] Wave 22 — Media Restart/End Action + Adv Audio Expander (Show/Hide still deferred)

@@ -33,6 +33,10 @@ public:
     void setLocalFile(bool local);
     void setFfmpegOptions(const QString& opts);
     void setAudioCallback(std::function<void(const AudioBuffer&)> cb);
+    /// Seek to start on next decode tick (OBS "Restart when activated").
+    void requestRestart();
+    /// Called once when a non-looping file reaches EOF (last frame kept).
+    void setOnEnded(std::function<void()> cb);
 
     static bool looksLikeNetworkUrl(const QString& input);
 
@@ -53,9 +57,13 @@ private:
     ID3D11Texture2D* m_texture = nullptr;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_stop{false};
+    std::atomic<bool> m_restartRequested{false};
     mutable std::mutex m_mutex;
     std::mutex m_audioCbMutex;
     std::function<void(const AudioBuffer&)> m_audioCb;
+    std::mutex m_endedCbMutex;
+    std::function<void()> m_onEnded;
+    std::atomic<bool> m_endedNotified{false};
     std::thread m_thread;
     int m_width = 0, m_height = 0;
 };

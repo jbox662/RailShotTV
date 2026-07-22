@@ -244,6 +244,7 @@ void AudioGraph::removeChannel(const QString& id)
         m_gateEnv.remove(id);
         m_gateHold.remove(id);
         m_compEnv.remove(id);
+        m_expEnv.remove(id);
         m_eqL.remove(id);
         m_eqR.remove(id);
         m_limEnv.remove(id);
@@ -325,6 +326,11 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.compAttackMs = s.compAttackMs;
                 cur.compReleaseMs = s.compReleaseMs;
                 cur.compMakeupDb = s.compMakeupDb;
+                cur.expEnabled = s.expEnabled;
+                cur.expThresholdDb = s.expThresholdDb;
+                cur.expRatio = s.expRatio;
+                cur.expAttackMs = s.expAttackMs;
+                cur.expReleaseMs = s.expReleaseMs;
                 cur.eqLowDb = s.eqLowDb;
                 cur.eqMidDb = s.eqMidDb;
                 cur.eqHighDb = s.eqHighDb;
@@ -486,6 +492,29 @@ void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelSta
                 gain = (compressed / over);
             }
             gain *= makeup;
+            buf.samples[size_t(i) * bch] = l * gain;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
+
+    if (ch.expEnabled) {
+        float& env = m_expEnv[channelId];
+        const float thrLin = std::pow(10.f, ch.expThresholdDb / 20.f);
+        const float ratio = std::max(1.f, ch.expRatio);
+        const float att = std::exp(-1.f / std::max(1.f, ch.expAttackMs * 0.001f * sr));
+        const float rel = std::exp(-1.f / std::max(1.f, ch.expReleaseMs * 0.001f * sr));
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            const float level = std::max(std::abs(l), std::abs(r));
+            const float coef = (level > env) ? att : rel;
+            env = level + coef * (env - level);
+            float gain = 1.f;
+            if (env < thrLin && thrLin > 1e-6f) {
+                const float under = std::max(env / thrLin, 1e-4f);
+                gain = std::pow(under, ratio - 1.f);
+            }
             buf.samples[size_t(i) * bch] = l * gain;
             if (bch > 1)
                 buf.samples[size_t(i) * bch + 1] = r * gain;

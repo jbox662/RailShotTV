@@ -178,6 +178,12 @@ struct AudioChannelState {
     float compReleaseMs = 60.f;
     float compMakeupDb = 0.f;
 
+    bool expEnabled = false;          // Downward expander
+    float expThresholdDb = -30.f;
+    float expRatio = 2.f;
+    float expAttackMs = 10.f;
+    float expReleaseMs = 100.f;
+
     // OBS 3-Band EQ (Low ~800 Hz / High ~5 kHz splits); gains in dB
     float eqLowDb = 0.f;
     float eqMidDb = 0.f;

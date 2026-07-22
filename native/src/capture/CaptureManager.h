@@ -52,10 +52,14 @@ public:
     /// Poll a single source into the frame bus (Properties preview).
     bool pollSource(const QString& sourceId);
 
+    /// OBS "Restart when activated" for Media sources in a scene.
+    void restartMediaOnActivate(const SceneItem& scene);
+
 signals:
     void sourceStarted(const QString& id);
     void sourceStopped(const QString& id);
     void sourceError(const QString& id, const QString& message);
+    void mediaEnded(const QString& id);
 
 private:
     std::unique_ptr<IVideoSource> createSource(const SourceItem& source);

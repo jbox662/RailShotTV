@@ -113,6 +113,18 @@ void MediaSource::setAudioCallback(std::function<void(const AudioBuffer&)> cb)
     m_audioCb = std::move(cb);
 }
 
+void MediaSource::requestRestart()
+{
+    m_restartRequested.store(true);
+    m_endedNotified.store(false);
+}
+
+void MediaSource::setOnEnded(std::function<void()> cb)
+{
+    std::lock_guard lock(m_endedCbMutex);
+    m_onEnded = std::move(cb);
+}
+
 void MediaSource::emitAudio(const float* interleaved, int frames, int channels, int sampleRate)
 {
     if (!interleaved || frames <= 0 || channels <= 0) return;
@@ -316,6 +328,12 @@ void MediaSource::decodeLoop()
 
         bool reopen = false;
         while (!m_stop.load()) {
+            if (m_restartRequested.exchange(false)) {
+                av_seek_frame(fmt, vIndex, 0, AVSEEK_FLAG_BACKWARD);
+                avcodec_flush_buffers(vdec);
+                if (adec) avcodec_flush_buffers(adec);
+                m_endedNotified.store(false);
+            }
             const int r = av_read_frame(fmt, pkt);
             if (r < 0) {
                 if (network) {
@@ -329,7 +347,20 @@ void MediaSource::decodeLoop()
                     if (adec) avcodec_flush_buffers(adec);
                     continue;
                 }
-                break;
+                // Freeze on last frame; notify once for end-action handlers.
+                if (!m_endedNotified.exchange(true)) {
+                    std::function<void()> ended;
+                    {
+                        std::lock_guard lock(m_endedCbMutex);
+                        ended = m_onEnded;
+                    }
+                    if (ended) ended();
+                }
+                // Idle until restart/stop
+                while (!m_stop.load() && !m_restartRequested.load())
+                    QThread::msleep(50);
+                if (m_stop.load()) break;
+                continue;
             }
 
             if (pkt->stream_index == vIndex) {
