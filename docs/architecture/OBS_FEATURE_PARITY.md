@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 19 (Mask Blend + Noise Suppress).
+Last updated: Wave 20 (Color Correction Hue/Gamma/Opacity + scene transition overrides).
 
 ## Design rules
 
@@ -24,7 +24,7 @@ Last updated: Wave 19 (Mask Blend + Noise Suppress).
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT) |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override |
 | Groups / Scene | Scene-as-source + Groups | partial | `SourceType::Scene` / `Group`; nested compose + `childIds` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
@@ -48,7 +48,7 @@ Last updated: Wave 19 (Mask Blend + Noise Suppress).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, 3-Band EQ, Limiter) |
@@ -78,3 +78,4 @@ Last updated: Wave 19 (Mask Blend + Noise Suppress).
 - [x] Wave 17 — Apply LUT (OBS-style 512×512 PNG; path + amount; `.cube` deferred)
 - [x] Wave 18 — Apply LUT `.cube` (parse 3D Adobe cube → bake 512×512; 1D / Texture3D deferred)
 - [x] Wave 19 — Image Mask Blend modes + Adv Audio Noise Suppress (HPF + soft expand; RNNoise deferred)
+- [x] Wave 20 — Color Correction Hue/Gamma/Opacity + per-scene Transition Overrides (Show/Hide deferred)

@@ -92,6 +92,9 @@ private:
     QSlider* m_brightness = nullptr;
     QSlider* m_contrast = nullptr;
     QSlider* m_saturation = nullptr;
+    QSlider* m_hue = nullptr;
+    QSlider* m_gamma = nullptr;
+    QSlider* m_colorOpacity = nullptr;
     QCheckBox* m_cropEnabled = nullptr;
     QSlider* m_cropL = nullptr;
     QSlider* m_cropR = nullptr;

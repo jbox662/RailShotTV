@@ -20,6 +20,7 @@ cbuffer CB : register(b0) {
     float4 fxParams;  // scrollU, scrollV, sharpen, maskOpacity (0=off)
     float4 keyColor;  // rgb key + mode (0 off, 1 chroma, 2 color, 3 luma)
     float4 keyParams; // similarity, smoothness, lumaMin, lumaMax
+    float4 ccParams;  // hueRad, gammaExp, filterOpacity, pad
 };
 VSOut main(VSIn i) {
     VSOut o;
@@ -52,6 +53,7 @@ cbuffer CB : register(b0) {
     float4 fxParams;
     float4 keyColor;
     float4 keyParams;
+    float4 ccParams; // hueRad, gammaExp, filterOpacity, pad
 };
 float2 rgbToCbCr(float3 rgb) {
     float cb = dot(rgb, float3(-0.100644, -0.338572, 0.439216)) + 0.501961;
@@ -74,6 +76,19 @@ float3 sampleLut512(float3 color) {
     float3 a = lutTex.Sample(samp, uv0).rgb;
     float3 b = lutTex.Sample(samp, uv1).rgb;
     return lerp(a, b, f);
+}
+float3 rgbToHsv(float3 c) {
+    float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    float4 p = lerp(float4(c.bg, K.wz), float4(c.gb, K.xy), step(c.b, c.g));
+    float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1e-10;
+    return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+float3 hsvToRgb(float3 c) {
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
 }
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float2 suv = frac(uv + fxParams.xy);
@@ -102,7 +117,16 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         float4 sharpBase = tex.Sample(samp, suv);
         c = lerp(c, sharpBase + (sharpBase - neigh) * (sharpen * 2.5), saturate(sharpen * 2.0));
     }
+    float gExp = ccParams.y;
+    if (abs(gExp - 1.0) > 0.001)
+        c.rgb = pow(max(c.rgb, 0.0), gExp.xxx);
     c.rgb = c.rgb * colorMul.rgb + colorAdd.rgb;
+    float hueRad = ccParams.x;
+    if (abs(hueRad) > 0.001) {
+        float3 hsv = rgbToHsv(saturate(c.rgb));
+        hsv.x = frac(hsv.x + hueRad / (2.0 * 3.14159265));
+        c.rgb = hsvToRgb(hsv);
+    }
     float mode = keyColor.w;
     if (mode > 0.5) {
         float sim = keyParams.x;
@@ -150,7 +174,7 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
             c.rgb = lerp(c.rgb, saturate(c.rgb - m.rgb), saturate(maskAmt));
         }
     }
-    c.a *= opacity;
+    c.a *= opacity * saturate(ccParams.z);
     return c;
 }
 )";

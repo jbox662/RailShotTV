@@ -71,7 +71,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     int lumaMin = 0;
     int lumaMax = 100;
     int blur = 0;
-    int bri = 0, con = 0, sat = 0;
+    int bri = 0, con = 0, sat = 0, hue = 0, gamma = 0, colorOpacity = 100;
     int cropL = 0, cropR = 0, cropT = 0, cropB = 0;
     bool pad = false;
     int scrollX = 0, scrollY = 0;
@@ -118,6 +118,9 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             bri = o.value(QStringLiteral("brightness")).toInt(0);
             con = o.value(QStringLiteral("contrast")).toInt(0);
             sat = o.value(QStringLiteral("saturation")).toInt(0);
+            hue = o.value(QStringLiteral("hue")).toInt(0);
+            gamma = o.value(QStringLiteral("gamma")).toInt(0);
+            colorOpacity = o.value(QStringLiteral("opacity")).toInt(100);
         } else if (type == QLatin1String("crop_pad")) {
             cropL = o.value(QStringLiteral("left")).toInt(0);
             cropR = o.value(QStringLiteral("right")).toInt(0);
@@ -149,6 +152,9 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("brightness"), bri);
     settings.insert(QStringLiteral("contrast"), con);
     settings.insert(QStringLiteral("saturation"), sat);
+    settings.insert(QStringLiteral("hue"), hue);
+    settings.insert(QStringLiteral("gamma"), gamma);
+    settings.insert(QStringLiteral("colorOpacity"), colorOpacity);
     settings.insert(QStringLiteral("filterCropL"), cropL);
     settings.insert(QStringLiteral("filterCropR"), cropR);
     settings.insert(QStringLiteral("filterCropT"), cropT);
@@ -366,10 +372,20 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         m_contrast->setRange(-100, 100);
         m_saturation = new QSlider(Qt::Horizontal, m_colorPage);
         m_saturation->setRange(-100, 100);
+        m_hue = new QSlider(Qt::Horizontal, m_colorPage);
+        m_hue->setRange(-180, 180);
+        m_gamma = new QSlider(Qt::Horizontal, m_colorPage);
+        m_gamma->setRange(-100, 100);
+        m_colorOpacity = new QSlider(Qt::Horizontal, m_colorPage);
+        m_colorOpacity->setRange(0, 100);
+        m_colorOpacity->setValue(100);
         form->addRow(m_colorEnabled);
         form->addRow(QStringLiteral("Brightness"), m_brightness);
         form->addRow(QStringLiteral("Contrast"), m_contrast);
         form->addRow(QStringLiteral("Saturation"), m_saturation);
+        form->addRow(QStringLiteral("Hue Shift"), m_hue);
+        form->addRow(QStringLiteral("Gamma"), m_gamma);
+        form->addRow(QStringLiteral("Opacity"), m_colorOpacity);
     }
     m_stack->addWidget(m_colorPage);
 
@@ -447,7 +463,8 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
                        m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
-                       m_brightness, m_contrast, m_saturation, m_cropL, m_cropR, m_cropT, m_cropB,
+                       m_brightness, m_contrast, m_saturation, m_hue, m_gamma, m_colorOpacity,
+                       m_cropL, m_cropR, m_cropT, m_cropB,
                        m_scrollX, m_scrollY, m_sharpenAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
@@ -550,7 +567,10 @@ void FiltersDialog::reload()
         const int bri = src->settings.value(QStringLiteral("brightness")).toInt(0);
         const int con = src->settings.value(QStringLiteral("contrast")).toInt(0);
         const int sat = src->settings.value(QStringLiteral("saturation")).toInt(0);
-        if (bri != 0 || con != 0 || sat != 0) {
+        const int hue = src->settings.value(QStringLiteral("hue")).toInt(0);
+        const int gamma = src->settings.value(QStringLiteral("gamma")).toInt(0);
+        const int colorOp = src->settings.value(QStringLiteral("colorOpacity")).toInt(100);
+        if (bri != 0 || con != 0 || sat != 0 || hue != 0 || gamma != 0 || colorOp != 100) {
             QJsonObject f;
             f.insert(QStringLiteral("id"), newId(QStringLiteral("flt")));
             f.insert(QStringLiteral("type"), QStringLiteral("color_correction"));
@@ -558,6 +578,9 @@ void FiltersDialog::reload()
             f.insert(QStringLiteral("brightness"), bri);
             f.insert(QStringLiteral("contrast"), con);
             f.insert(QStringLiteral("saturation"), sat);
+            f.insert(QStringLiteral("hue"), hue);
+            f.insert(QStringLiteral("gamma"), gamma);
+            f.insert(QStringLiteral("opacity"), colorOp);
             filters.append(f);
         }
         if (!filters.isEmpty()) {
@@ -638,6 +661,9 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("brightness"), 0);
         f.insert(QStringLiteral("contrast"), 0);
         f.insert(QStringLiteral("saturation"), 0);
+        f.insert(QStringLiteral("hue"), 0);
+        f.insert(QStringLiteral("gamma"), 0);
+        f.insert(QStringLiteral("opacity"), 100);
     } else if (chosen == chroma) {
         f.insert(QStringLiteral("type"), QStringLiteral("chroma_key"));
         f.insert(QStringLiteral("similarity"), 40);
@@ -828,6 +854,9 @@ void FiltersDialog::onSelectionChanged()
         m_brightness->setValue(f.value(QStringLiteral("brightness")).toInt(0));
         m_contrast->setValue(f.value(QStringLiteral("contrast")).toInt(0));
         m_saturation->setValue(f.value(QStringLiteral("saturation")).toInt(0));
+        m_hue->setValue(f.value(QStringLiteral("hue")).toInt(0));
+        m_gamma->setValue(f.value(QStringLiteral("gamma")).toInt(0));
+        m_colorOpacity->setValue(f.value(QStringLiteral("opacity")).toInt(100));
         m_stack->setCurrentWidget(m_colorPage);
     } else if (type == QLatin1String("crop_pad")) {
         m_cropEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
@@ -901,6 +930,9 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("brightness"), m_brightness->value());
                     o.insert(QStringLiteral("contrast"), m_contrast->value());
                     o.insert(QStringLiteral("saturation"), m_saturation->value());
+                    o.insert(QStringLiteral("hue"), m_hue->value());
+                    o.insert(QStringLiteral("gamma"), m_gamma->value());
+                    o.insert(QStringLiteral("opacity"), m_colorOpacity->value());
                 } else if (type == QLatin1String("crop_pad")) {
                     o.insert(QStringLiteral("enabled"), m_cropEnabled->isChecked());
                     o.insert(QStringLiteral("left"), m_cropL->value());

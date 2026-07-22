@@ -429,10 +429,21 @@ void EngineController::go(TransitionType type)
         emit errorOccurred(QStringLiteral("Nothing in Preview"));
         return;
     }
-    const TransitionType effective = type;
+    TransitionType effective = type;
+    int durationMs = p.transitionMs;
+    // Destination-scene override (OBS-style). Explicit Cut always cuts.
+    if (type != TransitionType::Cut) {
+        if (const auto* dest = p.findScene(p.previewSceneId)) {
+            if (dest->transitionOverride) {
+                effective = dest->transition;
+                if (dest->transitionMs > 0)
+                    durationMs = dest->transitionMs;
+            }
+        }
+    }
     if (m_transition) {
-        m_transition->configure(effective, p.transitionMs);
-        m_sceneGraph->setTransition(effective, p.transitionMs);
+        m_transition->configure(effective, durationMs);
+        m_sceneGraph->setTransition(effective, durationMs);
         emit transitionStarted(effective);
         if (effective == TransitionType::Cut) {
             stopStingerMedia();

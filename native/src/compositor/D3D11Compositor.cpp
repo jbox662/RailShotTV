@@ -40,6 +40,7 @@ struct alignas(16) CBData {
     float fxParams[4];   // 80 — scrollU, scrollV, sharpen, maskOpacity
     float keyColor[4];   // 96 — rgb + mode (0 off, 1 chroma, 2 color, 3 luma)
     float keyParams[4];  // 112 — sim, smooth, lumaMin, lumaMax
+    float ccParams[4];   // 128 — hueRad, gammaExp, filterOpacity, pad
 };
 
 struct alignas(16) TransCBData {
@@ -439,6 +440,17 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->_padCrop[0] = (maskSrv && maskInvert) ? 1.0f : 0.0f;
         cb->_padCrop[1] = lutSrv ? lutAmount : 0.0f;
 
+        const double hueUi = src.settings.value(QStringLiteral("hue")).toDouble(0.0);
+        const double gammaUi = src.settings.value(QStringLiteral("gamma")).toDouble(0.0);
+        const double ccOpUi = src.settings.value(QStringLiteral("colorOpacity")).toDouble(100.0);
+        const float hueNorm = static_cast<float>(std::clamp(hueUi, -180.0, 180.0) / 180.0); // -1..1
+        const float g = static_cast<float>(std::clamp(gammaUi / 100.0, -1.0, 1.0));
+        const float gammaExp = (g < 0.0f) ? (1.0f - g) : (1.0f / (1.0f + g));
+        cb->ccParams[0] = hueNorm * 3.14159265f; // radians (±π)
+        cb->ccParams[1] = gammaExp;
+        cb->ccParams[2] = static_cast<float>(std::clamp(ccOpUi, 0.0, 100.0) / 100.0);
+        cb->ccParams[3] = 0.0f;
+
         // Key filters: mode 0=off 1=chroma 2=color 3=luma
         const int keyMode = src.settings.value(QStringLiteral("keyMode")).toInt(0);
         QColor keyRgb(src.settings.value(QStringLiteral("keyColor")).toString(QStringLiteral("#00FF00")));
@@ -601,6 +613,10 @@ void D3D11Compositor::drawTexture(ID3D11Texture2D* tex, const Transform& xf, flo
         cb->keyColor[0] = cb->keyColor[1] = cb->keyColor[2] = cb->keyColor[3] = 0.0f;
         cb->keyParams[0] = cb->keyParams[1] = cb->keyParams[2] = 0.0f;
         cb->keyParams[3] = 1.0f;
+        cb->ccParams[0] = 0.0f;
+        cb->ccParams[1] = 1.0f;
+        cb->ccParams[2] = 1.0f;
+        cb->ccParams[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
@@ -780,6 +796,10 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
         cb->keyColor[0] = cb->keyColor[1] = cb->keyColor[2] = cb->keyColor[3] = 0.0f;
         cb->keyParams[0] = cb->keyParams[1] = cb->keyParams[2] = 0.0f;
         cb->keyParams[3] = 1.0f;
+        cb->ccParams[0] = 0.0f;
+        cb->ccParams[1] = 1.0f;
+        cb->ccParams[2] = 1.0f;
+        cb->ccParams[3] = 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     if (SUCCEEDED(ctx->Map(m_transCb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {

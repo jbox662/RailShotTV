@@ -1,12 +1,20 @@
 #include "ui/widgets/SceneListWidget.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
+#include "core/Types.h"
 #include <QMenu>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QAction>
 #include <QPainter>
 #include <QStyledItemDelegate>
+#include <QDialog>
+#include <QFormLayout>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
 
 namespace railshot {
 
@@ -113,6 +121,54 @@ SceneListWidget::SceneListWidget(EngineController* engine, QWidget* parent)
             });
             menu.addAction(QStringLiteral("Duplicate"), this, [this, id] {
                 m_engine->sceneGraph()->mutate([&](Project& p) { p.duplicateScene(id); });
+            });
+            menu.addAction(QStringLiteral("Transition Override…"), this, [this, id] {
+                const auto snap = m_engine->projectSnapshot();
+                const auto* sc = snap.findScene(id);
+                if (!sc) return;
+                QDialog dlg(this);
+                dlg.setWindowTitle(QStringLiteral("Transition Override — %1").arg(sc->name));
+                auto* lay = new QVBoxLayout(&dlg);
+                auto* form = new QFormLayout;
+                auto* enable = new QCheckBox(QStringLiteral("Override transition when taking to this scene"), &dlg);
+                enable->setChecked(sc->transitionOverride);
+                auto* typeBox = new QComboBox(&dlg);
+                const TransitionType catalog[] = {
+                    TransitionType::Fade, TransitionType::CrossDissolve, TransitionType::Wipe,
+                    TransitionType::Merge, TransitionType::Push, TransitionType::Cut,
+                    TransitionType::FTB, TransitionType::FadeToWhite, TransitionType::Stinger,
+                    TransitionType::CubeZoom, TransitionType::Swap, TransitionType::FlyOver,
+                };
+                for (auto t : catalog)
+                    typeBox->addItem(transitionTypeToString(t), int(t));
+                const int curIdx = typeBox->findData(int(sc->transition));
+                typeBox->setCurrentIndex(curIdx >= 0 ? curIdx : 0);
+                auto* ms = new QSpinBox(&dlg);
+                ms->setRange(50, 10000);
+                ms->setSuffix(QStringLiteral(" ms"));
+                ms->setValue(sc->transitionMs > 0 ? sc->transitionMs : 500);
+                form->addRow(enable);
+                form->addRow(QStringLiteral("Type"), typeBox);
+                form->addRow(QStringLiteral("Duration"), ms);
+                lay->addLayout(form);
+                auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+                lay->addWidget(buttons);
+                connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+                connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+                if (dlg.exec() != QDialog::Accepted) return;
+                m_engine->sceneGraph()->mutate([&](Project& p) {
+                    if (auto* s = p.findScene(id)) {
+                        s->transitionOverride = enable->isChecked();
+                        s->transition = TransitionType(typeBox->currentData().toInt());
+                        s->transitionMs = ms->value();
+                    }
+                });
+            });
+            menu.addAction(QStringLiteral("Clear Transition Override"), this, [this, id] {
+                m_engine->sceneGraph()->mutate([&](Project& p) {
+                    if (auto* s = p.findScene(id))
+                        s->transitionOverride = false;
+                });
             });
             auto* del = menu.addAction(QStringLiteral("Delete"));
             connect(del, &QAction::triggered, this, [this, id] {

@@ -281,6 +281,9 @@ QJsonObject SceneItem::toJson() const
         {QStringLiteral("id"), id},
         {QStringLiteral("name"), name},
         {QStringLiteral("sources"), arr},
+        {QStringLiteral("transitionOverride"), transitionOverride},
+        {QStringLiteral("transition"), transitionTypeToString(transition)},
+        {QStringLiteral("transitionMs"), transitionMs},
     };
 }
 
@@ -292,6 +295,9 @@ SceneItem SceneItem::fromJson(const QJsonObject& o)
     const auto arr = o.value(QStringLiteral("sources")).toArray();
     for (const auto& v : arr)
         sc.sources.append(SourceItem::fromJson(v.toObject()));
+    sc.transitionOverride = o.value(QStringLiteral("transitionOverride")).toBool(false);
+    sc.transition = transitionTypeFromString(o.value(QStringLiteral("transition")).toString(QStringLiteral("Fade")));
+    sc.transitionMs = o.value(QStringLiteral("transitionMs")).toInt(500);
     return sc;
 }
 

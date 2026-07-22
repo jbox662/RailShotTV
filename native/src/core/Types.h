@@ -128,6 +128,10 @@ struct SceneItem {
     QString id;
     QString name;
     QVector<SourceItem> sources;
+    /// OBS-style: when true, Take to this scene uses these instead of project defaults (Cut still cuts).
+    bool transitionOverride = false;
+    TransitionType transition = TransitionType::Fade;
+    int transitionMs = 500;
 
     QJsonObject toJson() const;
     static SceneItem fromJson(const QJsonObject& o);
