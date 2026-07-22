@@ -168,6 +168,15 @@ struct AudioChannelState {
     float compReleaseMs = 60.f;
     float compMakeupDb = 0.f;
 
+    // OBS 3-Band EQ (Low ~800 Hz / High ~5 kHz splits); gains in dB
+    float eqLowDb = 0.f;
+    float eqMidDb = 0.f;
+    float eqHighDb = 0.f;
+
+    bool limiterEnabled = false;
+    float limiterThresholdDb = -6.f;
+    float limiterReleaseMs = 60.f;
+
     float peakL = 0.0f;
     float peakR = 0.0f;
     float rmsL = 0.0f;

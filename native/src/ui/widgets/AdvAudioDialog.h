@@ -52,6 +52,12 @@ private:
         QDoubleSpinBox* compThresh = nullptr;
         QDoubleSpinBox* compRatio = nullptr;
         QDoubleSpinBox* compMakeup = nullptr;
+        QDoubleSpinBox* eqLow = nullptr;
+        QDoubleSpinBox* eqMid = nullptr;
+        QDoubleSpinBox* eqHigh = nullptr;
+        QCheckBox* limOn = nullptr;
+        QDoubleSpinBox* limThresh = nullptr;
+        QSpinBox* limRelease = nullptr;
         QComboBox* monitoring = nullptr;
         QCheckBox* tracks[6] = {};
     };

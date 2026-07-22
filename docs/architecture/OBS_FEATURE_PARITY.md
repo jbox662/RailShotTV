@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 12 (Scene-as-source, Groups, Stinger transition).
+Last updated: Wave 13 (Adv Audio 3-Band EQ + Limiter).
 
 ## Design rules
 
@@ -50,7 +50,7 @@ Last updated: Wave 12 (Scene-as-source, Groups, Stinger transition).
 | OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor, 3-Band EQ, Limiter) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -70,3 +70,4 @@ Last updated: Wave 12 (Scene-as-source, Groups, Stinger transition).
 - [x] Wave 10 — OBS chrome cleanup (File/Edit/View/Docks menus; Controls core; Scenes/Preview overlap fixes)
 - [x] Wave 11 — Filters Crop/Pad + Scroll + Sharpen; Adv Audio Gain / Noise Gate / Compressor
 - [x] Wave 12 — Scene-as-source, Groups, Stinger transition (media + point-of-take)
+- [x] Wave 13 — Adv Audio 3-Band EQ + Limiter

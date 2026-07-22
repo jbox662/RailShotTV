@@ -37,8 +37,8 @@ AdvAudioDialog::AdvAudioDialog(EngineController* engine, QWidget* parent)
     : QDialog(parent), m_engine(engine)
 {
     setWindowTitle(QStringLiteral("Advanced Audio Properties"));
-    setMinimumSize(1280, 360);
-    resize(1400, 400);
+    setMinimumSize(1480, 360);
+    resize(1600, 420);
     setSizeGripEnabled(true);
     setStyleSheet(QStringLiteral(
         "QDialog{background:#0F1114;}"
@@ -143,15 +143,17 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(6, QStringLiteral("Sync Offset"));
     mk(7, QStringLiteral("Gate"));
     mk(8, QStringLiteral("Compressor"));
-    mk(9, QStringLiteral("Audio Monitoring"));
-    mk(10, QStringLiteral("Tracks"));
+    mk(9, QStringLiteral("EQ L/M/H"));
+    mk(10, QStringLiteral("Limiter"));
+    mk(11, QStringLiteral("Audio Monitoring"));
+    mk(12, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
 {
     // Clear old rows (keep header at row 0)
-    while (m_grid->count() > 11) {
-        QLayoutItem* item = m_grid->takeAt(11);
+    while (m_grid->count() > 13) {
+        QLayoutItem* item = m_grid->takeAt(13);
         if (item->widget())
             item->widget()->deleteLater();
         delete item;
@@ -300,13 +302,56 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     compLay->addWidget(w.compMakeup);
     grid->addWidget(compHost, row, 8);
 
+    auto* eqHost = new QWidget(m_rowsHost);
+    auto* eqLay = new QHBoxLayout(eqHost);
+    eqLay->setContentsMargins(0, 0, 0, 0);
+    eqLay->setSpacing(3);
+    auto mkEq = [&](QDoubleSpinBox*& box, float v, const QString& tip) {
+        box = new QDoubleSpinBox(eqHost);
+        box->setRange(-20.0, 20.0);
+        box->setDecimals(1);
+        box->setSuffix(QStringLiteral(" dB"));
+        box->setValue(v);
+        box->setFixedWidth(72);
+        box->setToolTip(tip);
+        eqLay->addWidget(box);
+    };
+    mkEq(w.eqLow, ch.eqLowDb, QStringLiteral("Low band (< ~800 Hz)"));
+    mkEq(w.eqMid, ch.eqMidDb, QStringLiteral("Mid band"));
+    mkEq(w.eqHigh, ch.eqHighDb, QStringLiteral("High band (> ~5 kHz)"));
+    grid->addWidget(eqHost, row, 9);
+
+    auto* limHost = new QWidget(m_rowsHost);
+    auto* limLay = new QHBoxLayout(limHost);
+    limLay->setContentsMargins(0, 0, 0, 0);
+    limLay->setSpacing(4);
+    w.limOn = new QCheckBox(limHost);
+    w.limOn->setChecked(ch.limiterEnabled);
+    w.limThresh = new QDoubleSpinBox(limHost);
+    w.limThresh->setRange(-60.0, 0.0);
+    w.limThresh->setDecimals(1);
+    w.limThresh->setSuffix(QStringLiteral(" dB"));
+    w.limThresh->setValue(ch.limiterThresholdDb);
+    w.limThresh->setFixedWidth(78);
+    w.limThresh->setToolTip(QStringLiteral("Limiter threshold"));
+    w.limRelease = new QSpinBox(limHost);
+    w.limRelease->setRange(1, 1000);
+    w.limRelease->setSuffix(QStringLiteral(" ms"));
+    w.limRelease->setValue(int(std::lround(ch.limiterReleaseMs)));
+    w.limRelease->setFixedWidth(72);
+    w.limRelease->setToolTip(QStringLiteral("Limiter release"));
+    limLay->addWidget(w.limOn);
+    limLay->addWidget(w.limThresh);
+    limLay->addWidget(w.limRelease);
+    grid->addWidget(limHost, row, 10);
+
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
     w.monitoring->addItem(QStringLiteral("Monitor Only (MUTE)"), int(AudioMonitoringType::MonitorOnly));
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 9);
+    grid->addWidget(w.monitoring, row, 11);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -317,7 +362,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 10);
+    grid->addWidget(trackHost, row, 12);
 
     m_rows.insert(channelId, w);
 
@@ -334,6 +379,12 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     connect(w.compThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.compRatio, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.compMakeup, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.eqLow, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.eqMid, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.eqHigh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.limOn, &QCheckBox::toggled, this, wire);
+    connect(w.limThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.limRelease, qOverload<int>(&QSpinBox::valueChanged), this, wire);
     connect(w.monitoring, qOverload<int>(&QComboBox::currentIndexChanged), this, wire);
     for (int t = 0; t < 6; ++t)
         connect(w.tracks[t], &QCheckBox::toggled, this, wire);
@@ -376,6 +427,12 @@ void AdvAudioDialog::applyChannel(const QString& id)
     if (w.compThresh) state.compThresholdDb = float(w.compThresh->value());
     if (w.compRatio) state.compRatio = float(w.compRatio->value());
     if (w.compMakeup) state.compMakeupDb = float(w.compMakeup->value());
+    if (w.eqLow) state.eqLowDb = float(w.eqLow->value());
+    if (w.eqMid) state.eqMidDb = float(w.eqMid->value());
+    if (w.eqHigh) state.eqHighDb = float(w.eqHigh->value());
+    if (w.limOn) state.limiterEnabled = w.limOn->isChecked();
+    if (w.limThresh) state.limiterThresholdDb = float(w.limThresh->value());
+    if (w.limRelease) state.limiterReleaseMs = float(w.limRelease->value());
     if (w.monitoring)
         state.monitoring = AudioMonitoringType(w.monitoring->currentData().toInt());
     quint8 mask = 0;

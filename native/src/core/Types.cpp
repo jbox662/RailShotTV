@@ -321,6 +321,12 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("compAttackMs"), double(compAttackMs)},
         {QStringLiteral("compReleaseMs"), double(compReleaseMs)},
         {QStringLiteral("compMakeupDb"), double(compMakeupDb)},
+        {QStringLiteral("eqLowDb"), double(eqLowDb)},
+        {QStringLiteral("eqMidDb"), double(eqMidDb)},
+        {QStringLiteral("eqHighDb"), double(eqHighDb)},
+        {QStringLiteral("limiterEnabled"), limiterEnabled},
+        {QStringLiteral("limiterThresholdDb"), double(limiterThresholdDb)},
+        {QStringLiteral("limiterReleaseMs"), double(limiterReleaseMs)},
     };
 }
 
@@ -350,6 +356,12 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.compAttackMs = float(o.value(QStringLiteral("compAttackMs")).toDouble(6.0));
     s.compReleaseMs = float(o.value(QStringLiteral("compReleaseMs")).toDouble(60.0));
     s.compMakeupDb = float(o.value(QStringLiteral("compMakeupDb")).toDouble(0.0));
+    s.eqLowDb = float(o.value(QStringLiteral("eqLowDb")).toDouble(0.0));
+    s.eqMidDb = float(o.value(QStringLiteral("eqMidDb")).toDouble(0.0));
+    s.eqHighDb = float(o.value(QStringLiteral("eqHighDb")).toDouble(0.0));
+    s.limiterEnabled = o.value(QStringLiteral("limiterEnabled")).toBool(false);
+    s.limiterThresholdDb = float(o.value(QStringLiteral("limiterThresholdDb")).toDouble(-6.0));
+    s.limiterReleaseMs = float(o.value(QStringLiteral("limiterReleaseMs")).toDouble(60.0));
     return s;
 }
 

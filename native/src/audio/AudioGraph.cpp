@@ -238,6 +238,12 @@ void AudioGraph::removeChannel(const QString& id)
         m_pending.remove(id);
         m_meters.remove(id);
         m_delayLines.remove(id);
+        m_gateEnv.remove(id);
+        m_gateHold.remove(id);
+        m_compEnv.remove(id);
+        m_eqL.remove(id);
+        m_eqR.remove(id);
+        m_limEnv.remove(id);
     }
     emit channelsChanged();
 }
@@ -301,6 +307,23 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.syncOffsetMs = std::clamp(s.syncOffsetMs, -kMaxSyncMs, kMaxSyncMs);
                 cur.monitoring = s.monitoring;
                 cur.trackMask = s.trackMask;
+                cur.gateEnabled = s.gateEnabled;
+                cur.gateOpenDb = s.gateOpenDb;
+                cur.gateAttackMs = s.gateAttackMs;
+                cur.gateHoldMs = s.gateHoldMs;
+                cur.gateReleaseMs = s.gateReleaseMs;
+                cur.compEnabled = s.compEnabled;
+                cur.compThresholdDb = s.compThresholdDb;
+                cur.compRatio = s.compRatio;
+                cur.compAttackMs = s.compAttackMs;
+                cur.compReleaseMs = s.compReleaseMs;
+                cur.compMakeupDb = s.compMakeupDb;
+                cur.eqLowDb = s.eqLowDb;
+                cur.eqMidDb = s.eqMidDb;
+                cur.eqHighDb = s.eqHighDb;
+                cur.limiterEnabled = s.limiterEnabled;
+                cur.limiterThresholdDb = s.limiterThresholdDb;
+                cur.limiterReleaseMs = s.limiterReleaseMs;
                 if (!s.name.isEmpty())
                     cur.name = s.name;
                 *it = cur;
@@ -366,7 +389,7 @@ AudioBuffer AudioGraph::applySyncDelay(const QString& channelId, const AudioBuff
     return out;
 }
 
-void AudioGraph::applyGateCompressor(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf)
+void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf)
 {
     if (buf.samples.empty() || buf.frameCount() <= 0)
         return;
@@ -423,6 +446,79 @@ void AudioGraph::applyGateCompressor(const QString& channelId, const AudioChanne
                 buf.samples[size_t(i) * bch + 1] = r * gain;
         }
     }
+
+    // OBS basic_eq_filter: 3-band shelving via cascaded one-poles (800 / 5000 Hz).
+    const bool eqActive = std::abs(ch.eqLowDb) > 0.01f || std::abs(ch.eqMidDb) > 0.01f
+                          || std::abs(ch.eqHighDb) > 0.01f;
+    if (eqActive) {
+        constexpr float kEqEps = 1.f / 4294967295.f;
+        constexpr float kLowFreq = 800.f;
+        constexpr float kHighFreq = 5000.f;
+        const float lf = 2.f * std::sin(3.14159265f * kLowFreq / sr);
+        const float hf = 2.f * std::sin(3.14159265f * kHighFreq / sr);
+        const float lowG = std::pow(10.f, ch.eqLowDb / 20.f);
+        const float midG = std::pow(10.f, ch.eqMidDb / 20.f);
+        const float highG = std::pow(10.f, ch.eqHighDb / 20.f);
+
+        auto processBand = [&](EqBandState& c, float sample) -> float {
+            c.lfDelay[0] += lf * (sample - c.lfDelay[0]) + kEqEps;
+            c.lfDelay[1] += lf * (c.lfDelay[0] - c.lfDelay[1]);
+            c.lfDelay[2] += lf * (c.lfDelay[1] - c.lfDelay[2]);
+            c.lfDelay[3] += lf * (c.lfDelay[2] - c.lfDelay[3]);
+            const float lBand = c.lfDelay[3];
+
+            c.hfDelay[0] += hf * (sample - c.hfDelay[0]) + kEqEps;
+            c.hfDelay[1] += hf * (c.hfDelay[0] - c.hfDelay[1]);
+            c.hfDelay[2] += hf * (c.hfDelay[1] - c.hfDelay[2]);
+            c.hfDelay[3] += hf * (c.hfDelay[2] - c.hfDelay[3]);
+
+            const float hBand = c.sampleDelay[2] - c.hfDelay[3];
+            const float mBand = c.sampleDelay[2] - (hBand + lBand);
+
+            c.sampleDelay[2] = c.sampleDelay[1];
+            c.sampleDelay[1] = c.sampleDelay[0];
+            c.sampleDelay[0] = sample;
+
+            return lBand * lowG + mBand * midG + hBand * highG;
+        };
+
+        EqBandState& left = m_eqL[channelId];
+        EqBandState& right = m_eqR[channelId];
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            l = processBand(left, l);
+            r = processBand(right, r);
+            buf.samples[size_t(i) * bch] = l;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r;
+        }
+    }
+
+    if (ch.limiterEnabled) {
+        float& env = m_limEnv[channelId];
+        const float thrDb = ch.limiterThresholdDb;
+        // OBS limiter: ~1 ms attack, user release; slope = 1 (brick-wall above threshold).
+        const float att = std::exp(-1.f / std::max(1.f, 0.001f * sr));
+        const float rel = std::exp(-1.f / std::max(1.f, ch.limiterReleaseMs * 0.001f * sr));
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            const float level = std::max(std::abs(l), std::abs(r));
+            const float coef = (level > env) ? att : rel;
+            env = level + coef * (env - level);
+            float envDb = -96.f;
+            if (env > 1e-6f)
+                envDb = 20.f * std::log10(env);
+            float gainDb = thrDb - envDb; // slope=1
+            if (gainDb > 0.f)
+                gainDb = 0.f;
+            const float gain = std::pow(10.f, gainDb / 20.f);
+            buf.samples[size_t(i) * bch] = l * gain;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
 }
 
 void AudioGraph::onCapture(const QString& channelId, const AudioBuffer& buffer)
@@ -468,7 +564,7 @@ void AudioGraph::mixAndEmit()
             if (anySolo && !ch.solo) continue;
 
             AudioBuffer buf = applySyncDelay(it.key(), it.value(), ch.syncOffsetMs);
-            applyGateCompressor(it.key(), ch, buf);
+            applyChannelDsp(it.key(), ch, buf);
 
             const float linear = ch.volume * std::pow(10.f, ch.gainDb / 20.f);
             const float panL = std::cos((ch.pan + 1.f) * 0.25f * 3.14159265f);

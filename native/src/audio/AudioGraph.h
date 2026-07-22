@@ -72,7 +72,14 @@ private:
     void onCapture(const QString& channelId, const AudioBuffer& buffer);
     void mixAndEmit();
     AudioBuffer applySyncDelay(const QString& channelId, const AudioBuffer& in, int syncOffsetMs);
-    void applyGateCompressor(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf);
+    /// Gate → Comp → 3-band EQ → Limiter (OBS-style Adv Audio DSP chain).
+    void applyChannelDsp(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf);
+
+    struct EqBandState {
+        float lfDelay[4] = {};
+        float hfDelay[4] = {};
+        float sampleDelay[3] = {};
+    };
 
     AudioClock m_clock;
     std::unique_ptr<WasapiCapture> m_desktop;
@@ -89,6 +96,9 @@ private:
     QHash<QString, float> m_gateEnv;  // 0..1 open amount
     QHash<QString, float> m_gateHold; // samples remaining
     QHash<QString, float> m_compEnv;  // envelope follower linear
+    QHash<QString, EqBandState> m_eqL; // per-channel left EQ state
+    QHash<QString, EqBandState> m_eqR; // per-channel right EQ state
+    QHash<QString, float> m_limEnv;   // limiter envelope (linear)
     AudioMeter m_masterMeter;
     float m_masterVolume = 1.0f;
     bool m_masterMuted = false;
