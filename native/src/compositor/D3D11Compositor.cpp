@@ -1,8 +1,10 @@
 #include "compositor/D3D11Compositor.h"
 #include "compositor/D3D11Device.h"
 #include "compositor/Shaders.h"
+#include "core/Project.h"
 #include "core/Logger.h"
 #include <QElapsedTimer>
+#include <QJsonArray>
 #include <algorithm>
 #include <cmath>
 
@@ -95,6 +97,10 @@ bool D3D11Compositor::createTargets(QString* error)
             if (error) *error = QStringLiteral("Failed to create transition scratch");
             return false;
         }
+    }
+    if (!ensureNestTargets()) {
+        if (error) *error = QStringLiteral("Failed to create nest targets");
+        return false;
     }
     return true;
 #else
@@ -225,8 +231,8 @@ void D3D11Compositor::shutdown()
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
     rel(m_blendOpaque); rel(m_blend); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
     rel(m_layout); rel(m_transPs); rel(m_ps); rel(m_vs);
-    rel(m_previewRtv); rel(m_programRtv); rel(m_previewTex); rel(m_programTex);
-    rel(m_holdTex); rel(m_transScratch);
+    rel(m_previewRtv); rel(m_programRtv); rel(m_nestRtv);
+    rel(m_previewTex); rel(m_programTex); rel(m_holdTex); rel(m_transScratch); rel(m_nestTex);
 #endif
 }
 
@@ -243,6 +249,10 @@ void D3D11Compositor::clearTarget(ID3D11RenderTargetView* rtv, float r, float g,
 void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11RenderTargetView* rtv)
 {
 #ifdef _WIN32
+    if (src.type == SourceType::Scene || src.type == SourceType::Group) {
+        drawSceneOrGroup(src, bus, rtv);
+        return;
+    }
     auto frame = bus.latest(src.id);
     if (!frame || !frame->texture) return;
 
@@ -359,24 +369,202 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
 }
 
 bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProgram, float transitionMix,
-                              float clearR, float clearG, float clearB)
+                              float clearR, float clearG, float clearB, const Project* project)
 {
 #ifdef _WIN32
     auto* rtv = toProgram ? m_programRtv : m_previewRtv;
     if (!rtv) return false;
+    m_project = project;
+    const int savedDepth = m_nestDepth;
     clearTarget(rtv, clearR, clearG, clearB, 1.0f);
+    const QSet<QString> grouped = groupedChildIds(scene);
     for (const auto& src : scene.sources) {
         if (!src.visible) continue;
+        if (grouped.contains(src.id)) continue; // drawn via parent Group
         SourceItem drawn = src;
         drawn.transform.opacity *= transitionMix;
         drawSource(drawn, bus, rtv);
     }
+    m_nestDepth = savedDepth;
     emit frameComposed(toProgram);
     return true;
 #else
     Q_UNUSED(scene); Q_UNUSED(bus); Q_UNUSED(toProgram); Q_UNUSED(transitionMix);
-    Q_UNUSED(clearR); Q_UNUSED(clearG); Q_UNUSED(clearB);
+    Q_UNUSED(clearR); Q_UNUSED(clearG); Q_UNUSED(clearB); Q_UNUSED(project);
     return false;
+#endif
+}
+
+bool D3D11Compositor::ensureNestTargets()
+{
+#ifdef _WIN32
+    if (!m_device || !m_device->device()) return false;
+    if (m_nestTex && m_nestRtv) return true;
+    auto* dev = m_device->device();
+    if (m_nestRtv) { m_nestRtv->Release(); m_nestRtv = nullptr; }
+    if (m_nestTex) { m_nestTex->Release(); m_nestTex = nullptr; }
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(m_width);
+    desc.Height = static_cast<UINT>(m_height);
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    if (FAILED(dev->CreateTexture2D(&desc, nullptr, &m_nestTex)))
+        return false;
+    return SUCCEEDED(dev->CreateRenderTargetView(m_nestTex, nullptr, &m_nestRtv));
+#else
+    return false;
+#endif
+}
+
+QSet<QString> D3D11Compositor::groupedChildIds(const SceneItem& scene) const
+{
+    QSet<QString> ids;
+    for (const auto& src : scene.sources) {
+        if (src.type != SourceType::Group) continue;
+        const auto arr = src.settings.value(QStringLiteral("childIds")).toArray();
+        for (const auto& v : arr)
+            ids.insert(v.toString());
+    }
+    return ids;
+}
+
+Transform D3D11Compositor::combineTransform(const Transform& parent, const Transform& child) const
+{
+    Transform out = child;
+    out.x = parent.x + child.x * parent.w;
+    out.y = parent.y + child.y * parent.h;
+    out.w = child.w * parent.w;
+    out.h = child.h * parent.h;
+    out.opacity = child.opacity * parent.opacity;
+    out.rotation = child.rotation + parent.rotation;
+    return out;
+}
+
+void D3D11Compositor::drawTexture(ID3D11Texture2D* tex, const Transform& xf, float opacityMul,
+                                  ID3D11RenderTargetView* rtv)
+{
+#ifdef _WIN32
+    if (!tex || !rtv || !m_device) return;
+    auto* ctx = m_device->context();
+    auto* dev = m_device->device();
+    ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(dev->CreateShaderResourceView(tex, nullptr, &srv)))
+        return;
+
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(m_width);
+    vp.Height = static_cast<float>(m_height);
+    vp.MaxDepth = 1.0f;
+    ctx->RSSetViewports(1, &vp);
+    ctx->OMSetRenderTargets(1, &rtv, nullptr);
+    ctx->OMSetBlendState(m_blend, nullptr, 0xffffffff);
+    ctx->IASetInputLayout(m_layout);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    UINT stride = 16, offset = 0;
+    ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
+    ctx->VSSetShader(m_vs, nullptr, 0);
+    ctx->PSSetShader(m_ps, nullptr, 0);
+    ctx->PSSetShaderResources(0, 1, srv.GetAddressOf());
+    ctx->PSSetSamplers(0, 1, &m_sampler);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        auto* cb = reinterpret_cast<CBData*>(mapped.pData);
+        cb->rect[0] = float(xf.x);
+        cb->rect[1] = float(xf.y);
+        cb->rect[2] = float(xf.w);
+        cb->rect[3] = float(xf.h);
+        cb->opacity = float(xf.opacity * opacityMul);
+        cb->rotation = float(xf.rotation * 3.14159265358979323846 / 180.0);
+        cb->cropMin[0] = 0; cb->cropMin[1] = 0;
+        cb->cropMax[0] = 1; cb->cropMax[1] = 1;
+        cb->_padCrop[0] = 0; cb->_padCrop[1] = 0;
+        cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
+        cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
+        cb->fxParams[0] = cb->fxParams[1] = cb->fxParams[2] = cb->fxParams[3] = 0.0f;
+        ctx->Unmap(m_cb, 0);
+    }
+    ctx->VSSetConstantBuffers(0, 1, &m_cb);
+    ctx->PSSetConstantBuffers(0, 1, &m_cb);
+    ctx->Draw(4, 0);
+    ID3D11ShaderResourceView* nullSrv = nullptr;
+    ctx->PSSetShaderResources(0, 1, &nullSrv);
+#else
+    Q_UNUSED(tex); Q_UNUSED(xf); Q_UNUSED(opacityMul); Q_UNUSED(rtv);
+#endif
+}
+
+void D3D11Compositor::drawSceneOrGroup(const SourceItem& src, FrameBus& bus, ID3D11RenderTargetView* rtv)
+{
+#ifdef _WIN32
+    if (!m_project || m_nestDepth >= 4) return;
+
+    if (src.type == SourceType::Group) {
+        // Find owning scene that contains this group (search all scenes).
+        const SceneItem* host = nullptr;
+        for (const auto& sc : m_project->scenes) {
+            for (const auto& s : sc.sources) {
+                if (s.id == src.id) { host = &sc; break; }
+            }
+            if (host) break;
+        }
+        if (!host) return;
+        const auto arr = src.settings.value(QStringLiteral("childIds")).toArray();
+        for (const auto& v : arr) {
+            const QString cid = v.toString();
+            const SourceItem* child = nullptr;
+            for (const auto& s : host->sources) {
+                if (s.id == cid) { child = &s; break; }
+            }
+            if (!child || !child->visible) continue;
+            SourceItem drawn = *child;
+            drawn.transform = combineTransform(src.transform, child->transform);
+            drawSource(drawn, bus, rtv);
+        }
+        return;
+    }
+
+    // Scene-as-source
+    const QString sceneId = src.settings.value(QStringLiteral("sceneId")).toString();
+    const SceneItem* nested = m_project->findScene(sceneId);
+    if (!nested) return;
+    // Prevent trivial self-embed
+    for (const auto& sc : m_project->scenes) {
+        for (const auto& s : sc.sources) {
+            if (s.id == src.id && sc.id == sceneId)
+                return;
+        }
+    }
+    if (!ensureNestTargets() || !m_nestTex || !m_nestRtv) return;
+    ++m_nestDepth;
+    clearTarget(m_nestRtv, 0.f, 0.f, 0.f, 0.f);
+    const QSet<QString> grouped = groupedChildIds(*nested);
+    for (const auto& child : nested->sources) {
+        if (!child.visible) continue;
+        if (grouped.contains(child.id)) continue;
+        drawSource(child, bus, m_nestRtv);
+    }
+    --m_nestDepth;
+    drawTexture(m_nestTex, src.transform, 1.0f, rtv);
+#else
+    Q_UNUSED(src); Q_UNUSED(bus); Q_UNUSED(rtv);
+#endif
+}
+
+void D3D11Compositor::drawFullscreenOverlay(ID3D11Texture2D* tex, float opacity, bool toProgram)
+{
+#ifdef _WIN32
+    auto* rtv = toProgram ? m_programRtv : m_previewRtv;
+    Transform xf;
+    xf.x = 0; xf.y = 0; xf.w = 1; xf.h = 1;
+    xf.opacity = 1.0;
+    drawTexture(tex, xf, opacity, rtv);
+#else
+    Q_UNUSED(tex); Q_UNUSED(opacity); Q_UNUSED(toProgram);
 #endif
 }
 

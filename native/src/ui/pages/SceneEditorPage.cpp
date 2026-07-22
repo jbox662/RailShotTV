@@ -129,7 +129,7 @@ SceneEditorPage::SceneEditorPage(EngineController* engine, QWidget* parent)
             if (t == QLatin1String("Fade")) ty = TransitionType::Fade;
             else if (t == QLatin1String("Wipe")) ty = TransitionType::Wipe;
             else if (t == QLatin1String("Slide")) ty = TransitionType::Merge;
-            else if (t == QLatin1String("Stinger")) ty = TransitionType::CubeZoom;
+            else if (t == QLatin1String("Stinger")) ty = TransitionType::Stinger;
             m_engine->setTransition(ty, 300);
             m_engine->go(ty);
         });

@@ -29,6 +29,8 @@ QString sourceTypeToString(SourceType t)
     case SourceType::Game: return QStringLiteral("game");
     case SourceType::AudioInput: return QStringLiteral("audio_input");
     case SourceType::AudioOutput: return QStringLiteral("audio_output");
+    case SourceType::Scene: return QStringLiteral("scene");
+    case SourceType::Group: return QStringLiteral("group");
     default: return QStringLiteral("unknown");
     }
 }
@@ -50,6 +52,8 @@ SourceType sourceTypeFromString(const QString& s)
     if (s == QLatin1String("game")) return SourceType::Game;
     if (s == QLatin1String("audio_input") || s == QLatin1String("audioinput")) return SourceType::AudioInput;
     if (s == QLatin1String("audio_output") || s == QLatin1String("audiooutput")) return SourceType::AudioOutput;
+    if (s == QLatin1String("scene")) return SourceType::Scene;
+    if (s == QLatin1String("group")) return SourceType::Group;
     return SourceType::Unknown;
 }
 
@@ -62,6 +66,7 @@ QString transitionTypeToString(TransitionType t)
     case TransitionType::Merge: return QStringLiteral("Merge");
     case TransitionType::CubeZoom: return QStringLiteral("CubeZoom");
     case TransitionType::FTB: return QStringLiteral("FTB");
+    case TransitionType::Stinger: return QStringLiteral("Stinger");
     case TransitionType::Plane3D: return QStringLiteral("Plane3D");
     case TransitionType::Bands: return QStringLiteral("Bands");
     case TransitionType::ClockWipe: return QStringLiteral("ClockWipe");
@@ -92,6 +97,7 @@ TransitionType transitionTypeFromString(const QString& s)
     if (s == QLatin1String("Merge")) return TransitionType::Merge;
     if (s == QLatin1String("CubeZoom")) return TransitionType::CubeZoom;
     if (s == QLatin1String("FTB") || s == QLatin1String("FadeToBlack")) return TransitionType::FTB;
+    if (s == QLatin1String("Stinger")) return TransitionType::Stinger;
     if (s == QLatin1String("Plane3D") || s == QLatin1String("3D Plane")) return TransitionType::Plane3D;
     if (s == QLatin1String("Bands")) return TransitionType::Bands;
     if (s == QLatin1String("ClockWipe") || s == QLatin1String("Clock Wipe")) return TransitionType::ClockWipe;
@@ -125,15 +131,21 @@ bool transitionIsFtbStyle(TransitionType t)
     return t == TransitionType::FTB || t == TransitionType::FadeToWhite;
 }
 
+bool transitionIsStinger(TransitionType t)
+{
+    return t == TransitionType::Stinger;
+}
+
 bool transitionIsCrossfade(TransitionType t)
 {
-    return t != TransitionType::Cut && !transitionIsFtbStyle(t);
+    return t != TransitionType::Cut && !transitionIsFtbStyle(t) && !transitionIsStinger(t);
 }
 
 int transitionShaderMode(TransitionType t)
 {
     switch (t) {
-    case TransitionType::Cut: return 0;
+    case TransitionType::Cut:
+    case TransitionType::Stinger: return 0;
     case TransitionType::Fade:
     case TransitionType::CrossDissolve: return 1;
     case TransitionType::Wipe: return 2;
@@ -182,6 +194,8 @@ bool sourceTypeSupportsAudio(SourceType t)
     case SourceType::Alert:
     case SourceType::Scoreboard:
     case SourceType::LowerThird:
+    case SourceType::Scene:
+    case SourceType::Group:
     case SourceType::Unknown:
     default:
         return false;

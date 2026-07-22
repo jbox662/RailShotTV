@@ -7,6 +7,7 @@
 #include <QVector>
 #include <QLabel>
 #include <QSlider>
+#include <QLineEdit>
 #include <QString>
 
 namespace railshot {
@@ -34,6 +35,9 @@ private:
     QPushButton* m_go = nullptr;
     QLabel* m_speedValue = nullptr;
     QSlider* m_speed = nullptr;
+    QLineEdit* m_stingerPath = nullptr;
+    QSlider* m_stingerPoint = nullptr;
+    QWidget* m_stingerBox = nullptr;
     /// "Cut" = instant take; "Smooth" = use selected effect.
     QString m_mode = QStringLiteral("Cut");
     QString m_effect = QStringLiteral("Cross Dissolve");

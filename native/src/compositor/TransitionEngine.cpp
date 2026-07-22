@@ -23,7 +23,8 @@ void TransitionEngine::start()
     }
     m_active = true;
     m_timer.restart();
-    if (isCrossfade()) {
+    // Stinger uses a linear 0→1 timeline (point-of-take), same as crossfades.
+    if (isCrossfade() || transitionIsStinger(m_type)) {
         m_phase = Phase::Cross;
         emit phaseChanged(m_phase);
     } else {

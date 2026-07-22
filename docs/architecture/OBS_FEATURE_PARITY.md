@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 11 (Crop/Pad, Scroll, Sharpen filters; audio Gain/Gate/Compressor).
+Last updated: Wave 12 (Scene-as-source, Groups, Stinger transition).
 
 ## Design rules
 
@@ -24,7 +24,8 @@ Last updated: Wave 11 (Crop/Pad, Scroll, Sharpen filters; audio Gain/Gate/Compre
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe L/R/U/D; Merge ≠ Fade) |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT) |
+| Groups / Scene | Scene-as-source + Groups | partial | `SourceType::Scene` / `Group`; nested compose + `childIds` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
 | OBSBasic_ContextToolbar | Source context toolbar | partial | `SourceContextToolbar` |
@@ -68,3 +69,4 @@ Last updated: Wave 11 (Crop/Pad, Scroll, Sharpen filters; audio Gain/Gate/Compre
 - [x] Wave 9 — Replay Start/Stop, Studio Mode Swap + hotkeys, Wipe direction + Merge≠Fade
 - [x] Wave 10 — OBS chrome cleanup (File/Edit/View/Docks menus; Controls core; Scenes/Preview overlap fixes)
 - [x] Wave 11 — Filters Crop/Pad + Scroll + Sharpen; Adv Audio Gain / Noise Gate / Compressor
+- [x] Wave 12 — Scene-as-source, Groups, Stinger transition (media + point-of-take)

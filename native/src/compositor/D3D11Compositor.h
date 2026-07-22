@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QImage>
 #include <QElapsedTimer>
+#include <QSet>
+#include <QString>
 #include <memory>
 
 struct ID3D11Texture2D;
@@ -20,6 +22,7 @@ struct ID3D11BlendState;
 namespace railshot {
 
 class D3D11Device;
+class Project;
 
 class D3D11Compositor : public QObject {
     Q_OBJECT
@@ -34,25 +37,23 @@ public:
     ID3D11Texture2D* previewTexture() const { return m_previewTex; }
     ID3D11Texture2D* programTexture() const { return m_programTex; }
 
-    /// Compose a scene into the given bus (preview or program).
+    /// Compose a scene. Pass project for Scene/Group nested resolution.
     bool compose(const SceneItem& scene, FrameBus& bus, bool toProgram,
                  float transitionMix = 1.0f, float clearR = 0.02f, float clearG = 0.02f,
-                 float clearB = 0.03f);
+                 float clearB = 0.03f, const Project* project = nullptr);
 
-    /// Snapshot current program into hold buffer for A/B transitions.
     bool captureProgramHold();
     void clearProgramHold();
     bool hasProgramHold() const { return m_holdTex != nullptr; }
-    /// After compose of new program, blend hold over it with the selected effect.
     void blendProgramHold(float progress, TransitionType type);
-    /// 0=to right, 1=to left, 2=to bottom, 3=to top.
     void setWipeDirection(int direction);
     int wipeDirection() const { return m_wipeDirection; }
 
-    /// Readback program/preview frame (BGRA). Avoid in steady UI path.
+    /// Fullscreen overlay (stinger) using source alpha.
+    void drawFullscreenOverlay(ID3D11Texture2D* tex, float opacity = 1.0f, bool toProgram = true);
+
     QImage readbackProgram() const;
     QImage readbackPreview() const;
-    /// Readback any D3D texture (used by Properties source preview).
     QImage readbackTexture(ID3D11Texture2D* tex) const;
 
     int width() const { return m_width; }
@@ -64,19 +65,28 @@ signals:
 private:
     bool createTargets(QString* error);
     bool createPipeline(QString* error);
+    bool ensureNestTargets();
     void clearTarget(ID3D11RenderTargetView* rtv, float r, float g, float b, float a);
     void drawSource(const SourceItem& src, FrameBus& bus, ID3D11RenderTargetView* rtv);
+    void drawTexture(ID3D11Texture2D* tex, const Transform& xf, float opacityMul, ID3D11RenderTargetView* rtv);
+    void drawSceneOrGroup(const SourceItem& src, FrameBus& bus, ID3D11RenderTargetView* rtv);
+    Transform combineTransform(const Transform& parent, const Transform& child) const;
+    QSet<QString> groupedChildIds(const SceneItem& scene) const;
 
     D3D11Device* m_device = nullptr;
     int m_width = 1920;
     int m_height = 1080;
+    const Project* m_project = nullptr;
+    int m_nestDepth = 0;
 
     ID3D11Texture2D* m_previewTex = nullptr;
     ID3D11Texture2D* m_programTex = nullptr;
     ID3D11Texture2D* m_holdTex = nullptr;
     ID3D11Texture2D* m_transScratch = nullptr;
+    ID3D11Texture2D* m_nestTex = nullptr;
     ID3D11RenderTargetView* m_previewRtv = nullptr;
     ID3D11RenderTargetView* m_programRtv = nullptr;
+    ID3D11RenderTargetView* m_nestRtv = nullptr;
 
     ID3D11VertexShader* m_vs = nullptr;
     ID3D11PixelShader* m_ps = nullptr;

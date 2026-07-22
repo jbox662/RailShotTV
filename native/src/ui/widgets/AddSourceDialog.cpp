@@ -21,6 +21,8 @@
 #include <QCursor>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QJsonArray>
+#include <QJsonObject>
 
 namespace railshot {
 
@@ -46,6 +48,8 @@ const TypeEntry kMenuTypes[] = {
     {SourceType::Scoreboard, "Scoreboard"},
     {SourceType::LowerThird, "Lower Third"},
     {SourceType::Ndi, "NDI Source"},
+    {SourceType::Scene, "Scene"},
+    {SourceType::Group, "Group"},
     {SourceType::Alert, "Alert / Stinger"},
 };
 
@@ -75,6 +79,12 @@ QJsonObject defaultSettingsFor(SourceType type)
         s.insert(QStringLiteral("isLocalFile"), true);
         s.insert(QStringLiteral("loop"), true);
         s.insert(QStringLiteral("ffmpegOptions"), QString());
+        break;
+    case SourceType::Scene:
+        s.insert(QStringLiteral("sceneId"), QString());
+        break;
+    case SourceType::Group:
+        s.insert(QStringLiteral("childIds"), QJsonArray{});
         break;
     default:
         break;
@@ -177,6 +187,8 @@ SourceType showAddSourceTypeMenu(QWidget* parent, const QPoint& globalPos)
         {SourceType::Scoreboard, "Scoreboard", "#A855F7"},
         {SourceType::LowerThird, "Lower Third", "#F472B6"},
         {SourceType::Ndi, "NDI Source", "#06B6D4"},
+        {SourceType::Scene, "Scene", "#94A3B8"},
+        {SourceType::Group, "Group", "#64748B"},
         {SourceType::Alert, "Alert / Stinger", "#F59E0B"},
     };
 

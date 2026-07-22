@@ -1,6 +1,7 @@
 #include "ui/widgets/TransitionPanel.h"
 #include "core/EngineController.h"
 #include "core/SceneGraph.h"
+#include "core/Project.h"
 #include "core/Types.h"
 #include "ui/Theme.h"
 #include "ui/Motion.h"
@@ -16,6 +17,8 @@
 #include <QCursor>
 #include <QSignalBlocker>
 #include <QFontMetrics>
+#include <QFileDialog>
+#include <QLineEdit>
 
 namespace railshot {
 
@@ -49,6 +52,7 @@ constexpr TransEffect kEffects[] = {
     {"Windshield Wipe", TransitionType::WindshieldWipe, -1},
     {"Fly Over", TransitionType::FlyOver, -1},
     {"RGB Channels", TransitionType::RgbChannels, -1},
+    {"Stinger", TransitionType::Stinger, -1},
 };
 
 constexpr int kEffectCount = int(sizeof(kEffects) / sizeof(kEffects[0]));
@@ -169,6 +173,44 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     connect(m_effectBtn, &QPushButton::clicked, this, &TransitionPanel::showEffectMenu);
     col->addWidget(m_effectBtn);
 
+    m_stingerBox = new QWidget(this);
+    auto* stingLay = new QVBoxLayout(m_stingerBox);
+    stingLay->setContentsMargins(0, 0, 0, 0);
+    stingLay->setSpacing(4);
+    auto* stingLab = new QLabel(QStringLiteral("STINGER MEDIA"), m_stingerBox);
+    stingLab->setObjectName(QStringLiteral("sec"));
+    stingLay->addWidget(stingLab);
+    m_stingerPath = new QLineEdit(m_stingerBox);
+    m_stingerPath->setPlaceholderText(QStringLiteral("Browse…"));
+    m_stingerPath->setReadOnly(true);
+    m_stingerPath->setToolTip(QStringLiteral("Video/image with alpha used as stinger overlay"));
+    auto* browse = new QPushButton(QStringLiteral("Browse"), m_stingerBox);
+    browse->setCursor(Qt::PointingHandCursor);
+    connect(browse, &QPushButton::clicked, this, [this] {
+        const QString path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Stinger media"), QString(),
+            QStringLiteral("Media (*.webm *.mov *.mp4 *.png *.gif);;All (*.*)"));
+        if (path.isEmpty())
+            return;
+        m_stingerPath->setText(path);
+        applyEffectToEngine();
+    });
+    auto* pathRow = new QHBoxLayout();
+    pathRow->addWidget(m_stingerPath, 1);
+    pathRow->addWidget(browse);
+    stingLay->addLayout(pathRow);
+    auto* potLab = new QLabel(QStringLiteral("POINT OF TAKE (%)"), m_stingerBox);
+    potLab->setObjectName(QStringLiteral("sec"));
+    stingLay->addWidget(potLab);
+    m_stingerPoint = new QSlider(Qt::Horizontal, m_stingerBox);
+    m_stingerPoint->setRange(0, 100);
+    m_stingerPoint->setValue(50);
+    m_stingerPoint->setToolTip(QStringLiteral("When Program swaps from A→B during the stinger"));
+    connect(m_stingerPoint, &QSlider::valueChanged, this, [this](int) { applyEffectToEngine(); });
+    stingLay->addWidget(m_stingerPoint);
+    m_stingerBox->setVisible(false);
+    col->addWidget(m_stingerBox);
+
     m_go = new QPushButton(QStringLiteral("▶  ○"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
     m_go->setMinimumHeight(34);
@@ -252,6 +294,7 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     });
     refreshScenePad();
     updateGoArmed();
+    syncSpeedFromProject();
     motion::installPressScale(m_go);
 }
 
@@ -273,6 +316,15 @@ void TransitionPanel::applyEffectToEngine()
     const int ms = m_speed ? m_speed->value() : m_engine->projectSnapshot().transitionMs;
     // Keep engine configured for Smooth takes; Cut is applied at go() time.
     m_engine->setTransition(fx->type, ms);
+    if (m_stingerBox)
+        m_stingerBox->setVisible(fx->type == TransitionType::Stinger);
+    const QString path = m_stingerPath ? m_stingerPath->text() : QString();
+    const int pot = m_stingerPoint ? m_stingerPoint->value() : 50;
+    m_engine->sceneGraph()->mutate([&](Project& p) {
+        if (!path.isEmpty())
+            p.extras.insert(QStringLiteral("stingerPath"), path);
+        p.extras.insert(QStringLiteral("stingerPoint"), pot);
+    });
 }
 
 void TransitionPanel::updateModeButton()
@@ -367,11 +419,22 @@ void TransitionPanel::showEffectMenu()
 void TransitionPanel::syncSpeedFromProject()
 {
     if (!m_speed || m_speed->isSliderDown()) return;
-    const int ms = m_engine->projectSnapshot().transitionMs;
+    const auto snap = m_engine->projectSnapshot();
+    const int ms = snap.transitionMs;
     QSignalBlocker b(m_speed);
     m_speed->setValue(ms);
     if (m_speedValue)
         m_speedValue->setText(QStringLiteral("%1 ms").arg(ms));
+    if (m_stingerPath) {
+        QSignalBlocker bp(m_stingerPath);
+        m_stingerPath->setText(snap.extras.value(QStringLiteral("stingerPath")).toString());
+    }
+    if (m_stingerPoint) {
+        QSignalBlocker bpp(m_stingerPoint);
+        m_stingerPoint->setValue(snap.extras.value(QStringLiteral("stingerPoint")).toInt(50));
+    }
+    if (m_stingerBox)
+        m_stingerBox->setVisible(findEffect(m_effect)->type == TransitionType::Stinger);
 }
 
 void TransitionPanel::refreshScenePad()

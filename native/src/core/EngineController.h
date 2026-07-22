@@ -144,6 +144,11 @@ private:
     std::unique_ptr<ReplayBuffer> m_replay;
     std::unique_ptr<VirtualCamera> m_vcam;
     class TransitionEngine* m_transition = nullptr;
+    std::unique_ptr<class MediaSource> m_stingerMedia;
+    QString m_stingerFromSceneId;
+    QString m_stingerToSceneId;
+    bool m_stingerSwapped = false;
+    void stopStingerMedia();
 
     QTimer m_telemetryTimer;
     QTimer m_autosaveTimer;

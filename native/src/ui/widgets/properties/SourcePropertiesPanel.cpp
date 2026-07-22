@@ -20,6 +20,9 @@
 #include <QFontComboBox>
 #include <QFrame>
 #include <QSignalBlocker>
+#include <QSet>
+#include <QJsonArray>
+#include <QAbstractItemView>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -841,6 +844,112 @@ private:
     QComboBox* m_device = nullptr;
 };
 
+class SceneAsSourcePanel : public SourcePropertiesPanel {
+public:
+    SceneAsSourcePanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_scene = new QComboBox(this);
+        m_scene->addItem(QStringLiteral("(Select scene)"), QString());
+        if (engine) {
+            const auto p = engine->projectSnapshot();
+            for (const auto& sc : p.scenes)
+                m_scene->addItem(sc.name, sc.id);
+        }
+        form->addRow(QStringLiteral("Scene"), m_scene);
+        auto* hint = new QLabel(
+            QStringLiteral("Embeds another scene as a layer. Self-embedding is blocked."), this);
+        hint->setWordWrap(true);
+        form->addRow(QString(), hint);
+        wireChanged(this, m_scene);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        const QString id = src.settings.value(QStringLiteral("sceneId")).toString();
+        const int idx = m_scene->findData(id);
+        m_scene->setCurrentIndex(idx >= 0 ? idx : 0);
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("sceneId"), m_scene->currentData().toString());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("sceneId"), QString());
+    }
+
+private:
+    QComboBox* m_scene = nullptr;
+};
+
+class GroupPanel : public SourcePropertiesPanel {
+public:
+    GroupPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* lay = new QVBoxLayout(this);
+        lay->addWidget(new QLabel(QStringLiteral("Group members (same scene)"), this));
+        m_list = new QListWidget(this);
+        m_list->setSelectionMode(QAbstractItemView::NoSelection);
+        lay->addWidget(m_list, 1);
+        auto* hint = new QLabel(
+            QStringLiteral("Check sources to nest under this group. Grouped items are skipped at the root pass."),
+            this);
+        hint->setWordWrap(true);
+        lay->addWidget(hint);
+        connect(m_list, &QListWidget::itemChanged, this, [this](QListWidgetItem*) { emit settingsEdited(); });
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_hostId = src.id;
+        m_list->clear();
+        if (!m_engine) return;
+        const auto p = m_engine->projectSnapshot();
+        const SceneItem* hostScene = nullptr;
+        for (const auto& sc : p.scenes) {
+            for (const auto& s : sc.sources) {
+                if (s.id == src.id) {
+                    hostScene = &sc;
+                    break;
+                }
+            }
+            if (hostScene) break;
+        }
+        QSet<QString> selected;
+        const auto arr = src.settings.value(QStringLiteral("childIds")).toArray();
+        for (const auto& v : arr)
+            selected.insert(v.toString());
+        if (!hostScene) return;
+        for (const auto& s : hostScene->sources) {
+            if (s.id == src.id) continue;
+            if (s.type == SourceType::Group) continue;
+            auto* item = new QListWidgetItem(s.name, m_list);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setData(Qt::UserRole, s.id);
+            item->setCheckState(selected.contains(s.id) ? Qt::Checked : Qt::Unchecked);
+        }
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        QJsonArray ids;
+        for (int i = 0; i < m_list->count(); ++i) {
+            auto* it = m_list->item(i);
+            if (it->checkState() == Qt::Checked)
+                ids.append(it->data(Qt::UserRole).toString());
+        }
+        s.insert(QStringLiteral("childIds"), ids);
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("childIds"), QJsonArray{});
+    }
+
+private:
+    QString m_hostId;
+    QListWidget* m_list = nullptr;
+};
+
 } // namespace
 
 SourcePropertiesPanel* createSourcePropertiesPanel(SourceType type, EngineController* engine, QWidget* parent)
@@ -871,6 +980,10 @@ SourcePropertiesPanel* createSourcePropertiesPanel(SourceType type, EngineContro
         return new AudioDevicePanel(engine, parent, AudioDeviceKind::Capture);
     case SourceType::AudioOutput:
         return new AudioDevicePanel(engine, parent, AudioDeviceKind::Loopback);
+    case SourceType::Scene:
+        return new SceneAsSourcePanel(engine, parent);
+    case SourceType::Group:
+        return new GroupPanel(engine, parent);
     case SourceType::Scoreboard:
         return new OverlayNotePanel(engine, parent,
                                     QStringLiteral("Live scores come from the Scoreboard dock. Use Push on the dock to sync."));

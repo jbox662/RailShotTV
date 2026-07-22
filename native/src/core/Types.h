@@ -33,6 +33,8 @@ enum class SourceType {
     Game,
     AudioInput,
     AudioOutput,
+    Scene,   // nested scene-as-source
+    Group,   // container for child sources
     Unknown
 };
 
@@ -43,6 +45,7 @@ enum class TransitionType {
     Merge,
     CubeZoom,
     FTB,
+    Stinger, // OBS-style media overlay take
     // Wirecast-style catalog (each has a dedicated compositor path)
     Plane3D,
     Bands,
@@ -67,6 +70,8 @@ enum class TransitionType {
 
 /// True for two-phase fade-through-color takes (black or white).
 bool transitionIsFtbStyle(TransitionType t);
+/// True for media overlay stinger takes.
+bool transitionIsStinger(TransitionType t);
 /// True for single-pass A/B blends that use the program hold buffer.
 bool transitionIsCrossfade(TransitionType t);
 /// Shader mode id consumed by the transition pixel shader (0 = unused / Cut).

@@ -1,6 +1,7 @@
 #include "core/EngineController.h"
 #include "capture/CaptureManager.h"
 #include "capture/OverlaySource.h"
+#include "capture/MediaSource.h"
 #include "compositor/D3D11Device.h"
 #include "compositor/D3D11Compositor.h"
 #include "compositor/TransitionEngine.h"
@@ -25,6 +26,37 @@
 #include <algorithm>
 
 namespace railshot {
+
+namespace {
+
+void appendUniqueScene(QVector<const SceneItem*>& scenes, const SceneItem* sc)
+{
+    if (!sc) return;
+    for (const auto* s : scenes) {
+        if (s == sc) return;
+    }
+    scenes.push_back(sc);
+}
+
+/// Pull in scenes referenced by Scene-as-source so nested capture stays warm.
+void collectNestedScenes(const Project& project, QVector<const SceneItem*>& scenes)
+{
+    for (int pass = 0; pass < 4; ++pass) {
+        const int n = scenes.size();
+        for (int i = 0; i < n; ++i) {
+            const SceneItem* sc = scenes[i];
+            if (!sc) continue;
+            for (const auto& src : sc->sources) {
+                if (src.type != SourceType::Scene || !src.visible) continue;
+                const QString nid = src.settings.value(QStringLiteral("sceneId")).toString();
+                if (nid.isEmpty() || nid == sc->id) continue;
+                appendUniqueScene(scenes, project.findScene(nid));
+            }
+        }
+    }
+}
+
+} // namespace
 
 EngineController::EngineController(QObject* parent)
     : QObject(parent)
@@ -153,7 +185,7 @@ bool EngineController::initialize(QString* error)
 
     auto* renderTimer = new QTimer(this);
     connect(renderTimer, &QTimer::timeout, this, [this] {
-        const auto project = m_sceneGraph->snapshot();
+        auto project = m_sceneGraph->snapshot();
         QVector<const SceneItem*> scenes;
         if (const auto* preview = project.findScene(project.previewSceneId))
             scenes.push_back(preview);
@@ -166,6 +198,7 @@ bool EngineController::initialize(QString* error)
             }
             if (!listed) scenes.push_back(program);
         }
+        collectNestedScenes(project, scenes);
         m_capture->syncWithScenes(scenes);
         m_capture->poll();
 
@@ -181,8 +214,31 @@ bool EngineController::initialize(QString* error)
         if (!previewScene)
             previewScene = project.findScene(project.editSceneId());
         if (previewScene)
-            m_compositor->compose(*previewScene, m_capture->frameBus(), false, 1.0f);
-        if (const auto* program = project.findScene(project.programSceneId)) {
+            m_compositor->compose(*previewScene, m_capture->frameBus(), false, 1.0f, 0.02f, 0.02f, 0.03f, &project);
+
+        const bool stinger = m_transition && m_transition->isActive() && transitionIsStinger(activeType);
+        if (stinger) {
+            const float pot = float(project.extras.value(QStringLiteral("stingerPoint")).toInt(50)) / 100.f;
+            if (!m_stingerSwapped && mix >= pot) {
+                m_sceneGraph->setProgramSceneId(m_stingerToSceneId);
+                m_stingerSwapped = true;
+                project = m_sceneGraph->snapshot();
+            }
+            const SceneItem* show = nullptr;
+            if (m_stingerSwapped)
+                show = project.findScene(project.programSceneId);
+            else
+                show = project.findScene(m_stingerFromSceneId);
+            if (!show)
+                show = project.findScene(project.programSceneId);
+            if (show)
+                m_compositor->compose(*show, m_capture->frameBus(), true, 1.0f, 0.02f, 0.02f, 0.03f, &project);
+            if (m_stingerMedia) {
+                VideoFrame vf;
+                if (m_stingerMedia->acquireLatest(vf) && vf.texture)
+                    m_compositor->drawFullscreenOverlay(vf.texture, 1.0f, true);
+            }
+        } else if (const auto* program = project.findScene(project.programSceneId)) {
             // Crossfade: compose new program at full, then blend hold on top
             const bool cross = m_transition && m_transition->isActive() && m_transition->isCrossfade()
                                && m_compositor->hasProgramHold();
@@ -195,7 +251,7 @@ bool EngineController::initialize(QString* error)
                 }
             }
             m_compositor->compose(*program, m_capture->frameBus(), true, cross ? 1.0f : mix,
-                                  clearR, clearG, clearB);
+                                  clearR, clearG, clearB, &project);
             if (cross)
                 m_compositor->blendProgramHold(mix, activeType);
         }
@@ -232,6 +288,7 @@ void EngineController::shutdown()
     if (!m_initialized) return;
     stopStreaming();
     stopRecording();
+    stopStingerMedia();
     if (m_iso) m_iso->stopAll();
     if (m_vcam) m_vcam->stop();
     if (m_chat) m_chat->disconnectPlatform(QStringLiteral("twitch"));
@@ -323,6 +380,17 @@ void EngineController::swapPreviewProgram()
     rebuildSourcesForActiveScenes();
 }
 
+void EngineController::stopStingerMedia()
+{
+    if (m_stingerMedia) {
+        m_stingerMedia->stop();
+        m_stingerMedia.reset();
+    }
+    m_stingerSwapped = false;
+    m_stingerFromSceneId.clear();
+    m_stingerToSceneId.clear();
+}
+
 void EngineController::go(TransitionType type)
 {
     auto p = m_sceneGraph->snapshot();
@@ -336,10 +404,43 @@ void EngineController::go(TransitionType type)
         m_sceneGraph->setTransition(effective, p.transitionMs);
         emit transitionStarted(effective);
         if (effective == TransitionType::Cut) {
+            stopStingerMedia();
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
             if (m_compositor) m_compositor->clearProgramHold();
             emit transitionFinished();
+        } else if (transitionIsStinger(effective)) {
+            stopStingerMedia();
+            m_stingerFromSceneId = p.programSceneId;
+            m_stingerToSceneId = p.previewSceneId;
+            m_stingerSwapped = false;
+            const QString path = p.extras.value(QStringLiteral("stingerPath")).toString();
+            if (path.isEmpty()) {
+                emit errorOccurred(QStringLiteral("Stinger: set a media file in the Take panel"));
+                // Fall back to cut
+                m_sceneGraph->setProgramSceneId(p.previewSceneId);
+                emit transitionFinished();
+                return;
+            }
+            if (m_d3d && m_d3d->device()) {
+                m_stingerMedia = std::make_unique<MediaSource>(
+                    QStringLiteral("stinger_take"), QStringLiteral("Stinger"), path, false, true);
+                QString err;
+                if (!m_stingerMedia->start(m_d3d->device(), &err)) {
+                    Logger::warn(QStringLiteral("Stinger open failed: %1").arg(err));
+                    m_stingerMedia.reset();
+                    m_sceneGraph->setProgramSceneId(p.previewSceneId);
+                    emit transitionFinished();
+                    return;
+                }
+            }
+            connect(m_transition, &TransitionEngine::finished, this, [this] {
+                stopStingerMedia();
+                if (m_compositor) m_compositor->clearProgramHold();
+                emit transitionFinished();
+            }, Qt::SingleShotConnection);
+            m_transition->start();
         } else if (m_transition->isCrossfade()) {
+            stopStingerMedia();
             // Snapshot current program, switch immediately, blend hold → new
             if (m_compositor) m_compositor->captureProgramHold();
             m_sceneGraph->setProgramSceneId(p.previewSceneId);
@@ -349,6 +450,7 @@ void EngineController::go(TransitionType type)
             }, Qt::SingleShotConnection);
             m_transition->start();
         } else {
+            stopStingerMedia();
             // FTB / Fade to White: fade out old, swap, fade in new
             const QString target = p.previewSceneId;
             connect(m_transition, &TransitionEngine::phaseChanged, this, [this, target](TransitionEngine::Phase phase) {
@@ -880,6 +982,7 @@ void EngineController::rebuildSourcesForActiveScenes()
         }
         if (!listed) scenes.push_back(active);
     }
+    collectNestedScenes(project, scenes);
     m_capture->syncWithScenes(scenes);
 }
 

@@ -102,6 +102,10 @@ std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& sou
         const QString ffopts = source.settings.value(QStringLiteral("ffmpegOptions")).toString();
         return std::make_unique<MediaSource>(source.id, source.name, path, loop, local, ffopts);
     }
+    case SourceType::Scene:
+    case SourceType::Group:
+        // Drawn by compositor nesting — keep a transparent placeholder in the bus.
+        return std::make_unique<ColorSource>(source.id, source.name, QColor(0, 0, 0, 0), 16, 16);
     case SourceType::Ndi: {
         const QString ndi = source.settings.value(QStringLiteral("ndiName")).toString(source.name);
         return std::make_unique<NdiSource>(source.id, source.name, ndi);
