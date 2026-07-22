@@ -1,5 +1,6 @@
 #include "compositor/D3D11Compositor.h"
 #include "compositor/D3D11Device.h"
+#include "compositor/LutCubeLoader.h"
 #include "compositor/Shaders.h"
 #include "core/Project.h"
 #include "core/Logger.h"
@@ -261,10 +262,20 @@ ID3D11ShaderResourceView* D3D11Compositor::ensureMaskSrv(const QString& path)
     if (it != m_maskCache.end() && it->srv)
         return it->srv;
 
-    QImage img(path);
-    if (img.isNull())
-        return nullptr;
-    img = img.convertToFormat(QImage::Format_ARGB32);
+    QImage img;
+    if (path.endsWith(QLatin1String(".cube"), Qt::CaseInsensitive)) {
+        QString err;
+        img = LutCubeLoader::loadAsObsPng(path, &err);
+        if (img.isNull()) {
+            Logger::warn(err.isEmpty() ? QStringLiteral("Failed to load .cube LUT: %1").arg(path) : err);
+            return nullptr;
+        }
+    } else {
+        img = QImage(path);
+        if (img.isNull())
+            return nullptr;
+        img = img.convertToFormat(QImage::Format_ARGB32);
+    }
     auto* dev = m_device->device();
 
     D3D11_TEXTURE2D_DESC desc{};

@@ -149,6 +149,8 @@ add_library(railshot_compositor STATIC
     src/compositor/D3D11Device.cpp
     src/compositor/D3D11Compositor.h
     src/compositor/D3D11Compositor.cpp
+    src/compositor/LutCubeLoader.h
+    src/compositor/LutCubeLoader.cpp
     src/compositor/PreviewSurface.h
     src/compositor/PreviewSurface.cpp
     src/compositor/TransitionEngine.h

@@ -309,13 +309,13 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         auto* form = new QFormLayout(m_lutPage);
         m_lutEnabled = new QCheckBox(QStringLiteral("Enabled"), m_lutPage);
         m_lutPath = new QLineEdit(m_lutPage);
-        m_lutPath->setPlaceholderText(QStringLiteral("512×512 PNG LUT (OBS 8×8 tiles)…"));
+        m_lutPath->setPlaceholderText(QStringLiteral("512×512 PNG or Adobe .cube…"));
         m_lutPath->setReadOnly(true);
         auto* browse = new QPushButton(QStringLiteral("Browse…"), m_lutPage);
         connect(browse, &QPushButton::clicked, this, [this] {
             const QString path = QFileDialog::getOpenFileName(
                 this, QStringLiteral("Apply LUT"), QString(),
-                QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All (*.*)"));
+                QStringLiteral("LUT (*.cube *.png *.jpg *.jpeg *.bmp *.webp);;All (*.*)"));
             if (path.isEmpty()) return;
             m_lutPath->setText(path);
             saveCurrent();
@@ -331,7 +331,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         form->addRow(m_lutEnabled);
         form->addRow(QStringLiteral("LUT Image"), pathRow);
         form->addRow(QStringLiteral("Amount"), m_lutAmount);
-        form->addRow(new QLabel(QStringLiteral("Use OBS-style 512×512 PNG (8×8 of 64×64)."), m_lutPage));
+        form->addRow(new QLabel(QStringLiteral("PNG 512×512 (8×8 tiles) or 3D .cube (baked)."), m_lutPage));
     }
     m_stack->addWidget(m_lutPage);
 

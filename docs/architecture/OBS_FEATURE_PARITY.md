@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 17 (Apply LUT PNG filter).
+Last updated: Wave 18 (Apply LUT .cube bake).
 
 ## Design rules
 
@@ -48,7 +48,7 @@ Last updated: Wave 17 (Apply LUT PNG filter).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask, Apply LUT, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor, 3-Band EQ, Limiter) |
@@ -76,3 +76,4 @@ Last updated: Wave 17 (Apply LUT PNG filter).
 - [x] Wave 15 — Undo/Redo (project snapshots, coalesced edits, Edit menu + hotkeys)
 - [x] Wave 16 — Image Mask (Mask Alpha: path, opacity, invert)
 - [x] Wave 17 — Apply LUT (OBS-style 512×512 PNG; path + amount; `.cube` deferred)
+- [x] Wave 18 — Apply LUT `.cube` (parse 3D Adobe cube → bake 512×512; 1D / Texture3D deferred)
