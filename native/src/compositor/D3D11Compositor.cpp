@@ -431,10 +431,17 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
             cb->colorMul[1] = contrast;
             cb->colorMul[2] = contrast;
         }
+        QColor mulC(src.settings.value(QStringLiteral("colorMultiply")).toString(QStringLiteral("#FFFFFF")));
+        if (!mulC.isValid()) mulC = QColor(255, 255, 255);
+        QColor addC(src.settings.value(QStringLiteral("colorAdd")).toString(QStringLiteral("#000000")));
+        if (!addC.isValid()) addC = QColor(0, 0, 0);
+        cb->colorMul[0] *= float(mulC.redF());
+        cb->colorMul[1] *= float(mulC.greenF());
+        cb->colorMul[2] *= float(mulC.blueF());
         cb->colorMul[3] = maskSrv ? float(maskMode) : 0.0f;
-        cb->colorAdd[0] = brightness + mid;
-        cb->colorAdd[1] = brightness + mid;
-        cb->colorAdd[2] = brightness + mid;
+        cb->colorAdd[0] = brightness + mid + float(addC.redF());
+        cb->colorAdd[1] = brightness + mid + float(addC.greenF());
+        cb->colorAdd[2] = brightness + mid + float(addC.blueF());
         const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
         cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
         cb->_padCrop[0] = (maskSrv && maskInvert) ? 1.0f : 0.0f;

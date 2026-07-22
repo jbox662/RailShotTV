@@ -86,6 +86,7 @@ QString transitionTypeToString(TransitionType t)
     case TransitionType::WindshieldWipe: return QStringLiteral("WindshieldWipe");
     case TransitionType::FlyOver: return QStringLiteral("FlyOver");
     case TransitionType::RgbChannels: return QStringLiteral("RgbChannels");
+    case TransitionType::Swipe: return QStringLiteral("Swipe");
     }
     return QStringLiteral("Cut");
 }
@@ -123,6 +124,7 @@ TransitionType transitionTypeFromString(const QString& s)
     if (s == QLatin1String("FlyOver") || s == QLatin1String("Fly Over")) return TransitionType::FlyOver;
     if (s == QLatin1String("RgbChannels") || s == QLatin1String("RGB Channels"))
         return TransitionType::RgbChannels;
+    if (s == QLatin1String("Swipe")) return TransitionType::Swipe;
     return TransitionType::Cut;
 }
 
@@ -168,6 +170,7 @@ int transitionShaderMode(TransitionType t)
     case TransitionType::WindshieldWipe: return 19;
     case TransitionType::FlyOver: return 20;
     case TransitionType::RgbChannels: return 21;
+    case TransitionType::Swipe: return 22;
     case TransitionType::FTB:
     case TransitionType::FadeToWhite: return 0;
     }

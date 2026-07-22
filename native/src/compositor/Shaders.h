@@ -375,7 +375,7 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         return lerp(n, o, w);
     }
 
-    // 18 Push — slide
+    // 18 Push — slide both
     if (m == 18) {
         float2 uOld = uv;
         float2 uNew = uv;
@@ -398,6 +398,19 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
             useNew = uv.y > 1.0 - p;
         }
         return useNew ? sampleSafe(texNew, uNew) : sampleSafe(texOld, uOld);
+    }
+
+    // 22 Swipe — OBS: slide old away, reveal stationary new
+    if (m == 22) {
+        float2 sv = float2(0, 0);
+        if (wipeDir < 0.5) sv = float2(p, 0);
+        else if (wipeDir < 1.5) sv = float2(-p, 0);
+        else if (wipeDir < 2.5) sv = float2(0, p);
+        else sv = float2(0, -p);
+        float2 suv = uv + sv;
+        if ((suv.x - saturate(suv.x) != 0.0) || (suv.y - saturate(suv.y) != 0.0))
+            return n;
+        return texOld.Sample(samp, suv);
     }
 
     // 19 Windshield wipe — angled pivoting blade

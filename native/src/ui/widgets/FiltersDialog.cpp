@@ -72,6 +72,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     int lumaMax = 100;
     int blur = 0;
     int bri = 0, con = 0, sat = 0, hue = 0, gamma = 0, colorOpacity = 100;
+    QString colorMultiply = QStringLiteral("#FFFFFF");
+    QString colorAddHex = QStringLiteral("#000000");
     int cropL = 0, cropR = 0, cropT = 0, cropB = 0;
     bool pad = false;
     int scrollX = 0, scrollY = 0;
@@ -121,6 +123,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             hue = o.value(QStringLiteral("hue")).toInt(0);
             gamma = o.value(QStringLiteral("gamma")).toInt(0);
             colorOpacity = o.value(QStringLiteral("opacity")).toInt(100);
+            colorMultiply = o.value(QStringLiteral("colorMultiply")).toString(QStringLiteral("#FFFFFF"));
+            colorAddHex = o.value(QStringLiteral("colorAdd")).toString(QStringLiteral("#000000"));
         } else if (type == QLatin1String("crop_pad")) {
             cropL = o.value(QStringLiteral("left")).toInt(0);
             cropR = o.value(QStringLiteral("right")).toInt(0);
@@ -155,6 +159,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("hue"), hue);
     settings.insert(QStringLiteral("gamma"), gamma);
     settings.insert(QStringLiteral("colorOpacity"), colorOpacity);
+    settings.insert(QStringLiteral("colorMultiply"), colorMultiply);
+    settings.insert(QStringLiteral("colorAdd"), colorAddHex);
     settings.insert(QStringLiteral("filterCropL"), cropL);
     settings.insert(QStringLiteral("filterCropR"), cropR);
     settings.insert(QStringLiteral("filterCropT"), cropT);
@@ -379,6 +385,8 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         m_colorOpacity = new QSlider(Qt::Horizontal, m_colorPage);
         m_colorOpacity->setRange(0, 100);
         m_colorOpacity->setValue(100);
+        m_colorMulBtn = new QPushButton(QStringLiteral("Pick…"), m_colorPage);
+        m_colorAddBtn = new QPushButton(QStringLiteral("Pick…"), m_colorPage);
         form->addRow(m_colorEnabled);
         form->addRow(QStringLiteral("Brightness"), m_brightness);
         form->addRow(QStringLiteral("Contrast"), m_contrast);
@@ -386,6 +394,8 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         form->addRow(QStringLiteral("Hue Shift"), m_hue);
         form->addRow(QStringLiteral("Gamma"), m_gamma);
         form->addRow(QStringLiteral("Opacity"), m_colorOpacity);
+        form->addRow(QStringLiteral("Color Multiply"), m_colorMulBtn);
+        form->addRow(QStringLiteral("Color Add"), m_colorAddBtn);
     }
     m_stack->addWidget(m_colorPage);
 
@@ -456,6 +466,14 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         m_pickingKeyFor = QStringLiteral("color_key");
         pickKeyColor();
     });
+    connect(m_colorMulBtn, &QPushButton::clicked, this, [this] {
+        m_pickingKeyFor = QStringLiteral("cc_mul");
+        pickKeyColor();
+    });
+    connect(m_colorAddBtn, &QPushButton::clicked, this, [this] {
+        m_pickingKeyFor = QStringLiteral("cc_add");
+        pickKeyColor();
+    });
 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
                          m_lutEnabled, m_blurEnabled, m_colorEnabled,
@@ -498,13 +516,26 @@ void FiltersDialog::pasteOnto(EngineController* engine, const QString& sourceId)
 
 void FiltersDialog::pickKeyColor()
 {
-    QColor cur = m_pickingKeyFor == QLatin1String("color_key") ? m_colorKeyCustomColor : m_chromaCustomColor;
-    const QColor c = QColorDialog::getColor(cur, this, QStringLiteral("Key Color"));
+    QColor cur = m_chromaCustomColor;
+    if (m_pickingKeyFor == QLatin1String("color_key"))
+        cur = m_colorKeyCustomColor;
+    else if (m_pickingKeyFor == QLatin1String("cc_mul"))
+        cur = m_colorMultiply;
+    else if (m_pickingKeyFor == QLatin1String("cc_add"))
+        cur = m_colorAdd;
+    const QString title = (m_pickingKeyFor == QLatin1String("cc_mul") || m_pickingKeyFor == QLatin1String("cc_add"))
+                              ? QStringLiteral("Color")
+                              : QStringLiteral("Key Color");
+    const QColor c = QColorDialog::getColor(cur, this, title);
     if (!c.isValid()) return;
     if (m_pickingKeyFor == QLatin1String("color_key")) {
         m_colorKeyCustomColor = c;
         if (m_colorKeyType)
             m_colorKeyType->setCurrentIndex(m_colorKeyType->findData(QStringLiteral("custom")));
+    } else if (m_pickingKeyFor == QLatin1String("cc_mul")) {
+        m_colorMultiply = c;
+    } else if (m_pickingKeyFor == QLatin1String("cc_add")) {
+        m_colorAdd = c;
     } else {
         m_chromaCustomColor = c;
         if (m_chromaType)
@@ -526,6 +557,8 @@ void FiltersDialog::updateKeyColorButton()
     };
     paint(m_chromaColorBtn, m_chromaCustomColor);
     paint(m_colorKeyColorBtn, m_colorKeyCustomColor);
+    paint(m_colorMulBtn, m_colorMultiply);
+    paint(m_colorAddBtn, m_colorAdd);
 }
 
 void FiltersDialog::reload()
@@ -664,6 +697,8 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("hue"), 0);
         f.insert(QStringLiteral("gamma"), 0);
         f.insert(QStringLiteral("opacity"), 100);
+        f.insert(QStringLiteral("colorMultiply"), QStringLiteral("#FFFFFF"));
+        f.insert(QStringLiteral("colorAdd"), QStringLiteral("#000000"));
     } else if (chosen == chroma) {
         f.insert(QStringLiteral("type"), QStringLiteral("chroma_key"));
         f.insert(QStringLiteral("similarity"), 40);
@@ -857,6 +892,11 @@ void FiltersDialog::onSelectionChanged()
         m_hue->setValue(f.value(QStringLiteral("hue")).toInt(0));
         m_gamma->setValue(f.value(QStringLiteral("gamma")).toInt(0));
         m_colorOpacity->setValue(f.value(QStringLiteral("opacity")).toInt(100));
+        m_colorMultiply = QColor(f.value(QStringLiteral("colorMultiply")).toString(QStringLiteral("#FFFFFF")));
+        if (!m_colorMultiply.isValid()) m_colorMultiply = QColor(255, 255, 255);
+        m_colorAdd = QColor(f.value(QStringLiteral("colorAdd")).toString(QStringLiteral("#000000")));
+        if (!m_colorAdd.isValid()) m_colorAdd = QColor(0, 0, 0);
+        updateKeyColorButton();
         m_stack->setCurrentWidget(m_colorPage);
     } else if (type == QLatin1String("crop_pad")) {
         m_cropEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
@@ -933,6 +973,8 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("hue"), m_hue->value());
                     o.insert(QStringLiteral("gamma"), m_gamma->value());
                     o.insert(QStringLiteral("opacity"), m_colorOpacity->value());
+                    o.insert(QStringLiteral("colorMultiply"), m_colorMultiply.name(QColor::HexRgb));
+                    o.insert(QStringLiteral("colorAdd"), m_colorAdd.name(QColor::HexRgb));
                 } else if (type == QLatin1String("crop_pad")) {
                     o.insert(QStringLiteral("enabled"), m_cropEnabled->isChecked());
                     o.insert(QStringLiteral("left"), m_cropL->value());

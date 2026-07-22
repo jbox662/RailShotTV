@@ -49,6 +49,7 @@ constexpr TransEffect kEffects[] = {
     {"Vacuum", TransitionType::Vacuum, -1},
     {"Wave Wipe", TransitionType::WaveWipe, -1},
     {"Push", TransitionType::Push, 0},
+    {"Swipe", TransitionType::Swipe, 0},
     {"Windshield Wipe", TransitionType::WindshieldWipe, -1},
     {"Fly Over", TransitionType::FlyOver, -1},
     {"RGB Channels", TransitionType::RgbChannels, -1},

@@ -95,6 +95,10 @@ private:
     QSlider* m_hue = nullptr;
     QSlider* m_gamma = nullptr;
     QSlider* m_colorOpacity = nullptr;
+    QPushButton* m_colorMulBtn = nullptr;
+    QPushButton* m_colorAddBtn = nullptr;
+    QColor m_colorMultiply{255, 255, 255};
+    QColor m_colorAdd{0, 0, 0};
     QCheckBox* m_cropEnabled = nullptr;
     QSlider* m_cropL = nullptr;
     QSlider* m_cropR = nullptr;
@@ -110,7 +114,7 @@ private:
     QPushButton* m_upBtn = nullptr;
     QPushButton* m_downBtn = nullptr;
     bool m_loading = false;
-    /// Which key color button is being edited: "chroma" or "color_key"
+    /// Which color button is being edited: "chroma", "color_key", "cc_mul", "cc_add"
     QString m_pickingKeyFor;
 
     static QJsonArray s_clipboard;

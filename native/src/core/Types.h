@@ -65,7 +65,8 @@ enum class TransitionType {
     Push,
     WindshieldWipe,
     FlyOver,
-    RgbChannels
+    RgbChannels,
+    Swipe
 };
 
 /// True for two-phase fade-through-color takes (black or white).
