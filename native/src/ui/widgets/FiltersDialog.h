@@ -78,6 +78,7 @@ private:
 
     QCheckBox* m_maskEnabled = nullptr;
     QLineEdit* m_maskPath = nullptr;
+    QComboBox* m_maskMode = nullptr;
     QSlider* m_maskOpacity = nullptr;
     QCheckBox* m_maskInvert = nullptr;
 

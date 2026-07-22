@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 18 (Apply LUT .cube bake).
+Last updated: Wave 19 (Mask Blend + Noise Suppress).
 
 ## Design rules
 
@@ -48,10 +48,10 @@ Last updated: Wave 18 (Apply LUT .cube bake).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor, 3-Band EQ, Limiter) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, 3-Band EQ, Limiter) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -77,3 +77,4 @@ Last updated: Wave 18 (Apply LUT .cube bake).
 - [x] Wave 16 — Image Mask (Mask Alpha: path, opacity, invert)
 - [x] Wave 17 — Apply LUT (OBS-style 512×512 PNG; path + amount; `.cube` deferred)
 - [x] Wave 18 — Apply LUT `.cube` (parse 3D Adobe cube → bake 512×512; 1D / Texture3D deferred)
+- [x] Wave 19 — Image Mask Blend modes + Adv Audio Noise Suppress (HPF + soft expand; RNNoise deferred)

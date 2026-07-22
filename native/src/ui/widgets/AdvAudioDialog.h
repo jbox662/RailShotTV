@@ -46,6 +46,9 @@ private:
         QCheckBox* mono = nullptr;
         QSlider* balance = nullptr;
         QSpinBox* sync = nullptr;
+        QCheckBox* nsOn = nullptr;
+        QDoubleSpinBox* nsStrength = nullptr;
+        QDoubleSpinBox* nsFloorDb = nullptr;
         QCheckBox* gateOn = nullptr;
         QDoubleSpinBox* gateOpenDb = nullptr;
         QCheckBox* compOn = nullptr;

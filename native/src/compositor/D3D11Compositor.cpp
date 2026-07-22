@@ -356,6 +356,7 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     const float maskOpacity = static_cast<float>(
         std::clamp(src.settings.value(QStringLiteral("maskOpacity")).toDouble(0.0), 0.0, 100.0) / 100.0);
     const bool maskInvert = src.settings.value(QStringLiteral("maskInvert")).toBool(false);
+    const int maskMode = std::clamp(src.settings.value(QStringLiteral("maskMode")).toInt(0), 0, 4);
     ID3D11ShaderResourceView* maskSrv = nullptr;
     if (maskOpacity > 0.001f && !maskPath.isEmpty())
         maskSrv = ensureMaskSrv(maskPath);
@@ -429,7 +430,7 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
             cb->colorMul[1] = contrast;
             cb->colorMul[2] = contrast;
         }
-        cb->colorMul[3] = 1.0f;
+        cb->colorMul[3] = maskSrv ? float(maskMode) : 0.0f;
         cb->colorAdd[0] = brightness + mid;
         cb->colorAdd[1] = brightness + mid;
         cb->colorAdd[2] = brightness + mid;

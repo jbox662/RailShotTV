@@ -141,12 +141,13 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(4, QStringLiteral("Mono"));
     mk(5, QStringLiteral("Balance"));
     mk(6, QStringLiteral("Sync Offset"));
-    mk(7, QStringLiteral("Gate"));
-    mk(8, QStringLiteral("Compressor"));
-    mk(9, QStringLiteral("EQ L/M/H"));
-    mk(10, QStringLiteral("Limiter"));
-    mk(11, QStringLiteral("Audio Monitoring"));
-    mk(12, QStringLiteral("Tracks"));
+    mk(7, QStringLiteral("Suppress"));
+    mk(8, QStringLiteral("Gate"));
+    mk(9, QStringLiteral("Compressor"));
+    mk(10, QStringLiteral("EQ L/M/H"));
+    mk(11, QStringLiteral("Limiter"));
+    mk(12, QStringLiteral("Audio Monitoring"));
+    mk(13, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
@@ -254,6 +255,32 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.sync->setValue(ch.syncOffsetMs);
     grid->addWidget(w.sync, row, 6);
 
+    auto* nsHost = new QWidget(m_rowsHost);
+    auto* nsLay = new QHBoxLayout(nsHost);
+    nsLay->setContentsMargins(0, 0, 0, 0);
+    nsLay->setSpacing(4);
+    w.nsOn = new QCheckBox(nsHost);
+    w.nsOn->setChecked(ch.nsEnabled);
+    w.nsOn->setToolTip(QStringLiteral("Noise suppress (HPF + soft expand)"));
+    w.nsStrength = new QDoubleSpinBox(nsHost);
+    w.nsStrength->setRange(0.0, 100.0);
+    w.nsStrength->setDecimals(0);
+    w.nsStrength->setSuffix(QStringLiteral(" %"));
+    w.nsStrength->setValue(ch.nsStrength);
+    w.nsStrength->setFixedWidth(64);
+    w.nsStrength->setToolTip(QStringLiteral("Suppress strength"));
+    w.nsFloorDb = new QDoubleSpinBox(nsHost);
+    w.nsFloorDb->setRange(-80.0, -20.0);
+    w.nsFloorDb->setDecimals(0);
+    w.nsFloorDb->setSuffix(QStringLiteral(" dB"));
+    w.nsFloorDb->setValue(ch.nsFloorDb);
+    w.nsFloorDb->setFixedWidth(72);
+    w.nsFloorDb->setToolTip(QStringLiteral("Expand below this floor"));
+    nsLay->addWidget(w.nsOn);
+    nsLay->addWidget(w.nsStrength);
+    nsLay->addWidget(w.nsFloorDb);
+    grid->addWidget(nsHost, row, 7);
+
     auto* gateHost = new QWidget(m_rowsHost);
     auto* gateLay = new QHBoxLayout(gateHost);
     gateLay->setContentsMargins(0, 0, 0, 0);
@@ -269,7 +296,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.gateOpenDb->setToolTip(QStringLiteral("Noise gate open threshold"));
     gateLay->addWidget(w.gateOn);
     gateLay->addWidget(w.gateOpenDb);
-    grid->addWidget(gateHost, row, 7);
+    grid->addWidget(gateHost, row, 8);
 
     auto* compHost = new QWidget(m_rowsHost);
     auto* compLay = new QHBoxLayout(compHost);
@@ -300,7 +327,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     compLay->addWidget(w.compThresh);
     compLay->addWidget(w.compRatio);
     compLay->addWidget(w.compMakeup);
-    grid->addWidget(compHost, row, 8);
+    grid->addWidget(compHost, row, 9);
 
     auto* eqHost = new QWidget(m_rowsHost);
     auto* eqLay = new QHBoxLayout(eqHost);
@@ -319,7 +346,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     mkEq(w.eqLow, ch.eqLowDb, QStringLiteral("Low band (< ~800 Hz)"));
     mkEq(w.eqMid, ch.eqMidDb, QStringLiteral("Mid band"));
     mkEq(w.eqHigh, ch.eqHighDb, QStringLiteral("High band (> ~5 kHz)"));
-    grid->addWidget(eqHost, row, 9);
+    grid->addWidget(eqHost, row, 10);
 
     auto* limHost = new QWidget(m_rowsHost);
     auto* limLay = new QHBoxLayout(limHost);
@@ -343,7 +370,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     limLay->addWidget(w.limOn);
     limLay->addWidget(w.limThresh);
     limLay->addWidget(w.limRelease);
-    grid->addWidget(limHost, row, 10);
+    grid->addWidget(limHost, row, 11);
 
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
@@ -351,7 +378,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 11);
+    grid->addWidget(w.monitoring, row, 12);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -362,7 +389,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 12);
+    grid->addWidget(trackHost, row, 13);
 
     m_rows.insert(channelId, w);
 
@@ -373,6 +400,9 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     connect(w.mono, &QCheckBox::toggled, this, wire);
     connect(w.balance, &QSlider::valueChanged, this, wire);
     connect(w.sync, qOverload<int>(&QSpinBox::valueChanged), this, wire);
+    connect(w.nsOn, &QCheckBox::toggled, this, wire);
+    connect(w.nsStrength, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.nsFloorDb, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.gateOn, &QCheckBox::toggled, this, wire);
     connect(w.gateOpenDb, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.compOn, &QCheckBox::toggled, this, wire);
@@ -421,6 +451,9 @@ void AdvAudioDialog::applyChannel(const QString& id)
     if (w.mono) state.forceMono = w.mono->isChecked();
     if (w.balance) state.pan = w.balance->value() / 100.f;
     if (w.sync) state.syncOffsetMs = w.sync->value();
+    if (w.nsOn) state.nsEnabled = w.nsOn->isChecked();
+    if (w.nsStrength) state.nsStrength = float(w.nsStrength->value());
+    if (w.nsFloorDb) state.nsFloorDb = float(w.nsFloorDb->value());
     if (w.gateOn) state.gateEnabled = w.gateOn->isChecked();
     if (w.gateOpenDb) state.gateOpenDb = float(w.gateOpenDb->value());
     if (w.compOn) state.compEnabled = w.compOn->isChecked();

@@ -155,6 +155,11 @@ struct AudioChannelState {
     quint8 trackMask = 0x01;  // bits 0..5 = tracks 1..6 (stream uses track 1)
 
     // OBS-style audio filters (processed in AudioGraph)
+    bool nsEnabled = false;       // Noise suppress (HPF + soft expander)
+    float nsStrength = 50.f;      // 0..100
+    float nsFloorDb = -40.f;      // expand below this
+    float nsHpHz = 80.f;          // 0 = HPF off
+
     bool gateEnabled = false;
     float gateOpenDb = -32.f;
     float gateAttackMs = 25.f;

@@ -72,7 +72,7 @@ private:
     void onCapture(const QString& channelId, const AudioBuffer& buffer);
     void mixAndEmit();
     AudioBuffer applySyncDelay(const QString& channelId, const AudioBuffer& in, int syncOffsetMs);
-    /// Gate → Comp → 3-band EQ → Limiter (OBS-style Adv Audio DSP chain).
+    /// Noise Suppress → Gate → Comp → 3-band EQ → Limiter (OBS-style Adv Audio DSP chain).
     void applyChannelDsp(const QString& channelId, const AudioChannelState& ch, AudioBuffer& buf);
 
     struct EqBandState {
@@ -93,6 +93,9 @@ private:
     QHash<QString, AudioBuffer> m_pending;
     QHash<QString, AudioMeter> m_meters;
     QHash<QString, std::deque<float>> m_delayLines; // interleaved stereo delay ring
+    QHash<QString, float> m_nsEnv;    // noise suppress envelope (linear)
+    QHash<QString, float> m_nsHpZL;   // HPF z^-1 left
+    QHash<QString, float> m_nsHpZR;   // HPF z^-1 right
     QHash<QString, float> m_gateEnv;  // 0..1 open amount
     QHash<QString, float> m_gateHold; // samples remaining
     QHash<QString, float> m_compEnv;  // envelope follower linear

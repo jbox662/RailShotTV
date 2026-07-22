@@ -47,7 +47,7 @@ cbuffer CB : register(b0) {
     float2 cropMin;
     float2 cropMax;
     float2 _padCrop; // .x = mask invert, .y = lut amount
-    float4 colorMul;
+    float4 colorMul; // rgb + .w mask mode (0 a, 1 color, 2 mul, 3 add, 4 sub)
     float4 colorAdd;
     float4 fxParams;
     float4 keyColor;
@@ -134,12 +134,21 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float maskAmt = fxParams.w;
     if (maskAmt > 0.001) {
         float4 m = maskTex.Sample(samp, suv);
-        float ma = m.a;
-        if (ma > 0.999)
-            ma = dot(m.rgb, float3(0.3333, 0.3333, 0.3334));
-        if (_padCrop.x > 0.5)
-            ma = 1.0 - ma;
-        c.a *= saturate(ma) * saturate(maskAmt);
+        float mm = colorMul.w; // 0 alpha, 1 color, 2 mul, 3 add, 4 sub
+        if (mm < 1.5) {
+            float ma = (mm < 0.5) ? m.a : dot(m.rgb, float3(0.3333, 0.3333, 0.3334));
+            if (mm < 0.5 && ma > 0.999)
+                ma = dot(m.rgb, float3(0.3333, 0.3333, 0.3334));
+            if (_padCrop.x > 0.5)
+                ma = 1.0 - ma;
+            c.a *= saturate(ma) * saturate(maskAmt);
+        } else if (mm < 2.5) {
+            c.rgb = lerp(c.rgb, c.rgb * m.rgb, saturate(maskAmt));
+        } else if (mm < 3.5) {
+            c.rgb = lerp(c.rgb, saturate(c.rgb + m.rgb), saturate(maskAmt));
+        } else {
+            c.rgb = lerp(c.rgb, saturate(c.rgb - m.rgb), saturate(maskAmt));
+        }
     }
     c.a *= opacity;
     return c;

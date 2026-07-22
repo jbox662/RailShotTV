@@ -32,7 +32,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("chroma_key")) return QStringLiteral("Chroma Key");
     if (type == QLatin1String("color_key")) return QStringLiteral("Color Key");
     if (type == QLatin1String("luma_key")) return QStringLiteral("Luma Key");
-    if (type == QLatin1String("mask_alpha")) return QStringLiteral("Image Mask");
+    if (type == QLatin1String("mask_alpha")) return QStringLiteral("Image Mask/Blend");
     if (type == QLatin1String("apply_lut")) return QStringLiteral("Apply LUT");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
@@ -79,6 +79,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
+    int maskMode = 0;
     QString lutPath;
     int lutAmount = 0;
 
@@ -107,6 +108,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             maskPath = o.value(QStringLiteral("path")).toString();
             maskOpacity = o.value(QStringLiteral("opacity")).toInt(100);
             maskInvert = o.value(QStringLiteral("invert")).toBool(false);
+            maskMode = o.value(QStringLiteral("mode")).toInt(0);
         } else if (type == QLatin1String("apply_lut")) {
             lutPath = o.value(QStringLiteral("path")).toString();
             lutAmount = o.value(QStringLiteral("amount")).toInt(100);
@@ -140,6 +142,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("maskPath"), maskPath);
     settings.insert(QStringLiteral("maskOpacity"), maskOpacity);
     settings.insert(QStringLiteral("maskInvert"), maskInvert);
+    settings.insert(QStringLiteral("maskMode"), maskMode);
     settings.insert(QStringLiteral("lutPath"), lutPath);
     settings.insert(QStringLiteral("lutAmount"), lutAmount);
     settings.insert(QStringLiteral("blur"), blur);
@@ -296,9 +299,16 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         m_maskOpacity = new QSlider(Qt::Horizontal, m_maskPage);
         m_maskOpacity->setRange(0, 100);
         m_maskOpacity->setValue(100);
+        m_maskMode = new QComboBox(m_maskPage);
+        m_maskMode->addItem(QStringLiteral("Alpha"), 0);
+        m_maskMode->addItem(QStringLiteral("Color"), 1);
+        m_maskMode->addItem(QStringLiteral("Multiply"), 2);
+        m_maskMode->addItem(QStringLiteral("Addition"), 3);
+        m_maskMode->addItem(QStringLiteral("Subtraction"), 4);
         m_maskInvert = new QCheckBox(QStringLiteral("Invert mask"), m_maskPage);
         form->addRow(m_maskEnabled);
         form->addRow(QStringLiteral("Image"), pathRow);
+        form->addRow(QStringLiteral("Type"), m_maskMode);
         form->addRow(QStringLiteral("Opacity"), m_maskOpacity);
         form->addRow(m_maskInvert);
     }
@@ -442,6 +452,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
+    connect(m_maskMode, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
 
     updateKeyColorButton();
     reload();
@@ -609,7 +620,7 @@ void FiltersDialog::onAddFilter()
     auto* chroma = menu.addAction(QStringLiteral("Chroma Key"));
     auto* colorKey = menu.addAction(QStringLiteral("Color Key"));
     auto* luma = menu.addAction(QStringLiteral("Luma Key"));
-    auto* mask = menu.addAction(QStringLiteral("Image Mask"));
+    auto* mask = menu.addAction(QStringLiteral("Image Mask/Blend"));
     auto* lut = menu.addAction(QStringLiteral("Apply LUT"));
     auto* blur = menu.addAction(QStringLiteral("Blur"));
     menu.addSeparator();
@@ -649,6 +660,7 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("path"), QString());
         f.insert(QStringLiteral("opacity"), 100);
         f.insert(QStringLiteral("invert"), false);
+        f.insert(QStringLiteral("mode"), 0);
     } else if (chosen == lut) {
         f.insert(QStringLiteral("type"), QStringLiteral("apply_lut"));
         f.insert(QStringLiteral("path"), QString());
@@ -798,6 +810,9 @@ void FiltersDialog::onSelectionChanged()
         m_maskPath->setText(f.value(QStringLiteral("path")).toString());
         m_maskOpacity->setValue(f.value(QStringLiteral("opacity")).toInt(100));
         m_maskInvert->setChecked(f.value(QStringLiteral("invert")).toBool(false));
+        const int mode = f.value(QStringLiteral("mode")).toInt(0);
+        const int idx = m_maskMode->findData(mode);
+        m_maskMode->setCurrentIndex(idx >= 0 ? idx : 0);
         m_stack->setCurrentWidget(m_maskPage);
     } else if (type == QLatin1String("apply_lut")) {
         m_lutEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
@@ -873,6 +888,7 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("path"), m_maskPath->text());
                     o.insert(QStringLiteral("opacity"), m_maskOpacity->value());
                     o.insert(QStringLiteral("invert"), m_maskInvert->isChecked());
+                    o.insert(QStringLiteral("mode"), m_maskMode->currentData().toInt());
                 } else if (type == QLatin1String("apply_lut")) {
                     o.insert(QStringLiteral("enabled"), m_lutEnabled->isChecked());
                     o.insert(QStringLiteral("path"), m_lutPath->text());

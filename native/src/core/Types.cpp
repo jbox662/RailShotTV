@@ -310,6 +310,10 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("syncOffsetMs"), syncOffsetMs},
         {QStringLiteral("monitoring"), int(monitoring)},
         {QStringLiteral("trackMask"), int(trackMask)},
+        {QStringLiteral("nsEnabled"), nsEnabled},
+        {QStringLiteral("nsStrength"), double(nsStrength)},
+        {QStringLiteral("nsFloorDb"), double(nsFloorDb)},
+        {QStringLiteral("nsHpHz"), double(nsHpHz)},
         {QStringLiteral("gateEnabled"), gateEnabled},
         {QStringLiteral("gateOpenDb"), double(gateOpenDb)},
         {QStringLiteral("gateAttackMs"), double(gateAttackMs)},
@@ -345,6 +349,10 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.syncOffsetMs = o.value(QStringLiteral("syncOffsetMs")).toInt(0);
     s.monitoring = AudioMonitoringType(o.value(QStringLiteral("monitoring")).toInt(int(AudioMonitoringType::MonitorAndOutput)));
     s.trackMask = quint8(o.value(QStringLiteral("trackMask")).toInt(0x01));
+    s.nsEnabled = o.value(QStringLiteral("nsEnabled")).toBool(false);
+    s.nsStrength = float(o.value(QStringLiteral("nsStrength")).toDouble(50.0));
+    s.nsFloorDb = float(o.value(QStringLiteral("nsFloorDb")).toDouble(-40.0));
+    s.nsHpHz = float(o.value(QStringLiteral("nsHpHz")).toDouble(80.0));
     s.gateEnabled = o.value(QStringLiteral("gateEnabled")).toBool(false);
     s.gateOpenDb = float(o.value(QStringLiteral("gateOpenDb")).toDouble(-32.0));
     s.gateAttackMs = float(o.value(QStringLiteral("gateAttackMs")).toDouble(25.0));

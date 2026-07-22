@@ -238,6 +238,9 @@ void AudioGraph::removeChannel(const QString& id)
         m_pending.remove(id);
         m_meters.remove(id);
         m_delayLines.remove(id);
+        m_nsEnv.remove(id);
+        m_nsHpZL.remove(id);
+        m_nsHpZR.remove(id);
         m_gateEnv.remove(id);
         m_gateHold.remove(id);
         m_compEnv.remove(id);
@@ -307,6 +310,10 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.syncOffsetMs = std::clamp(s.syncOffsetMs, -kMaxSyncMs, kMaxSyncMs);
                 cur.monitoring = s.monitoring;
                 cur.trackMask = s.trackMask;
+                cur.nsEnabled = s.nsEnabled;
+                cur.nsStrength = s.nsStrength;
+                cur.nsFloorDb = s.nsFloorDb;
+                cur.nsHpHz = s.nsHpHz;
                 cur.gateEnabled = s.gateEnabled;
                 cur.gateOpenDb = s.gateOpenDb;
                 cur.gateAttackMs = s.gateAttackMs;
@@ -396,6 +403,44 @@ void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelSta
     const int n = buf.frameCount();
     const int bch = std::max(1, buf.channels);
     const float sr = float(buf.sampleRate > 0 ? buf.sampleRate : kAudioSampleRate);
+
+    // Lightweight noise suppress: optional HPF + soft downward expander (no RNNoise).
+    if (ch.nsEnabled) {
+        float& env = m_nsEnv[channelId];
+        float& zL = m_nsHpZL[channelId];
+        float& zR = m_nsHpZR[channelId];
+        const float strength = std::clamp(ch.nsStrength, 0.f, 100.f) / 100.f;
+        const float floorLin = std::pow(10.f, ch.nsFloorDb / 20.f);
+        const float att = std::exp(-1.f / std::max(1.f, 0.005f * sr)); // ~5 ms
+        const float rel = std::exp(-1.f / std::max(1.f, 0.080f * sr)); // ~80 ms
+        const float hpHz = std::clamp(ch.nsHpHz, 0.f, 200.f);
+        const float hpRc = (hpHz > 0.5f) ? std::exp(-2.f * 3.14159265f * hpHz / sr) : 0.f;
+
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            if (hpRc > 0.f) {
+                const float nl = l - zL;
+                const float nr = r - zR;
+                zL = l + hpRc * (zL - l);
+                zR = r + hpRc * (zR - r);
+                l = nl;
+                r = nr;
+            }
+            const float level = std::max(std::abs(l), std::abs(r));
+            const float coef = (level > env) ? att : rel;
+            env = level + coef * (env - level);
+            float gain = 1.f;
+            if (env < floorLin && floorLin > 1e-8f) {
+                const float ratio = env / floorLin;
+                // Soft expand: pull quieter material down by strength
+                gain = std::pow(std::max(ratio, 1e-4f), strength * 2.5f);
+            }
+            buf.samples[size_t(i) * bch] = l * gain;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
 
     if (ch.gateEnabled) {
         float& env = m_gateEnv[channelId];
