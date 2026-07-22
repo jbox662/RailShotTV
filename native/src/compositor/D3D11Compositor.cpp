@@ -5,6 +5,7 @@
 #include "core/Logger.h"
 #include <QElapsedTimer>
 #include <QJsonArray>
+#include <QColor>
 #include <algorithm>
 #include <cmath>
 
@@ -31,10 +32,12 @@ struct alignas(16) CBData {
     float rotation;      // 20
     float cropMin[2];    // 24
     float cropMax[2];    // 32
-    float _padCrop[2];   // 40 — chroma flag + similarity
+    float _padCrop[2];   // 40 — unused (legacy)
     float colorMul[4];   // 48
     float colorAdd[4];   // 64 — rgb + blur in .a
     float fxParams[4];   // 80 — scrollU, scrollV, sharpen, unused
+    float keyColor[4];   // 96 — rgb + mode (0 off, 1 chroma, 2 color, 3 luma)
+    float keyParams[4];  // 112 — sim, smooth, lumaMin, lumaMax
 };
 
 struct alignas(16) TransCBData {
@@ -344,8 +347,28 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->colorAdd[2] = brightness + mid;
         const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
         cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
-        cb->_padCrop[0] = src.settings.value(QStringLiteral("chromaKey")).toBool(false) ? 1.0f : 0.0f;
-        cb->_padCrop[1] = static_cast<float>(src.settings.value(QStringLiteral("chromaSimilarity")).toDouble(40.0) / 100.0);
+        cb->_padCrop[0] = 0.0f;
+        cb->_padCrop[1] = 0.0f;
+
+        // Key filters: mode 0=off 1=chroma 2=color 3=luma
+        const int keyMode = src.settings.value(QStringLiteral("keyMode")).toInt(0);
+        QColor keyRgb(src.settings.value(QStringLiteral("keyColor")).toString(QStringLiteral("#00FF00")));
+        if (!keyRgb.isValid())
+            keyRgb = QColor(0, 255, 0);
+        cb->keyColor[0] = keyRgb.redF();
+        cb->keyColor[1] = keyRgb.greenF();
+        cb->keyColor[2] = keyRgb.blueF();
+        cb->keyColor[3] = float(keyMode);
+        // similarity UI 0..100 → 0..1 (OBS uses /1000 with ~400 default ≈ 0.4)
+        cb->keyParams[0] = static_cast<float>(
+            std::clamp(src.settings.value(QStringLiteral("chromaSimilarity")).toDouble(40.0), 0.0, 100.0) / 100.0);
+        // smoothness UI 1..100 → map as (v*10)/1000 = v/100 (OBS default 80 → store 8)
+        cb->keyParams[1] = static_cast<float>(
+            std::clamp(src.settings.value(QStringLiteral("keySmoothness")).toDouble(8.0), 0.1, 100.0) / 100.0);
+        cb->keyParams[2] = static_cast<float>(
+            std::clamp(src.settings.value(QStringLiteral("lumaMin")).toDouble(0.0), 0.0, 100.0) / 100.0);
+        cb->keyParams[3] = static_cast<float>(
+            std::clamp(src.settings.value(QStringLiteral("lumaMax")).toDouble(100.0), 0.0, 100.0) / 100.0);
 
         const double tSec = m_fxClock.isValid() ? m_fxClock.elapsed() / 1000.0 : 0.0;
         const double sx = src.settings.value(QStringLiteral("scrollSpeedX")).toDouble(0.0);
@@ -486,6 +509,9 @@ void D3D11Compositor::drawTexture(ID3D11Texture2D* tex, const Transform& xf, flo
         cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
         cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
         cb->fxParams[0] = cb->fxParams[1] = cb->fxParams[2] = cb->fxParams[3] = 0.0f;
+        cb->keyColor[0] = cb->keyColor[1] = cb->keyColor[2] = cb->keyColor[3] = 0.0f;
+        cb->keyParams[0] = cb->keyParams[1] = cb->keyParams[2] = 0.0f;
+        cb->keyParams[3] = 1.0f;
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
@@ -662,6 +688,9 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
         cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
         cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
         cb->fxParams[0] = cb->fxParams[1] = cb->fxParams[2] = cb->fxParams[3] = 0.0f;
+        cb->keyColor[0] = cb->keyColor[1] = cb->keyColor[2] = cb->keyColor[3] = 0.0f;
+        cb->keyParams[0] = cb->keyParams[1] = cb->keyParams[2] = 0.0f;
+        cb->keyParams[3] = 1.0f;
         ctx->Unmap(m_cb, 0);
     }
     if (SUCCEEDED(ctx->Map(m_transCb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {

@@ -13,6 +13,8 @@
 #include <QFormLayout>
 #include <QMenu>
 #include <QCursor>
+#include <QComboBox>
+#include <QColorDialog>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -22,9 +24,12 @@ QJsonArray FiltersDialog::s_clipboard{};
 bool FiltersDialog::s_hasClipboard = false;
 
 namespace {
+
 QString filterTypeLabel(const QString& type)
 {
     if (type == QLatin1String("chroma_key")) return QStringLiteral("Chroma Key");
+    if (type == QLatin1String("color_key")) return QStringLiteral("Color Key");
+    if (type == QLatin1String("luma_key")) return QStringLiteral("Luma Key");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
@@ -44,23 +49,51 @@ QJsonArray remappedFilters(const QJsonArray& in)
     return out;
 }
 
+QString keyTypeToColor(const QString& type, const QString& customHex)
+{
+    if (type == QLatin1String("blue"))
+        return QStringLiteral("#0000FF");
+    if (type == QLatin1String("custom") && !customHex.isEmpty())
+        return customHex;
+    return QStringLiteral("#00FF00");
+}
+
 void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
 {
-    bool chroma = false;
+    int keyMode = 0;
     int sim = 40;
+    int smooth = 8;
+    QString keyColor = QStringLiteral("#00FF00");
+    int lumaMin = 0;
+    int lumaMax = 100;
     int blur = 0;
     int bri = 0, con = 0, sat = 0;
     int cropL = 0, cropR = 0, cropT = 0, cropB = 0;
     bool pad = false;
     int scrollX = 0, scrollY = 0;
     int sharpen = 0;
+
     for (const auto& v : filters) {
         const auto o = v.toObject();
         if (!o.value(QStringLiteral("enabled")).toBool(true)) continue;
         const QString type = o.value(QStringLiteral("type")).toString();
         if (type == QLatin1String("chroma_key")) {
-            chroma = true;
+            keyMode = 1;
             sim = o.value(QStringLiteral("similarity")).toInt(40);
+            smooth = o.value(QStringLiteral("smoothness")).toInt(8);
+            keyColor = keyTypeToColor(o.value(QStringLiteral("keyType")).toString(QStringLiteral("green")),
+                                      o.value(QStringLiteral("keyColor")).toString());
+        } else if (type == QLatin1String("color_key")) {
+            keyMode = 2;
+            sim = o.value(QStringLiteral("similarity")).toInt(8);
+            smooth = o.value(QStringLiteral("smoothness")).toInt(5);
+            keyColor = keyTypeToColor(o.value(QStringLiteral("keyType")).toString(QStringLiteral("green")),
+                                      o.value(QStringLiteral("keyColor")).toString());
+        } else if (type == QLatin1String("luma_key")) {
+            keyMode = 3;
+            lumaMin = o.value(QStringLiteral("lumaMin")).toInt(0);
+            lumaMax = o.value(QStringLiteral("lumaMax")).toInt(100);
+            smooth = o.value(QStringLiteral("smoothness")).toInt(5);
         } else if (type == QLatin1String("blur")) {
             blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
         } else if (type == QLatin1String("color_correction")) {
@@ -80,8 +113,14 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             sharpen = qMax(sharpen, o.value(QStringLiteral("amount")).toInt(0));
         }
     }
-    settings.insert(QStringLiteral("chromaKey"), chroma);
+
+    settings.insert(QStringLiteral("keyMode"), keyMode);
+    settings.insert(QStringLiteral("chromaKey"), keyMode == 1);
     settings.insert(QStringLiteral("chromaSimilarity"), sim);
+    settings.insert(QStringLiteral("keySmoothness"), smooth);
+    settings.insert(QStringLiteral("keyColor"), keyColor);
+    settings.insert(QStringLiteral("lumaMin"), lumaMin);
+    settings.insert(QStringLiteral("lumaMax"), lumaMax);
     settings.insert(QStringLiteral("blur"), blur);
     settings.insert(QStringLiteral("brightness"), bri);
     settings.insert(QStringLiteral("contrast"), con);
@@ -95,13 +134,22 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("scrollSpeedY"), scrollY);
     settings.insert(QStringLiteral("sharpen"), sharpen);
 }
+
+void fillKeyTypeCombo(QComboBox* box)
+{
+    box->clear();
+    box->addItem(QStringLiteral("Green"), QStringLiteral("green"));
+    box->addItem(QStringLiteral("Blue"), QStringLiteral("blue"));
+    box->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
+}
+
 } // namespace
 
 FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, QWidget* parent)
     : QDialog(parent), m_engine(engine), m_sourceId(sourceId)
 {
     setWindowTitle(QStringLiteral("Filters"));
-    setMinimumSize(560, 420);
+    setMinimumSize(580, 440);
     setStyleSheet(QStringLiteral(
         "QDialog{background:#0F1114;}"
         "QLabel{color:#C8CCD4; font-family:'DM Sans';}"
@@ -111,6 +159,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         "  color:#E0E2E8; font-weight:700; padding:4px 10px;}"
         "QPushButton:hover{border-color:#4F9EFF;}"
         "QPushButton:disabled{color:#505860; border-color:#2A2D35;}"
+        "QComboBox{background:#12151A; border:1px solid #3A3D45; color:#E0E2E8; padding:2px 6px;}"
         "QCheckBox{color:#E0E2E8;}"));
 
     auto* root = new QHBoxLayout(this);
@@ -151,12 +200,56 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     {
         auto* form = new QFormLayout(m_chromaPage);
         m_chromaEnabled = new QCheckBox(QStringLiteral("Enabled"), m_chromaPage);
+        m_chromaType = new QComboBox(m_chromaPage);
+        fillKeyTypeCombo(m_chromaType);
+        m_chromaColorBtn = new QPushButton(QStringLiteral("Pick color…"), m_chromaPage);
         m_chromaSim = new QSlider(Qt::Horizontal, m_chromaPage);
         m_chromaSim->setRange(5, 95);
+        m_chromaSmooth = new QSlider(Qt::Horizontal, m_chromaPage);
+        m_chromaSmooth->setRange(1, 40);
         form->addRow(m_chromaEnabled);
+        form->addRow(QStringLiteral("Key Color Type"), m_chromaType);
+        form->addRow(QStringLiteral("Custom Color"), m_chromaColorBtn);
         form->addRow(QStringLiteral("Similarity"), m_chromaSim);
+        form->addRow(QStringLiteral("Smoothness"), m_chromaSmooth);
     }
     m_stack->addWidget(m_chromaPage);
+
+    m_colorKeyPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_colorKeyPage);
+        m_colorKeyEnabled = new QCheckBox(QStringLiteral("Enabled"), m_colorKeyPage);
+        m_colorKeyType = new QComboBox(m_colorKeyPage);
+        fillKeyTypeCombo(m_colorKeyType);
+        m_colorKeyColorBtn = new QPushButton(QStringLiteral("Pick color…"), m_colorKeyPage);
+        m_colorKeySim = new QSlider(Qt::Horizontal, m_colorKeyPage);
+        m_colorKeySim->setRange(1, 40);
+        m_colorKeySmooth = new QSlider(Qt::Horizontal, m_colorKeyPage);
+        m_colorKeySmooth->setRange(1, 40);
+        form->addRow(m_colorKeyEnabled);
+        form->addRow(QStringLiteral("Key Color Type"), m_colorKeyType);
+        form->addRow(QStringLiteral("Custom Color"), m_colorKeyColorBtn);
+        form->addRow(QStringLiteral("Similarity"), m_colorKeySim);
+        form->addRow(QStringLiteral("Smoothness"), m_colorKeySmooth);
+    }
+    m_stack->addWidget(m_colorKeyPage);
+
+    m_lumaPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_lumaPage);
+        m_lumaEnabled = new QCheckBox(QStringLiteral("Enabled"), m_lumaPage);
+        m_lumaMin = new QSlider(Qt::Horizontal, m_lumaPage);
+        m_lumaMax = new QSlider(Qt::Horizontal, m_lumaPage);
+        m_lumaSmooth = new QSlider(Qt::Horizontal, m_lumaPage);
+        m_lumaMin->setRange(0, 100);
+        m_lumaMax->setRange(0, 100);
+        m_lumaSmooth->setRange(0, 40);
+        form->addRow(m_lumaEnabled);
+        form->addRow(QStringLiteral("Luma Min"), m_lumaMin);
+        form->addRow(QStringLiteral("Luma Max"), m_lumaMax);
+        form->addRow(QStringLiteral("Smoothness"), m_lumaSmooth);
+    }
+    m_stack->addWidget(m_lumaPage);
 
     m_blurPage = new QWidget(m_stack);
     {
@@ -245,14 +338,27 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     connect(m_upBtn, &QPushButton::clicked, this, &FiltersDialog::onMoveUp);
     connect(m_downBtn, &QPushButton::clicked, this, &FiltersDialog::onMoveDown);
     connect(m_list, &QListWidget::currentRowChanged, this, &FiltersDialog::onSelectionChanged);
+    connect(m_chromaColorBtn, &QPushButton::clicked, this, [this] {
+        m_pickingKeyFor = QStringLiteral("chroma");
+        pickKeyColor();
+    });
+    connect(m_colorKeyColorBtn, &QPushButton::clicked, this, [this] {
+        m_pickingKeyFor = QStringLiteral("color_key");
+        pickKeyColor();
+    });
 
-    for (QCheckBox* c : {m_chromaEnabled, m_blurEnabled, m_colorEnabled, m_cropEnabled, m_cropPad,
-                         m_scrollEnabled, m_sharpenEnabled})
+    for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_blurEnabled, m_colorEnabled,
+                         m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
-    for (QSlider* s : {m_chromaSim, m_blurAmount, m_brightness, m_contrast, m_saturation,
-                       m_cropL, m_cropR, m_cropT, m_cropB, m_scrollX, m_scrollY, m_sharpenAmount})
+    for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
+                       m_lumaMin, m_lumaMax, m_lumaSmooth, m_blurAmount, m_brightness, m_contrast,
+                       m_saturation, m_cropL, m_cropR, m_cropT, m_cropB, m_scrollX, m_scrollY,
+                       m_sharpenAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
+    connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
+    connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
 
+    updateKeyColorButton();
     reload();
 }
 
@@ -277,6 +383,38 @@ void FiltersDialog::pasteOnto(EngineController* engine, const QString& sourceId)
     });
 }
 
+void FiltersDialog::pickKeyColor()
+{
+    QColor cur = m_pickingKeyFor == QLatin1String("color_key") ? m_colorKeyCustomColor : m_chromaCustomColor;
+    const QColor c = QColorDialog::getColor(cur, this, QStringLiteral("Key Color"));
+    if (!c.isValid()) return;
+    if (m_pickingKeyFor == QLatin1String("color_key")) {
+        m_colorKeyCustomColor = c;
+        if (m_colorKeyType)
+            m_colorKeyType->setCurrentIndex(m_colorKeyType->findData(QStringLiteral("custom")));
+    } else {
+        m_chromaCustomColor = c;
+        if (m_chromaType)
+            m_chromaType->setCurrentIndex(m_chromaType->findData(QStringLiteral("custom")));
+    }
+    updateKeyColorButton();
+    saveCurrent();
+}
+
+void FiltersDialog::updateKeyColorButton()
+{
+    auto paint = [](QPushButton* btn, const QColor& c) {
+        if (!btn) return;
+        btn->setStyleSheet(QStringLiteral(
+            "QPushButton{background:%1; border:1px solid #5A5E68; border-radius:3px;"
+            " color:%2; font-weight:700; padding:4px 10px;}")
+                               .arg(c.name(), c.lightness() > 140 ? QStringLiteral("#111") : QStringLiteral("#EEE")));
+        btn->setText(c.name().toUpper());
+    };
+    paint(m_chromaColorBtn, m_chromaCustomColor);
+    paint(m_colorKeyColorBtn, m_colorKeyCustomColor);
+}
+
 void FiltersDialog::reload()
 {
     m_loading = true;
@@ -290,13 +428,19 @@ void FiltersDialog::reload()
 
     QJsonArray filters = src->settings.value(QStringLiteral("filters")).toArray();
     if (filters.isEmpty()) {
-        if (src->settings.value(QStringLiteral("chromaKey")).toBool()) {
+        if (src->settings.value(QStringLiteral("chromaKey")).toBool()
+            || src->settings.value(QStringLiteral("keyMode")).toInt(0) == 1) {
             QJsonObject f;
             f.insert(QStringLiteral("id"), newId(QStringLiteral("flt")));
             f.insert(QStringLiteral("type"), QStringLiteral("chroma_key"));
             f.insert(QStringLiteral("enabled"), true);
             f.insert(QStringLiteral("similarity"),
                      src->settings.value(QStringLiteral("chromaSimilarity")).toInt(40));
+            f.insert(QStringLiteral("smoothness"),
+                     src->settings.value(QStringLiteral("keySmoothness")).toInt(8));
+            f.insert(QStringLiteral("keyType"), QStringLiteral("green"));
+            f.insert(QStringLiteral("keyColor"),
+                     src->settings.value(QStringLiteral("keyColor")).toString(QStringLiteral("#00FF00")));
             filters.append(f);
         }
         if (src->settings.value(QStringLiteral("blur")).toInt(0) > 0) {
@@ -378,6 +522,8 @@ void FiltersDialog::onAddFilter()
     QMenu menu(this);
     auto* color = menu.addAction(QStringLiteral("Color Correction"));
     auto* chroma = menu.addAction(QStringLiteral("Chroma Key"));
+    auto* colorKey = menu.addAction(QStringLiteral("Color Key"));
+    auto* luma = menu.addAction(QStringLiteral("Luma Key"));
     auto* blur = menu.addAction(QStringLiteral("Blur"));
     menu.addSeparator();
     auto* crop = menu.addAction(QStringLiteral("Crop/Pad"));
@@ -397,6 +543,20 @@ void FiltersDialog::onAddFilter()
     } else if (chosen == chroma) {
         f.insert(QStringLiteral("type"), QStringLiteral("chroma_key"));
         f.insert(QStringLiteral("similarity"), 40);
+        f.insert(QStringLiteral("smoothness"), 8);
+        f.insert(QStringLiteral("keyType"), QStringLiteral("green"));
+        f.insert(QStringLiteral("keyColor"), QStringLiteral("#00FF00"));
+    } else if (chosen == colorKey) {
+        f.insert(QStringLiteral("type"), QStringLiteral("color_key"));
+        f.insert(QStringLiteral("similarity"), 8);
+        f.insert(QStringLiteral("smoothness"), 5);
+        f.insert(QStringLiteral("keyType"), QStringLiteral("green"));
+        f.insert(QStringLiteral("keyColor"), QStringLiteral("#00FF00"));
+    } else if (chosen == luma) {
+        f.insert(QStringLiteral("type"), QStringLiteral("luma_key"));
+        f.insert(QStringLiteral("lumaMin"), 0);
+        f.insert(QStringLiteral("lumaMax"), 100);
+        f.insert(QStringLiteral("smoothness"), 5);
     } else if (chosen == blur) {
         f.insert(QStringLiteral("type"), QStringLiteral("blur"));
         f.insert(QStringLiteral("amount"), 25);
@@ -509,8 +669,34 @@ void FiltersDialog::onSelectionChanged()
     m_hint->setText(filterTypeLabel(type));
     if (type == QLatin1String("chroma_key")) {
         m_chromaEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        const QString kt = f.value(QStringLiteral("keyType")).toString(QStringLiteral("green"));
+        const int idx = m_chromaType->findData(kt);
+        m_chromaType->setCurrentIndex(idx >= 0 ? idx : 0);
+        m_chromaCustomColor = QColor(f.value(QStringLiteral("keyColor")).toString(QStringLiteral("#00FF00")));
+        if (!m_chromaCustomColor.isValid())
+            m_chromaCustomColor = QColor(0, 255, 0);
         m_chromaSim->setValue(f.value(QStringLiteral("similarity")).toInt(40));
+        m_chromaSmooth->setValue(f.value(QStringLiteral("smoothness")).toInt(8));
+        updateKeyColorButton();
         m_stack->setCurrentWidget(m_chromaPage);
+    } else if (type == QLatin1String("color_key")) {
+        m_colorKeyEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        const QString kt = f.value(QStringLiteral("keyType")).toString(QStringLiteral("green"));
+        const int idx = m_colorKeyType->findData(kt);
+        m_colorKeyType->setCurrentIndex(idx >= 0 ? idx : 0);
+        m_colorKeyCustomColor = QColor(f.value(QStringLiteral("keyColor")).toString(QStringLiteral("#00FF00")));
+        if (!m_colorKeyCustomColor.isValid())
+            m_colorKeyCustomColor = QColor(0, 255, 0);
+        m_colorKeySim->setValue(f.value(QStringLiteral("similarity")).toInt(8));
+        m_colorKeySmooth->setValue(f.value(QStringLiteral("smoothness")).toInt(5));
+        updateKeyColorButton();
+        m_stack->setCurrentWidget(m_colorKeyPage);
+    } else if (type == QLatin1String("luma_key")) {
+        m_lumaEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_lumaMin->setValue(f.value(QStringLiteral("lumaMin")).toInt(0));
+        m_lumaMax->setValue(f.value(QStringLiteral("lumaMax")).toInt(100));
+        m_lumaSmooth->setValue(f.value(QStringLiteral("smoothness")).toInt(5));
+        m_stack->setCurrentWidget(m_lumaPage);
     } else if (type == QLatin1String("blur")) {
         m_blurEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_blurAmount->setValue(f.value(QStringLiteral("amount")).toInt(0));
@@ -561,6 +747,20 @@ void FiltersDialog::saveCurrent()
                 if (type == QLatin1String("chroma_key")) {
                     o.insert(QStringLiteral("enabled"), m_chromaEnabled->isChecked());
                     o.insert(QStringLiteral("similarity"), m_chromaSim->value());
+                    o.insert(QStringLiteral("smoothness"), m_chromaSmooth->value());
+                    o.insert(QStringLiteral("keyType"), m_chromaType->currentData().toString());
+                    o.insert(QStringLiteral("keyColor"), m_chromaCustomColor.name(QColor::HexRgb));
+                } else if (type == QLatin1String("color_key")) {
+                    o.insert(QStringLiteral("enabled"), m_colorKeyEnabled->isChecked());
+                    o.insert(QStringLiteral("similarity"), m_colorKeySim->value());
+                    o.insert(QStringLiteral("smoothness"), m_colorKeySmooth->value());
+                    o.insert(QStringLiteral("keyType"), m_colorKeyType->currentData().toString());
+                    o.insert(QStringLiteral("keyColor"), m_colorKeyCustomColor.name(QColor::HexRgb));
+                } else if (type == QLatin1String("luma_key")) {
+                    o.insert(QStringLiteral("enabled"), m_lumaEnabled->isChecked());
+                    o.insert(QStringLiteral("lumaMin"), m_lumaMin->value());
+                    o.insert(QStringLiteral("lumaMax"), m_lumaMax->value());
+                    o.insert(QStringLiteral("smoothness"), m_lumaSmooth->value());
                 } else if (type == QLatin1String("blur")) {
                     o.insert(QStringLiteral("enabled"), m_blurEnabled->isChecked());
                     o.insert(QStringLiteral("amount"), m_blurAmount->value());

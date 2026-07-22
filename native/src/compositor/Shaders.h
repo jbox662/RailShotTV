@@ -18,6 +18,8 @@ cbuffer CB : register(b0) {
     float4 colorMul;  // rgb mul + pad
     float4 colorAdd;  // brightness bias in rgb + blur in a
     float4 fxParams;  // scrollU, scrollV, sharpen, unused
+    float4 keyColor;  // rgb key + mode (0 off, 1 chroma, 2 color, 3 luma)
+    float4 keyParams; // similarity, smoothness, lumaMin, lumaMax
 };
 VSOut main(VSIn i) {
     VSOut o;
@@ -46,7 +48,14 @@ cbuffer CB : register(b0) {
     float4 colorMul;
     float4 colorAdd;
     float4 fxParams;
+    float4 keyColor;
+    float4 keyParams;
 };
+float2 rgbToCbCr(float3 rgb) {
+    float cb = dot(rgb, float3(-0.100644, -0.338572, 0.439216)) + 0.501961;
+    float cr = dot(rgb, float3( 0.439216, -0.398942,-0.040274)) + 0.501961;
+    return float2(cb, cr);
+}
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float2 suv = frac(uv + fxParams.xy);
     float blur = colorAdd.a;
@@ -75,12 +84,31 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         c = lerp(c, sharpBase + (sharpBase - neigh) * (sharpen * 2.5), saturate(sharpen * 2.0));
     }
     c.rgb = c.rgb * colorMul.rgb + colorAdd.rgb;
-    // chroma key when _padCrop.x > 0.5 (green screen default)
-    if (_padCrop.x > 0.5) {
-        float g = c.g;
-        float rb = (c.r + c.b) * 0.5;
-        float key = saturate((g - rb - (1.0 - _padCrop.y) * 0.35) / max(0.05, _padCrop.y));
-        c.a *= (1.0 - key);
+    float mode = keyColor.w;
+    if (mode > 0.5) {
+        float sim = keyParams.x;
+        float sm = max(0.001, keyParams.y);
+        if (mode < 1.5) {
+            // Chroma key (Cb/Cr distance + spill suppress)
+            float dist = distance(rgbToCbCr(c.rgb), rgbToCbCr(keyColor.rgb));
+            float mask = pow(saturate((dist - sim) / sm), 1.5);
+            float spill = pow(saturate((dist - sim) / max(sm, 0.05)), 1.5);
+            float desat = dot(c.rgb, float3(0.2126, 0.7152, 0.0722));
+            c.rgb = lerp(float3(desat, desat, desat), c.rgb, spill);
+            c.a *= mask;
+        } else if (mode < 2.5) {
+            // Color key (RGB distance)
+            float dist = distance(c.rgb, keyColor.rgb);
+            c.a *= saturate(max(dist - sim, 0.0) / sm);
+        } else {
+            // Luma key — keep mid luminance band
+            float luma = dot(c.rgb, float3(0.2126, 0.7152, 0.0722));
+            float lo = keyParams.z;
+            float hi = keyParams.w;
+            float clo = smoothstep(lo, lo + sm, luma);
+            float chi = 1.0 - smoothstep(hi - sm, hi, luma);
+            c.a *= clo * chi;
+        }
     }
     c.a *= opacity;
     return c;
