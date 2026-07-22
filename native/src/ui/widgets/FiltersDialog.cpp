@@ -15,6 +15,8 @@
 #include <QCursor>
 #include <QComboBox>
 #include <QColorDialog>
+#include <QFileDialog>
+#include <QLineEdit>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -30,6 +32,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("chroma_key")) return QStringLiteral("Chroma Key");
     if (type == QLatin1String("color_key")) return QStringLiteral("Color Key");
     if (type == QLatin1String("luma_key")) return QStringLiteral("Luma Key");
+    if (type == QLatin1String("mask_alpha")) return QStringLiteral("Image Mask");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
@@ -72,6 +75,9 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     bool pad = false;
     int scrollX = 0, scrollY = 0;
     int sharpen = 0;
+    QString maskPath;
+    int maskOpacity = 0;
+    bool maskInvert = false;
 
     for (const auto& v : filters) {
         const auto o = v.toObject();
@@ -94,6 +100,10 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             lumaMin = o.value(QStringLiteral("lumaMin")).toInt(0);
             lumaMax = o.value(QStringLiteral("lumaMax")).toInt(100);
             smooth = o.value(QStringLiteral("smoothness")).toInt(5);
+        } else if (type == QLatin1String("mask_alpha")) {
+            maskPath = o.value(QStringLiteral("path")).toString();
+            maskOpacity = o.value(QStringLiteral("opacity")).toInt(100);
+            maskInvert = o.value(QStringLiteral("invert")).toBool(false);
         } else if (type == QLatin1String("blur")) {
             blur = qMax(blur, o.value(QStringLiteral("amount")).toInt(0));
         } else if (type == QLatin1String("color_correction")) {
@@ -121,6 +131,9 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("keyColor"), keyColor);
     settings.insert(QStringLiteral("lumaMin"), lumaMin);
     settings.insert(QStringLiteral("lumaMax"), lumaMax);
+    settings.insert(QStringLiteral("maskPath"), maskPath);
+    settings.insert(QStringLiteral("maskOpacity"), maskOpacity);
+    settings.insert(QStringLiteral("maskInvert"), maskInvert);
     settings.insert(QStringLiteral("blur"), blur);
     settings.insert(QStringLiteral("brightness"), bri);
     settings.insert(QStringLiteral("contrast"), con);
@@ -251,6 +264,38 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_lumaPage);
 
+    m_maskPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_maskPage);
+        m_maskEnabled = new QCheckBox(QStringLiteral("Enabled"), m_maskPage);
+        m_maskPath = new QLineEdit(m_maskPage);
+        m_maskPath->setPlaceholderText(QStringLiteral("PNG / JPG with alpha…"));
+        m_maskPath->setReadOnly(true);
+        auto* browse = new QPushButton(QStringLiteral("Browse…"), m_maskPage);
+        connect(browse, &QPushButton::clicked, this, [this] {
+            const QString path = QFileDialog::getOpenFileName(
+                this, QStringLiteral("Mask Image"), QString(),
+                QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All (*.*)"));
+            if (path.isEmpty()) return;
+            m_maskPath->setText(path);
+            saveCurrent();
+        });
+        auto* pathRow = new QWidget(m_maskPage);
+        auto* pathLay = new QHBoxLayout(pathRow);
+        pathLay->setContentsMargins(0, 0, 0, 0);
+        pathLay->addWidget(m_maskPath, 1);
+        pathLay->addWidget(browse);
+        m_maskOpacity = new QSlider(Qt::Horizontal, m_maskPage);
+        m_maskOpacity->setRange(0, 100);
+        m_maskOpacity->setValue(100);
+        m_maskInvert = new QCheckBox(QStringLiteral("Invert mask"), m_maskPage);
+        form->addRow(m_maskEnabled);
+        form->addRow(QStringLiteral("Image"), pathRow);
+        form->addRow(QStringLiteral("Opacity"), m_maskOpacity);
+        form->addRow(m_maskInvert);
+    }
+    m_stack->addWidget(m_maskPage);
+
     m_blurPage = new QWidget(m_stack);
     {
         auto* form = new QFormLayout(m_blurPage);
@@ -347,11 +392,12 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
         pickKeyColor();
     });
 
-    for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_blurEnabled, m_colorEnabled,
+    for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
+                         m_blurEnabled, m_colorEnabled,
                          m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
-                       m_lumaMin, m_lumaMax, m_lumaSmooth, m_blurAmount, m_brightness, m_contrast,
+                       m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_blurAmount, m_brightness, m_contrast,
                        m_saturation, m_cropL, m_cropR, m_cropT, m_cropB, m_scrollX, m_scrollY,
                        m_sharpenAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
@@ -524,6 +570,7 @@ void FiltersDialog::onAddFilter()
     auto* chroma = menu.addAction(QStringLiteral("Chroma Key"));
     auto* colorKey = menu.addAction(QStringLiteral("Color Key"));
     auto* luma = menu.addAction(QStringLiteral("Luma Key"));
+    auto* mask = menu.addAction(QStringLiteral("Image Mask"));
     auto* blur = menu.addAction(QStringLiteral("Blur"));
     menu.addSeparator();
     auto* crop = menu.addAction(QStringLiteral("Crop/Pad"));
@@ -557,6 +604,11 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("lumaMin"), 0);
         f.insert(QStringLiteral("lumaMax"), 100);
         f.insert(QStringLiteral("smoothness"), 5);
+    } else if (chosen == mask) {
+        f.insert(QStringLiteral("type"), QStringLiteral("mask_alpha"));
+        f.insert(QStringLiteral("path"), QString());
+        f.insert(QStringLiteral("opacity"), 100);
+        f.insert(QStringLiteral("invert"), false);
     } else if (chosen == blur) {
         f.insert(QStringLiteral("type"), QStringLiteral("blur"));
         f.insert(QStringLiteral("amount"), 25);
@@ -697,6 +749,12 @@ void FiltersDialog::onSelectionChanged()
         m_lumaMax->setValue(f.value(QStringLiteral("lumaMax")).toInt(100));
         m_lumaSmooth->setValue(f.value(QStringLiteral("smoothness")).toInt(5));
         m_stack->setCurrentWidget(m_lumaPage);
+    } else if (type == QLatin1String("mask_alpha")) {
+        m_maskEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_maskPath->setText(f.value(QStringLiteral("path")).toString());
+        m_maskOpacity->setValue(f.value(QStringLiteral("opacity")).toInt(100));
+        m_maskInvert->setChecked(f.value(QStringLiteral("invert")).toBool(false));
+        m_stack->setCurrentWidget(m_maskPage);
     } else if (type == QLatin1String("blur")) {
         m_blurEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_blurAmount->setValue(f.value(QStringLiteral("amount")).toInt(0));
@@ -761,6 +819,11 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("lumaMin"), m_lumaMin->value());
                     o.insert(QStringLiteral("lumaMax"), m_lumaMax->value());
                     o.insert(QStringLiteral("smoothness"), m_lumaSmooth->value());
+                } else if (type == QLatin1String("mask_alpha")) {
+                    o.insert(QStringLiteral("enabled"), m_maskEnabled->isChecked());
+                    o.insert(QStringLiteral("path"), m_maskPath->text());
+                    o.insert(QStringLiteral("opacity"), m_maskOpacity->value());
+                    o.insert(QStringLiteral("invert"), m_maskInvert->isChecked());
                 } else if (type == QLatin1String("blur")) {
                     o.insert(QStringLiteral("enabled"), m_blurEnabled->isChecked());
                     o.insert(QStringLiteral("amount"), m_blurAmount->value());

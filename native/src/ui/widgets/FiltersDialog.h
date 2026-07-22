@@ -12,6 +12,7 @@ class QLabel;
 class QStackedWidget;
 class QPushButton;
 class QComboBox;
+class QLineEdit;
 
 namespace railshot {
 class EngineController;
@@ -47,6 +48,7 @@ private:
     QWidget* m_chromaPage = nullptr;
     QWidget* m_colorKeyPage = nullptr;
     QWidget* m_lumaPage = nullptr;
+    QWidget* m_maskPage = nullptr;
     QWidget* m_blurPage = nullptr;
     QWidget* m_colorPage = nullptr;
     QWidget* m_cropPage = nullptr;
@@ -72,6 +74,11 @@ private:
     QSlider* m_lumaMin = nullptr;
     QSlider* m_lumaMax = nullptr;
     QSlider* m_lumaSmooth = nullptr;
+
+    QCheckBox* m_maskEnabled = nullptr;
+    QLineEdit* m_maskPath = nullptr;
+    QSlider* m_maskOpacity = nullptr;
+    QCheckBox* m_maskInvert = nullptr;
 
     QCheckBox* m_blurEnabled = nullptr;
     QSlider* m_blurAmount = nullptr;

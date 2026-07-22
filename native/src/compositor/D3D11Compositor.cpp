@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QColor>
+#include <QImage>
 #include <algorithm>
 #include <cmath>
 
@@ -35,7 +36,7 @@ struct alignas(16) CBData {
     float _padCrop[2];   // 40 — unused (legacy)
     float colorMul[4];   // 48
     float colorAdd[4];   // 64 — rgb + blur in .a
-    float fxParams[4];   // 80 — scrollU, scrollV, sharpen, unused
+    float fxParams[4];   // 80 — scrollU, scrollV, sharpen, maskOpacity
     float keyColor[4];   // 96 — rgb + mode (0 off, 1 chroma, 2 color, 3 luma)
     float keyParams[4];  // 112 — sim, smooth, lumaMin, lumaMax
 };
@@ -231,11 +232,70 @@ void D3D11Compositor::resize(int width, int height)
 void D3D11Compositor::shutdown()
 {
 #ifdef _WIN32
+    clearMaskCache();
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
     rel(m_blendOpaque); rel(m_blend); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
     rel(m_layout); rel(m_transPs); rel(m_ps); rel(m_vs);
     rel(m_previewRtv); rel(m_programRtv); rel(m_nestRtv);
     rel(m_previewTex); rel(m_programTex); rel(m_holdTex); rel(m_transScratch); rel(m_nestTex);
+#endif
+}
+
+void D3D11Compositor::clearMaskCache()
+{
+#ifdef _WIN32
+    for (auto it = m_maskCache.begin(); it != m_maskCache.end(); ++it) {
+        if (it->srv) { it->srv->Release(); it->srv = nullptr; }
+        if (it->tex) { it->tex->Release(); it->tex = nullptr; }
+    }
+    m_maskCache.clear();
+#endif
+}
+
+ID3D11ShaderResourceView* D3D11Compositor::ensureMaskSrv(const QString& path)
+{
+#ifdef _WIN32
+    if (path.isEmpty() || !m_device || !m_device->device())
+        return nullptr;
+    auto it = m_maskCache.find(path);
+    if (it != m_maskCache.end() && it->srv)
+        return it->srv;
+
+    QImage img(path);
+    if (img.isNull())
+        return nullptr;
+    img = img.convertToFormat(QImage::Format_ARGB32);
+    auto* dev = m_device->device();
+
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(img.width());
+    desc.Height = static_cast<UINT>(img.height());
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA init{};
+    init.pSysMem = img.bits();
+    init.SysMemPitch = static_cast<UINT>(img.bytesPerLine());
+
+    ComPtr<ID3D11Texture2D> tex;
+    if (FAILED(dev->CreateTexture2D(&desc, &init, &tex)))
+        return nullptr;
+    ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(dev->CreateShaderResourceView(tex.Get(), nullptr, &srv)))
+        return nullptr;
+
+    MaskEntry entry;
+    entry.tex = tex.Detach();
+    entry.srv = srv.Detach();
+    m_maskCache.insert(path, entry);
+    return entry.srv;
+#else
+    Q_UNUSED(path);
+    return nullptr;
 #endif
 }
 
@@ -279,8 +339,17 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
     ctx->VSSetShader(m_vs, nullptr, 0);
     ctx->PSSetShader(m_ps, nullptr, 0);
-    ctx->PSSetShaderResources(0, 1, srv.GetAddressOf());
     ctx->PSSetSamplers(0, 1, &m_sampler);
+
+    const QString maskPath = src.settings.value(QStringLiteral("maskPath")).toString();
+    const float maskOpacity = static_cast<float>(
+        std::clamp(src.settings.value(QStringLiteral("maskOpacity")).toDouble(0.0), 0.0, 100.0) / 100.0);
+    const bool maskInvert = src.settings.value(QStringLiteral("maskInvert")).toBool(false);
+    ID3D11ShaderResourceView* maskSrv = nullptr;
+    if (maskOpacity > 0.001f && !maskPath.isEmpty())
+        maskSrv = ensureMaskSrv(maskPath);
+    ID3D11ShaderResourceView* srvs[2] = { srv.Get(), maskSrv };
+    ctx->PSSetShaderResources(0, 2, srvs);
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -347,7 +416,7 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->colorAdd[2] = brightness + mid;
         const double blurUi = src.settings.value(QStringLiteral("blur")).toDouble(0.0);
         cb->colorAdd[3] = static_cast<float>(std::clamp(blurUi, 0.0, 100.0) / 100.0 * 0.02);
-        cb->_padCrop[0] = 0.0f;
+        cb->_padCrop[0] = (maskSrv && maskInvert) ? 1.0f : 0.0f;
         cb->_padCrop[1] = 0.0f;
 
         // Key filters: mode 0=off 1=chroma 2=color 3=luma
@@ -377,15 +446,15 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->fxParams[0] = static_cast<float>(sx / 100.0 * tSec);
         cb->fxParams[1] = static_cast<float>(sy / 100.0 * tSec);
         cb->fxParams[2] = static_cast<float>(std::clamp(src.settings.value(QStringLiteral("sharpen")).toDouble(0.0), 0.0, 100.0) / 100.0);
-        cb->fxParams[3] = 0.0f;
+        cb->fxParams[3] = maskSrv ? maskOpacity : 0.0f;
         ctx->Unmap(m_cb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
     ctx->PSSetConstantBuffers(0, 1, &m_cb);
     ctx->Draw(4, 0);
 
-    ID3D11ShaderResourceView* nullSrv = nullptr;
-    ctx->PSSetShaderResources(0, 1, &nullSrv);
+    ID3D11ShaderResourceView* nullSrvs[2] = { nullptr, nullptr };
+    ctx->PSSetShaderResources(0, 2, nullSrvs);
 #else
     Q_UNUSED(src); Q_UNUSED(bus); Q_UNUSED(rtv);
 #endif

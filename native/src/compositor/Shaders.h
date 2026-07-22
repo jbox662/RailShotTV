@@ -17,7 +17,7 @@ cbuffer CB : register(b0) {
     float2 _padCrop;
     float4 colorMul;  // rgb mul + pad
     float4 colorAdd;  // brightness bias in rgb + blur in a
-    float4 fxParams;  // scrollU, scrollV, sharpen, unused
+    float4 fxParams;  // scrollU, scrollV, sharpen, maskOpacity (0=off)
     float4 keyColor;  // rgb key + mode (0 off, 1 chroma, 2 color, 3 luma)
     float4 keyParams; // similarity, smoothness, lumaMin, lumaMax
 };
@@ -37,6 +37,7 @@ VSOut main(VSIn i) {
 
 inline constexpr char kPsMain[] = R"(
 Texture2D tex : register(t0);
+Texture2D maskTex : register(t1);
 SamplerState samp : register(s0);
 cbuffer CB : register(b0) {
     float4 rect;
@@ -44,7 +45,7 @@ cbuffer CB : register(b0) {
     float rotation;
     float2 cropMin;
     float2 cropMax;
-    float2 _padCrop;
+    float2 _padCrop; // .x = mask invert
     float4 colorMul;
     float4 colorAdd;
     float4 fxParams;
@@ -109,6 +110,17 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
             float chi = 1.0 - smoothstep(hi - sm, hi, luma);
             c.a *= clo * chi;
         }
+    }
+    // Image Mask (alpha) — OBS mask_alpha style
+    float maskAmt = fxParams.w;
+    if (maskAmt > 0.001) {
+        float4 m = maskTex.Sample(samp, suv);
+        float ma = m.a;
+        if (ma > 0.999)
+            ma = dot(m.rgb, float3(0.3333, 0.3333, 0.3334));
+        if (_padCrop.x > 0.5)
+            ma = 1.0 - ma;
+        c.a *= saturate(ma) * saturate(maskAmt);
     }
     c.a *= opacity;
     return c;

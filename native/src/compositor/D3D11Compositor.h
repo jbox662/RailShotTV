@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QSet>
 #include <QString>
+#include <QHash>
 #include <memory>
 
 struct ID3D11Texture2D;
@@ -63,6 +64,11 @@ signals:
     void frameComposed(bool program);
 
 private:
+    struct MaskEntry {
+        ID3D11Texture2D* tex = nullptr;
+        ID3D11ShaderResourceView* srv = nullptr;
+    };
+
     bool createTargets(QString* error);
     bool createPipeline(QString* error);
     bool ensureNestTargets();
@@ -72,6 +78,8 @@ private:
     void drawSceneOrGroup(const SourceItem& src, FrameBus& bus, ID3D11RenderTargetView* rtv);
     Transform combineTransform(const Transform& parent, const Transform& child) const;
     QSet<QString> groupedChildIds(const SceneItem& scene) const;
+    ID3D11ShaderResourceView* ensureMaskSrv(const QString& path);
+    void clearMaskCache();
 
     D3D11Device* m_device = nullptr;
     int m_width = 1920;
@@ -100,6 +108,7 @@ private:
     ID3D11BlendState* m_blendOpaque = nullptr;
     int m_wipeDirection = 0;
     QElapsedTimer m_fxClock;
+    QHash<QString, MaskEntry> m_maskCache;
 };
 
 } // namespace railshot

@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 15 (Undo/Redo project history).
+Last updated: Wave 16 (Image Mask / Mask Alpha filter).
 
 ## Design rules
 
@@ -48,7 +48,7 @@ Last updated: Wave 15 (Undo/Redo project history).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction, Chroma/Color/Luma Key, Image Mask, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Gate, Compressor, 3-Band EQ, Limiter) |
@@ -74,3 +74,4 @@ Last updated: Wave 15 (Undo/Redo project history).
 - [x] Wave 13 — Adv Audio 3-Band EQ + Limiter
 - [x] Wave 14 — Color Key + Luma Key; Chroma Key color type / smoothness
 - [x] Wave 15 — Undo/Redo (project snapshots, coalesced edits, Edit menu + hotkeys)
+- [x] Wave 16 — Image Mask (Mask Alpha: path, opacity, invert)
