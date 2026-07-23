@@ -19,6 +19,7 @@ QString sourceTypeToString(SourceType t)
     case SourceType::Browser: return QStringLiteral("browser");
     case SourceType::Text: return QStringLiteral("text");
     case SourceType::Image: return QStringLiteral("image");
+    case SourceType::Slideshow: return QStringLiteral("slideshow");
     case SourceType::Alert: return QStringLiteral("alert");
     case SourceType::Scoreboard: return QStringLiteral("scoreboard");
     case SourceType::LowerThird: return QStringLiteral("lowerthird");
@@ -42,6 +43,7 @@ SourceType sourceTypeFromString(const QString& s)
     if (s == QLatin1String("browser")) return SourceType::Browser;
     if (s == QLatin1String("text")) return SourceType::Text;
     if (s == QLatin1String("image")) return SourceType::Image;
+    if (s == QLatin1String("slideshow")) return SourceType::Slideshow;
     if (s == QLatin1String("alert")) return SourceType::Alert;
     if (s == QLatin1String("scoreboard")) return SourceType::Scoreboard;
     if (s == QLatin1String("lowerthird") || s == QLatin1String("lower-third")) return SourceType::LowerThird;
@@ -346,6 +348,7 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("echoDelayMs"), double(echoDelayMs)},
         {QStringLiteral("echoDecay"), double(echoDecay)},
         {QStringLiteral("echoWet"), double(echoWet)},
+        {QStringLiteral("invertPolarity"), invertPolarity},
         {QStringLiteral("eqLowDb"), double(eqLowDb)},
         {QStringLiteral("eqMidDb"), double(eqMidDb)},
         {QStringLiteral("eqHighDb"), double(eqHighDb)},
@@ -394,6 +397,7 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.echoDelayMs = float(o.value(QStringLiteral("echoDelayMs")).toDouble(250.0));
     s.echoDecay = float(o.value(QStringLiteral("echoDecay")).toDouble(0.45));
     s.echoWet = float(o.value(QStringLiteral("echoWet")).toDouble(0.35));
+    s.invertPolarity = o.value(QStringLiteral("invertPolarity")).toBool(false);
     s.eqLowDb = float(o.value(QStringLiteral("eqLowDb")).toDouble(0.0));
     s.eqMidDb = float(o.value(QStringLiteral("eqMidDb")).toDouble(0.0));
     s.eqHighDb = float(o.value(QStringLiteral("eqHighDb")).toDouble(0.0));

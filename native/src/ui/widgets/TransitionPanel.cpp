@@ -19,6 +19,9 @@
 #include <QFontMetrics>
 #include <QFileDialog>
 #include <QLineEdit>
+#include <QCheckBox>
+#include <algorithm>
+#include <cmath>
 
 namespace railshot {
 
@@ -213,6 +216,54 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     m_stingerBox->setVisible(false);
     col->addWidget(m_stingerBox);
 
+    m_lumaWipeBox = new QWidget(this);
+    auto* lumaLay = new QVBoxLayout(m_lumaWipeBox);
+    lumaLay->setContentsMargins(0, 0, 0, 0);
+    lumaLay->setSpacing(4);
+    auto* lumaLab = new QLabel(QStringLiteral("LUMA WIPE IMAGE"), m_lumaWipeBox);
+    lumaLab->setObjectName(QStringLiteral("sec"));
+    lumaLay->addWidget(lumaLab);
+    m_lumaWipePath = new QLineEdit(m_lumaWipeBox);
+    m_lumaWipePath->setPlaceholderText(QStringLiteral("Optional — empty = procedural"));
+    m_lumaWipePath->setReadOnly(true);
+    m_lumaWipePath->setToolTip(QStringLiteral("Grayscale wipe pattern (PNG/JPG). Empty uses procedural luma."));
+    auto* lumaBrowse = new QPushButton(QStringLiteral("Browse"), m_lumaWipeBox);
+    lumaBrowse->setCursor(Qt::PointingHandCursor);
+    connect(lumaBrowse, &QPushButton::clicked, this, [this] {
+        const QString path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Luma wipe image"), QString(),
+            QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All (*.*)"));
+        if (path.isEmpty())
+            return;
+        m_lumaWipePath->setText(path);
+        applyEffectToEngine();
+    });
+    auto* lumaClear = new QPushButton(QStringLiteral("Clear"), m_lumaWipeBox);
+    lumaClear->setCursor(Qt::PointingHandCursor);
+    connect(lumaClear, &QPushButton::clicked, this, [this] {
+        m_lumaWipePath->clear();
+        applyEffectToEngine();
+    });
+    auto* lumaPathRow = new QHBoxLayout();
+    lumaPathRow->addWidget(m_lumaWipePath, 1);
+    lumaPathRow->addWidget(lumaBrowse);
+    lumaPathRow->addWidget(lumaClear);
+    lumaLay->addLayout(lumaPathRow);
+    m_lumaWipeInvert = new QCheckBox(QStringLiteral("Invert luma"), m_lumaWipeBox);
+    connect(m_lumaWipeInvert, &QCheckBox::toggled, this, [this](bool) { applyEffectToEngine(); });
+    lumaLay->addWidget(m_lumaWipeInvert);
+    auto* softLab = new QLabel(QStringLiteral("SOFTNESS"), m_lumaWipeBox);
+    softLab->setObjectName(QStringLiteral("sec"));
+    lumaLay->addWidget(softLab);
+    m_lumaWipeSoft = new QSlider(Qt::Horizontal, m_lumaWipeBox);
+    m_lumaWipeSoft->setRange(1, 50);
+    m_lumaWipeSoft->setValue(7);
+    m_lumaWipeSoft->setToolTip(QStringLiteral("Edge softness (1–50 → 0.01–0.50)"));
+    connect(m_lumaWipeSoft, &QSlider::valueChanged, this, [this](int) { applyEffectToEngine(); });
+    lumaLay->addWidget(m_lumaWipeSoft);
+    m_lumaWipeBox->setVisible(false);
+    col->addWidget(m_lumaWipeBox);
+
     m_go = new QPushButton(QStringLiteral("▶  ○"), this);
     m_go->setObjectName(QStringLiteral("goButton"));
     m_go->setMinimumHeight(34);
@@ -346,12 +397,20 @@ void TransitionPanel::applyEffectToEngine()
     m_engine->setTransition(fx->type, ms);
     if (m_stingerBox)
         m_stingerBox->setVisible(fx->type == TransitionType::Stinger);
+    if (m_lumaWipeBox)
+        m_lumaWipeBox->setVisible(fx->type == TransitionType::LumaWipe);
     const QString path = m_stingerPath ? m_stingerPath->text() : QString();
     const int pot = m_stingerPoint ? m_stingerPoint->value() : 50;
+    const QString lumaPath = m_lumaWipePath ? m_lumaWipePath->text() : QString();
+    const bool lumaInvert = m_lumaWipeInvert && m_lumaWipeInvert->isChecked();
+    const float lumaSoft = m_lumaWipeSoft ? float(m_lumaWipeSoft->value()) * 0.01f : 0.07f;
     m_engine->sceneGraph()->mutate([&](Project& p) {
         if (!path.isEmpty())
             p.extras.insert(QStringLiteral("stingerPath"), path);
         p.extras.insert(QStringLiteral("stingerPoint"), pot);
+        p.extras.insert(QStringLiteral("lumaWipePath"), lumaPath);
+        p.extras.insert(QStringLiteral("lumaWipeInvert"), lumaInvert);
+        p.extras.insert(QStringLiteral("lumaWipeSoftness"), double(lumaSoft));
     });
 }
 
@@ -470,6 +529,21 @@ void TransitionPanel::syncSpeedFromProject()
     }
     if (m_stingerBox)
         m_stingerBox->setVisible(findEffect(m_effect)->type == TransitionType::Stinger);
+    if (m_lumaWipeBox)
+        m_lumaWipeBox->setVisible(findEffect(m_effect)->type == TransitionType::LumaWipe);
+    if (m_lumaWipePath) {
+        QSignalBlocker bp(m_lumaWipePath);
+        m_lumaWipePath->setText(snap.extras.value(QStringLiteral("lumaWipePath")).toString());
+    }
+    if (m_lumaWipeInvert) {
+        QSignalBlocker bi(m_lumaWipeInvert);
+        m_lumaWipeInvert->setChecked(snap.extras.value(QStringLiteral("lumaWipeInvert")).toBool(false));
+    }
+    if (m_lumaWipeSoft) {
+        QSignalBlocker bs(m_lumaWipeSoft);
+        const int soft = int(std::lround(snap.extras.value(QStringLiteral("lumaWipeSoftness")).toDouble(0.07) * 100.0));
+        m_lumaWipeSoft->setValue(std::clamp(soft, 1, 50));
+    }
 }
 
 void TransitionPanel::refreshScenePad()

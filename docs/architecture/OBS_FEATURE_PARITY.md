@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys).
+Last updated: Wave 26 (Color Invert filter + Image Slide Show source).
 
 ## Design rules
 
@@ -24,7 +24,7 @@ Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys)
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
 | OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color); Show/Hide opacity fade |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe/Luma Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override; Show/Hide fade duration |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe/Luma Wipe image+procedural L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override; Show/Hide fade duration |
 | Groups / Scene | Scene-as-source + Groups | partial | `SourceType::Scene` / `Group`; nested compose + `childIds` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
@@ -39,6 +39,7 @@ Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys)
 | Undo / Redo | Edit history | partial | `UndoStack` + Edit menu + Ctrl+Z/Y (project snapshots) |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
 | Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options; Restart on activate + End Action |
+| Image Slide Show | Slideshow | partial | `SlideshowSource` (paths + interval + loop; hard cut) |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
 | ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 
@@ -48,10 +49,10 @@ Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys)
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Color Invert, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter, Echo) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter, Echo, Invert Polarity) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -83,3 +84,5 @@ Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys)
 - [x] Wave 22 — Media Restart/End Action + Adv Audio Expander (Show/Hide still deferred)
 - [x] Wave 23 — Adv Audio Echo/Delay FX + procedural Luma Wipe (image-luma / Show/Hide deferred)
 - [x] Wave 24 — Source Show/Hide opacity fades + visibility/lock hotkeys (Shift+V / Shift+L)
+- [x] Wave 25 — Image Luma Wipe (path/invert/softness) + Adv Audio Invert Polarity
+- [x] Wave 26 — Color Invert filter + Image Slide Show source (cut interval)

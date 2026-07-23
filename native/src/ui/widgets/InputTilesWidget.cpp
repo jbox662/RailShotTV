@@ -39,6 +39,7 @@ QString typeIconGlyph(SourceType t)
     case SourceType::Window: return QStringLiteral("🗔");
     case SourceType::Game: return QStringLiteral("🎮");
     case SourceType::Image: return QStringLiteral("🖼");
+    case SourceType::Slideshow: return QStringLiteral("🎞");
     case SourceType::Text: return QStringLiteral("T");
     case SourceType::Media: return QStringLiteral("▶");
     case SourceType::Ndi: return QStringLiteral("📡");
@@ -432,6 +433,7 @@ void InputTilesWidget::refresh()
                 case SourceType::Browser: hex = QStringLiteral("#22D3EE"); break;
                 case SourceType::Text: hex = QStringLiteral("#A855F7"); break;
                 case SourceType::Image: hex = QStringLiteral("#FBBF24"); break;
+                case SourceType::Slideshow: hex = QStringLiteral("#F59E0B"); break;
                 case SourceType::Alert:
                 case SourceType::Scoreboard: hex = QStringLiteral("#FF5A2C"); break;
                 default: break;

@@ -50,6 +50,11 @@ public:
     void setWipeDirection(int direction);
     int wipeDirection() const { return m_wipeDirection; }
 
+    /// Optional grayscale/RGB wipe image for Luma Wipe (empty = procedural).
+    void setLumaWipePath(const QString& path) { m_lumaWipePath = path; }
+    void setLumaWipeInvert(bool invert) { m_lumaWipeInvert = invert; }
+    void setLumaWipeSoftness(float soft01) { m_lumaWipeSoftness = soft01; }
+
     /// Per-source opacity multipliers for Show/Hide fades (missing id → 1.0).
     void setShowHideFadeMuls(const QHash<QString, float>& muls) { m_showHideFadeMuls = muls; }
 
@@ -110,6 +115,9 @@ private:
     ID3D11BlendState* m_blend = nullptr;
     ID3D11BlendState* m_blendOpaque = nullptr;
     int m_wipeDirection = 0;
+    QString m_lumaWipePath;
+    bool m_lumaWipeInvert = false;
+    float m_lumaWipeSoftness = 0.07f;
     QElapsedTimer m_fxClock;
     QHash<QString, MaskEntry> m_maskCache;
     QHash<QString, float> m_showHideFadeMuls;

@@ -40,7 +40,7 @@ struct alignas(16) CBData {
     float fxParams[4];   // 80 — scrollU, scrollV, sharpen, maskOpacity
     float keyColor[4];   // 96 — rgb + mode (0 off, 1 chroma, 2 color, 3 luma)
     float keyParams[4];  // 112 — sim, smooth, lumaMin, lumaMax
-    float ccParams[4];   // 128 — hueRad, gammaExp, filterOpacity, pad
+    float ccParams[4];   // 128 — hueRad, gammaExp, filterOpacity, colorInvert
 };
 
 struct alignas(16) TransCBData {
@@ -48,6 +48,10 @@ struct alignas(16) TransCBData {
     float mode;
     float aspect;
     float wipeDir;
+    float hasLuma;      // 1 = sample texLuma (t2)
+    float lumaInvert;   // 1 = invert luma
+    float lumaSoft;     // soft edge width
+    float _pad;
 };
 
 D3D11Compositor::D3D11Compositor(D3D11Device* device, QObject* parent)
@@ -456,7 +460,7 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
         cb->ccParams[0] = hueNorm * 3.14159265f; // radians (±π)
         cb->ccParams[1] = gammaExp;
         cb->ccParams[2] = static_cast<float>(std::clamp(ccOpUi, 0.0, 100.0) / 100.0);
-        cb->ccParams[3] = 0.0f;
+        cb->ccParams[3] = src.settings.value(QStringLiteral("colorInvert")).toBool(false) ? 1.0f : 0.0f;
 
         // Key filters: mode 0=off 1=chroma 2=color 3=luma
         const int keyMode = src.settings.value(QStringLiteral("keyMode")).toInt(0);
@@ -786,8 +790,15 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
     ctx->VSSetShader(m_vs, nullptr, 0);
     ctx->PSSetShader(m_transPs, nullptr, 0);
 
-    ID3D11ShaderResourceView* srvs[2] = { srvOld.Get(), srvNew.Get() };
-    ctx->PSSetShaderResources(0, 2, srvs);
+    ID3D11ShaderResourceView* srvs[3] = { srvOld.Get(), srvNew.Get(), nullptr };
+    float hasLuma = 0.f;
+    if (!m_lumaWipePath.isEmpty() && mode == 23) {
+        if (auto* lumaSrv = ensureMaskSrv(m_lumaWipePath)) {
+            srvs[2] = lumaSrv;
+            hasLuma = 1.f;
+        }
+    }
+    ctx->PSSetShaderResources(0, 3, srvs);
     ctx->PSSetSamplers(0, 1, &m_sampler);
 
     // Fullscreen rect via the shared VS constant buffer.
@@ -824,14 +835,18 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
         tcb->mode = static_cast<float>(mode);
         tcb->aspect = m_height > 0 ? float(m_width) / float(m_height) : 1.0f;
         tcb->wipeDir = static_cast<float>(m_wipeDirection);
+        tcb->hasLuma = hasLuma;
+        tcb->lumaInvert = m_lumaWipeInvert ? 1.f : 0.f;
+        tcb->lumaSoft = std::clamp(m_lumaWipeSoftness, 0.001f, 0.5f);
+        tcb->_pad = 0.f;
         ctx->Unmap(m_transCb, 0);
     }
     ctx->VSSetConstantBuffers(0, 1, &m_cb);
     ctx->PSSetConstantBuffers(0, 1, &m_transCb);
     ctx->Draw(4, 0);
 
-    ID3D11ShaderResourceView* nullSrvs[2] = { nullptr, nullptr };
-    ctx->PSSetShaderResources(0, 2, nullSrvs);
+    ID3D11ShaderResourceView* nullSrvs[3] = { nullptr, nullptr, nullptr };
+    ctx->PSSetShaderResources(0, 3, nullSrvs);
 #else
     Q_UNUSED(progress); Q_UNUSED(type);
 #endif

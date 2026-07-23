@@ -41,6 +41,7 @@ const TypeEntry kMenuTypes[] = {
     {SourceType::AudioInput, "Audio Input Capture"},
     {SourceType::AudioOutput, "Audio Output Capture"},
     {SourceType::Image, "Image"},
+    {SourceType::Slideshow, "Image Slide Show"},
     {SourceType::Media, "Media Source"},
     {SourceType::Text, "Text (GDI+)"},
     {SourceType::Browser, "Browser"},
@@ -79,6 +80,11 @@ QJsonObject defaultSettingsFor(SourceType type)
         s.insert(QStringLiteral("isLocalFile"), true);
         s.insert(QStringLiteral("loop"), true);
         s.insert(QStringLiteral("ffmpegOptions"), QString());
+        break;
+    case SourceType::Slideshow:
+        s.insert(QStringLiteral("paths"), QJsonArray{});
+        s.insert(QStringLiteral("intervalMs"), 5000);
+        s.insert(QStringLiteral("loop"), true);
         break;
     case SourceType::Scene:
         s.insert(QStringLiteral("sceneId"), QString());
@@ -180,6 +186,7 @@ SourceType showAddSourceTypeMenu(QWidget* parent, const QPoint& globalPos)
         {SourceType::AudioInput, "Audio Input Capture", "#F472B6"},
         {SourceType::AudioOutput, "Audio Output Capture", "#FB7185"},
         {SourceType::Image, "Image", "#FBBF24"},
+        {SourceType::Slideshow, "Image Slide Show", "#F59E0B"},
         {SourceType::Media, "Media Source", "#FB923C"},
         {SourceType::Text, "Text (GDI+)", "#EC4899"},
         {SourceType::Browser, "Browser", "#3B82F6"},

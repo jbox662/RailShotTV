@@ -36,6 +36,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("apply_lut")) return QStringLiteral("Apply LUT");
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
+    if (type == QLatin1String("color_invert")) return QStringLiteral("Color Invert");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
     if (type == QLatin1String("scroll")) return QStringLiteral("Scroll");
     if (type == QLatin1String("sharpen")) return QStringLiteral("Sharpen");
@@ -78,6 +79,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     bool pad = false;
     int scrollX = 0, scrollY = 0;
     int sharpen = 0;
+    bool colorInvert = false;
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
@@ -136,6 +138,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             scrollY = o.value(QStringLiteral("speedY")).toInt(0);
         } else if (type == QLatin1String("sharpen")) {
             sharpen = qMax(sharpen, o.value(QStringLiteral("amount")).toInt(0));
+        } else if (type == QLatin1String("color_invert")) {
+            colorInvert = true;
         }
     }
 
@@ -169,6 +173,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("scrollSpeedX"), scrollX);
     settings.insert(QStringLiteral("scrollSpeedY"), scrollY);
     settings.insert(QStringLiteral("sharpen"), sharpen);
+    settings.insert(QStringLiteral("colorInvert"), colorInvert);
 }
 
 void fillKeyTypeCombo(QComboBox* box)
@@ -444,6 +449,15 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_sharpenPage);
 
+    m_invertPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_invertPage);
+        m_invertEnabled = new QCheckBox(QStringLiteral("Enabled"), m_invertPage);
+        form->addRow(m_invertEnabled);
+        form->addRow(new QLabel(QStringLiteral("Inverts RGB channels (1 − color)."), m_invertPage));
+    }
+    m_stack->addWidget(m_invertPage);
+
     right->addWidget(m_stack, 1);
     auto* closeRow = new QHBoxLayout();
     closeRow->addStretch();
@@ -477,7 +491,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
                          m_lutEnabled, m_blurEnabled, m_colorEnabled,
-                         m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled})
+                         m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled, m_invertEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
                        m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
@@ -683,6 +697,7 @@ void FiltersDialog::onAddFilter()
     auto* crop = menu.addAction(QStringLiteral("Crop/Pad"));
     auto* scroll = menu.addAction(QStringLiteral("Scroll"));
     auto* sharpen = menu.addAction(QStringLiteral("Sharpen"));
+    auto* invert = menu.addAction(QStringLiteral("Color Invert"));
     auto* chosen = menu.exec(QCursor::pos());
     if (!chosen) return;
 
@@ -740,9 +755,13 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("type"), QStringLiteral("scroll"));
         f.insert(QStringLiteral("speedX"), 10);
         f.insert(QStringLiteral("speedY"), 0);
-    } else {
+    } else if (chosen == sharpen) {
         f.insert(QStringLiteral("type"), QStringLiteral("sharpen"));
         f.insert(QStringLiteral("amount"), 35);
+    } else if (chosen == invert) {
+        f.insert(QStringLiteral("type"), QStringLiteral("color_invert"));
+    } else {
+        return;
     }
 
     m_engine->sceneGraph()->mutate([this, f](Project& p) {
@@ -915,6 +934,9 @@ void FiltersDialog::onSelectionChanged()
         m_sharpenEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_sharpenAmount->setValue(f.value(QStringLiteral("amount")).toInt(0));
         m_stack->setCurrentWidget(m_sharpenPage);
+    } else if (type == QLatin1String("color_invert")) {
+        m_invertEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_stack->setCurrentWidget(m_invertPage);
     } else {
         m_stack->setCurrentWidget(m_emptyPage);
     }
@@ -989,6 +1011,8 @@ void FiltersDialog::saveCurrent()
                 } else if (type == QLatin1String("sharpen")) {
                     o.insert(QStringLiteral("enabled"), m_sharpenEnabled->isChecked());
                     o.insert(QStringLiteral("amount"), m_sharpenAmount->value());
+                } else if (type == QLatin1String("color_invert")) {
+                    o.insert(QStringLiteral("enabled"), m_invertEnabled->isChecked());
                 }
                 arr.replace(i, o);
                 break;

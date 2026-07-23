@@ -108,6 +108,8 @@ add_library(railshot_capture STATIC
     src/capture/WindowEnumerator.cpp
     src/capture/ImageSource.h
     src/capture/ImageSource.cpp
+    src/capture/SlideshowSource.h
+    src/capture/SlideshowSource.cpp
     src/capture/TextSource.h
     src/capture/TextSource.cpp
     src/capture/ColorSource.h

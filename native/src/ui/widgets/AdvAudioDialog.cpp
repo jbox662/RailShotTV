@@ -148,8 +148,9 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(11, QStringLiteral("EQ L/M/H"));
     mk(12, QStringLiteral("Limiter"));
     mk(13, QStringLiteral("Echo"));
-    mk(14, QStringLiteral("Audio Monitoring"));
-    mk(15, QStringLiteral("Tracks"));
+    mk(14, QStringLiteral("Invert Polarity"));
+    mk(15, QStringLiteral("Audio Monitoring"));
+    mk(16, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
@@ -432,13 +433,18 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     echoLay->addWidget(w.echoWet);
     grid->addWidget(echoHost, row, 13);
 
+    w.invertPolarity = new QCheckBox(m_rowsHost);
+    w.invertPolarity->setChecked(ch.invertPolarity);
+    w.invertPolarity->setToolTip(QStringLiteral("Invert audio polarity (phase flip)"));
+    grid->addWidget(w.invertPolarity, row, 14);
+
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
     w.monitoring->addItem(QStringLiteral("Monitor Only (MUTE)"), int(AudioMonitoringType::MonitorOnly));
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 14);
+    grid->addWidget(w.monitoring, row, 15);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -449,7 +455,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 15);
+    grid->addWidget(trackHost, row, 16);
 
     m_rows.insert(channelId, w);
 
@@ -482,6 +488,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     connect(w.echoDelay, qOverload<int>(&QSpinBox::valueChanged), this, wire);
     connect(w.echoDecay, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.echoWet, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.invertPolarity, &QCheckBox::toggled, this, wire);
     connect(w.monitoring, qOverload<int>(&QComboBox::currentIndexChanged), this, wire);
     for (int t = 0; t < 6; ++t)
         connect(w.tracks[t], &QCheckBox::toggled, this, wire);
@@ -540,6 +547,7 @@ void AdvAudioDialog::applyChannel(const QString& id)
     if (w.echoDelay) state.echoDelayMs = float(w.echoDelay->value());
     if (w.echoDecay) state.echoDecay = float(w.echoDecay->value());
     if (w.echoWet) state.echoWet = float(w.echoWet->value());
+    if (w.invertPolarity) state.invertPolarity = w.invertPolarity->isChecked();
     if (w.monitoring)
         state.monitoring = AudioMonitoringType(w.monitoring->currentData().toInt());
     quint8 mask = 0;

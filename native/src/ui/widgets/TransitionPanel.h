@@ -9,6 +9,7 @@
 #include <QSlider>
 #include <QLineEdit>
 #include <QString>
+#include <QCheckBox>
 
 namespace railshot {
 class EngineController;
@@ -40,6 +41,10 @@ private:
     QLineEdit* m_stingerPath = nullptr;
     QSlider* m_stingerPoint = nullptr;
     QWidget* m_stingerBox = nullptr;
+    QWidget* m_lumaWipeBox = nullptr;
+    QLineEdit* m_lumaWipePath = nullptr;
+    QCheckBox* m_lumaWipeInvert = nullptr;
+    QSlider* m_lumaWipeSoft = nullptr;
     /// "Cut" = instant take; "Smooth" = use selected effect.
     QString m_mode = QStringLiteral("Cut");
     QString m_effect = QStringLiteral("Cross Dissolve");

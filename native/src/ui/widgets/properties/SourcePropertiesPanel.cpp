@@ -5,6 +5,7 @@
 #include "audio/WasapiCapture.h"
 #include "audio/AudioTypes.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -471,6 +472,86 @@ private:
     QString m_key;
     QLineEdit* m_path = nullptr;
     QCheckBox* m_unload = nullptr;
+};
+
+class SlideshowPanel : public SourcePropertiesPanel {
+public:
+    SlideshowPanel(EngineController* engine, QWidget* parent)
+        : SourcePropertiesPanel(engine, parent)
+    {
+        auto* form = new QFormLayout(this);
+        m_list = new QListWidget(this);
+        m_list->setMinimumHeight(120);
+        form->addRow(QStringLiteral("Images"), m_list);
+        auto* btnRow = new QHBoxLayout();
+        auto* addBtn = new QPushButton(QStringLiteral("Add…"), this);
+        auto* remBtn = new QPushButton(QStringLiteral("Remove"), this);
+        connect(addBtn, &QPushButton::clicked, this, [this] {
+            const auto paths = QFileDialog::getOpenFileNames(
+                this, QStringLiteral("Add slideshow images"), {},
+                QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
+            for (const auto& p : paths) {
+                if (!p.isEmpty())
+                    m_list->addItem(p);
+            }
+            if (!paths.isEmpty())
+                emit settingsEdited();
+        });
+        connect(remBtn, &QPushButton::clicked, this, [this] {
+            qDeleteAll(m_list->selectedItems());
+            emit settingsEdited();
+        });
+        btnRow->addWidget(addBtn);
+        btnRow->addWidget(remBtn);
+        form->addRow(btnRow);
+        m_interval = new QSpinBox(this);
+        m_interval->setRange(250, 600000);
+        m_interval->setSuffix(QStringLiteral(" ms"));
+        m_interval->setValue(5000);
+        form->addRow(QStringLiteral("Slide Time"), m_interval);
+        m_loop = new QCheckBox(QStringLiteral("Loop"), this);
+        m_loop->setChecked(true);
+        form->addRow(m_loop);
+        wireChanged(this, m_interval);
+        wireChanged(this, m_loop);
+    }
+    void loadFrom(const SourceItem& src) override
+    {
+        m_list->clear();
+        const auto arr = src.settings.value(QStringLiteral("paths")).toArray();
+        for (const auto& v : arr) {
+            const QString p = v.toString();
+            if (!p.isEmpty())
+                m_list->addItem(p);
+        }
+        if (m_list->count() == 0) {
+            const QString one = src.settings.value(QStringLiteral("path")).toString();
+            if (!one.isEmpty())
+                m_list->addItem(one);
+        }
+        m_interval->setValue(src.settings.value(QStringLiteral("intervalMs")).toInt(5000));
+        m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(true));
+    }
+    void applyTo(QJsonObject& s) const override
+    {
+        QJsonArray arr;
+        for (int i = 0; i < m_list->count(); ++i)
+            arr.append(m_list->item(i)->text());
+        s.insert(QStringLiteral("paths"), arr);
+        s.insert(QStringLiteral("intervalMs"), m_interval->value());
+        s.insert(QStringLiteral("loop"), m_loop->isChecked());
+    }
+    void resetDefaults(QJsonObject& s) const override
+    {
+        s.insert(QStringLiteral("paths"), QJsonArray{});
+        s.insert(QStringLiteral("intervalMs"), 5000);
+        s.insert(QStringLiteral("loop"), true);
+    }
+
+private:
+    QListWidget* m_list = nullptr;
+    QSpinBox* m_interval = nullptr;
+    QCheckBox* m_loop = nullptr;
 };
 
 /// OBS Media Source: Local File checkbox, or network Input URL (rtsp/http/hls/…).
@@ -977,6 +1058,8 @@ SourcePropertiesPanel* createSourcePropertiesPanel(SourceType type, EngineContro
     case SourceType::Image:
         return new PathPanel(engine, parent, QStringLiteral("path"),
                              QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp)"), false);
+    case SourceType::Slideshow:
+        return new SlideshowPanel(engine, parent);
     case SourceType::Media:
         return new MediaPanel(engine, parent);
     case SourceType::Color:

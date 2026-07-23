@@ -55,6 +55,7 @@ private:
     QWidget* m_cropPage = nullptr;
     QWidget* m_scrollPage = nullptr;
     QWidget* m_sharpenPage = nullptr;
+    QWidget* m_invertPage = nullptr;
     QWidget* m_emptyPage = nullptr;
 
     QCheckBox* m_chromaEnabled = nullptr;
@@ -110,6 +111,7 @@ private:
     QSlider* m_scrollY = nullptr;
     QCheckBox* m_sharpenEnabled = nullptr;
     QSlider* m_sharpenAmount = nullptr;
+    QCheckBox* m_invertEnabled = nullptr;
     QLabel* m_hint = nullptr;
     QPushButton* m_upBtn = nullptr;
     QPushButton* m_downBtn = nullptr;

@@ -20,7 +20,7 @@ cbuffer CB : register(b0) {
     float4 fxParams;  // scrollU, scrollV, sharpen, maskOpacity (0=off)
     float4 keyColor;  // rgb key + mode (0 off, 1 chroma, 2 color, 3 luma)
     float4 keyParams; // similarity, smoothness, lumaMin, lumaMax
-    float4 ccParams;  // hueRad, gammaExp, filterOpacity, pad
+    float4 ccParams;  // hueRad, gammaExp, filterOpacity, colorInvert (0/1)
 };
 VSOut main(VSIn i) {
     VSOut o;
@@ -53,7 +53,7 @@ cbuffer CB : register(b0) {
     float4 fxParams;
     float4 keyColor;
     float4 keyParams;
-    float4 ccParams; // hueRad, gammaExp, filterOpacity, pad
+    float4 ccParams; // hueRad, gammaExp, filterOpacity, colorInvert
 };
 float2 rgbToCbCr(float3 rgb) {
     float cb = dot(rgb, float3(-0.100644, -0.338572, 0.439216)) + 0.501961;
@@ -127,6 +127,8 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         hsv.x = frac(hsv.x + hueRad / (2.0 * 3.14159265));
         c.rgb = hsvToRgb(hsv);
     }
+    if (ccParams.w > 0.5)
+        c.rgb = 1.0 - c.rgb;
     float mode = keyColor.w;
     if (mode > 0.5) {
         float sim = keyParams.x;
@@ -179,16 +181,21 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
 }
 )";
 
-/// Fullscreen A/B transition: t0 = old (hold), t1 = new. mode selects Wirecast-style effect.
+/// Fullscreen A/B transition: t0 = old (hold), t1 = new, t2 = optional luma wipe image.
 inline constexpr char kPsTransition[] = R"(
 Texture2D texOld : register(t0);
 Texture2D texNew : register(t1);
+Texture2D texLuma : register(t2);
 SamplerState samp : register(s0);
 cbuffer TransCB : register(b0) {
     float progress;
     float mode;
     float aspect;
     float wipeDir;
+    float hasLuma;
+    float lumaInvert;
+    float lumaSoft;
+    float _padLuma;
 };
 
 float4 blur5(Texture2D tex, float2 uv, float radius) {
@@ -413,17 +420,24 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
         return texOld.Sample(samp, suv);
     }
 
-    // 23 Luma Wipe — procedural luma (no wipe image); soft edge
+    // 23 Luma Wipe — image luma (t2) or procedural fallback; soft edge
     if (m == 23) {
-        float luma = uv.x;
-        if (wipeDir < 0.5) luma = uv.x;
-        else if (wipeDir < 1.5) luma = 1.0 - uv.x;
-        else if (wipeDir < 2.5) luma = uv.y;
-        else luma = 1.0 - uv.y;
-        // Slight vignette variation so it isn't a hard bar wipe
-        float2 d = uv - 0.5;
-        luma = saturate(luma * 0.85 + (1.0 - length(d) * 0.5) * 0.15);
-        float soft = 0.07;
+        float luma;
+        float soft = max(lumaSoft, 0.001);
+        if (hasLuma > 0.5) {
+            float3 sample = texLuma.Sample(samp, uv).rgb;
+            luma = dot(sample, float3(0.2126, 0.7152, 0.0722));
+            if (lumaInvert > 0.5) luma = 1.0 - luma;
+        } else {
+            luma = uv.x;
+            if (wipeDir < 0.5) luma = uv.x;
+            else if (wipeDir < 1.5) luma = 1.0 - uv.x;
+            else if (wipeDir < 2.5) luma = uv.y;
+            else luma = 1.0 - uv.y;
+            float2 d = uv - 0.5;
+            luma = saturate(luma * 0.85 + (1.0 - length(d) * 0.5) * 0.15);
+            soft = 0.07;
+        }
         float w = smoothstep(p - soft, p + soft, luma);
         return lerp(n, o, w);
     }

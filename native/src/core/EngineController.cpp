@@ -267,6 +267,10 @@ bool EngineController::initialize(QString* error)
                     clearR = clearG = clearB = 0.0f;
                 }
             }
+            m_compositor->setLumaWipePath(project.extras.value(QStringLiteral("lumaWipePath")).toString());
+            m_compositor->setLumaWipeInvert(project.extras.value(QStringLiteral("lumaWipeInvert")).toBool(false));
+            const double soft = project.extras.value(QStringLiteral("lumaWipeSoftness")).toDouble(0.07);
+            m_compositor->setLumaWipeSoftness(float(std::clamp(soft, 0.001, 0.5)));
             m_compositor->compose(*program, m_capture->frameBus(), true, cross ? 1.0f : mix,
                                   clearR, clearG, clearB, &project);
             if (cross)

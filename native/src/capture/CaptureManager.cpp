@@ -3,6 +3,7 @@
 #include "capture/WindowsGraphicsCapture.h"
 #include "capture/DesktopDuplicationCapture.h"
 #include "capture/ImageSource.h"
+#include "capture/SlideshowSource.h"
 #include "capture/TextSource.h"
 #include "capture/OverlaySource.h"
 #include "capture/BrowserSource.h"
@@ -14,6 +15,8 @@
 #include "core/Logger.h"
 #include <QColor>
 #include <QSet>
+#include <QJsonArray>
+#include <QStringList>
 
 namespace railshot {
 
@@ -82,6 +85,24 @@ std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& sou
     case SourceType::Image:
         return std::make_unique<ImageSource>(
             source.id, source.name, source.settings.value(QStringLiteral("path")).toString());
+    case SourceType::Slideshow: {
+        QStringList paths;
+        const auto arr = source.settings.value(QStringLiteral("paths")).toArray();
+        for (const auto& v : arr) {
+            const QString p = v.toString().trimmed();
+            if (!p.isEmpty())
+                paths.push_back(p);
+        }
+        // Fallback: single path key for convenience
+        if (paths.isEmpty()) {
+            const QString one = source.settings.value(QStringLiteral("path")).toString().trimmed();
+            if (!one.isEmpty())
+                paths.push_back(one);
+        }
+        const int interval = source.settings.value(QStringLiteral("intervalMs")).toInt(5000);
+        const bool loop = source.settings.value(QStringLiteral("loop")).toBool(true);
+        return std::make_unique<SlideshowSource>(source.id, source.name, paths, interval, loop);
+    }
     case SourceType::Text:
         return std::make_unique<TextSource>(
             source.id, source.name, source.settings.value(QStringLiteral("text")).toString(source.name));
@@ -176,6 +197,8 @@ void CaptureManager::updateSource(const SourceItem& source)
             return dynamic_cast<WindowsGraphicsCapture*>(src) == nullptr;
         case SourceType::Image:
             return dynamic_cast<ImageSource*>(src) == nullptr;
+        case SourceType::Slideshow:
+            return dynamic_cast<SlideshowSource*>(src) == nullptr;
         case SourceType::Ndi:
             return dynamic_cast<NdiSource*>(src) == nullptr;
         case SourceType::AudioInput:
@@ -212,6 +235,10 @@ void CaptureManager::updateSource(const SourceItem& source)
             break;
         case SourceType::Image:
             reattach = keyChanged("path");
+            break;
+        case SourceType::Slideshow:
+            reattach = keyChanged("paths") || keyChanged("path") || keyChanged("intervalMs")
+                       || keyChanged("loop");
             break;
         case SourceType::Media:
             reattach = keyChanged("path") || keyChanged("loop") || keyChanged("isLocalFile")

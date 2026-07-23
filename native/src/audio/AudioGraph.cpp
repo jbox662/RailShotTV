@@ -336,6 +336,7 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.echoDelayMs = s.echoDelayMs;
                 cur.echoDecay = s.echoDecay;
                 cur.echoWet = s.echoWet;
+                cur.invertPolarity = s.invertPolarity;
                 cur.eqLowDb = s.eqLowDb;
                 cur.eqMidDb = s.eqMidDb;
                 cur.eqHighDb = s.eqHighDb;
@@ -629,6 +630,11 @@ void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelSta
             else
                 Q_UNUSED(dR);
         }
+    }
+
+    if (ch.invertPolarity) {
+        for (float& s : buf.samples)
+            s = -s;
     }
 }
 

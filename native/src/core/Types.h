@@ -23,6 +23,7 @@ enum class SourceType {
     Browser,
     Text,
     Image,
+    Slideshow,
     Alert,
     Scoreboard,
     LowerThird,
@@ -189,6 +190,7 @@ struct AudioChannelState {
     float echoDelayMs = 250.f;        // 1..1000
     float echoDecay = 0.45f;          // feedback 0..0.95
     float echoWet = 0.35f;            // wet mix 0..1
+    bool invertPolarity = false;      // OBS Invert Polarity filter
 
     // OBS 3-Band EQ (Low ~800 Hz / High ~5 kHz splits); gains in dB
     float eqLowDb = 0.f;

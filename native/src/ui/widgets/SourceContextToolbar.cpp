@@ -133,7 +133,8 @@ void SourceContextToolbar::rebuild()
         break;
     }
     case SourceType::Media:
-    case SourceType::Image: {
+    case SourceType::Image:
+    case SourceType::Slideshow: {
         auto* open = addBtn(QStringLiteral("Open File"), QStringLiteral("Change media file"));
         connect(open, &QPushButton::clicked, this, [this] { emit propertiesRequested(m_sourceId); });
         break;

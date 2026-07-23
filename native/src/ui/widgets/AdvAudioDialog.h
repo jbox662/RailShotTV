@@ -68,6 +68,7 @@ private:
         QSpinBox* echoDelay = nullptr;
         QDoubleSpinBox* echoDecay = nullptr;
         QDoubleSpinBox* echoWet = nullptr;
+        QCheckBox* invertPolarity = nullptr;
         QComboBox* monitoring = nullptr;
         QCheckBox* tracks[6] = {};
     };
