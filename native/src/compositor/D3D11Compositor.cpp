@@ -192,6 +192,9 @@ bool D3D11Compositor::createPipeline(QString* error)
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     dev->CreateSamplerState(&sd, &m_sampler);
+    D3D11_SAMPLER_DESC psd = sd;
+    psd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+    dev->CreateSamplerState(&psd, &m_pointSampler);
 
     D3D11_BLEND_DESC bd{};
     bd.RenderTarget[0].BlendEnable = TRUE;
@@ -240,7 +243,7 @@ void D3D11Compositor::shutdown()
 #ifdef _WIN32
     clearMaskCache();
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
-    rel(m_blendOpaque); rel(m_blend); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
+    rel(m_blendOpaque); rel(m_blend); rel(m_pointSampler); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
     rel(m_layout); rel(m_transPs); rel(m_ps); rel(m_vs);
     rel(m_previewRtv); rel(m_programRtv); rel(m_nestRtv);
     rel(m_previewTex); rel(m_programTex); rel(m_holdTex); rel(m_transScratch); rel(m_nestTex);
@@ -355,7 +358,10 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
     ctx->VSSetShader(m_vs, nullptr, 0);
     ctx->PSSetShader(m_ps, nullptr, 0);
-    ctx->PSSetSamplers(0, 1, &m_sampler);
+    ID3D11SamplerState* samp = (src.settings.value(QStringLiteral("scalePoint")).toBool(false) && m_pointSampler)
+                                   ? m_pointSampler
+                                   : m_sampler;
+    ctx->PSSetSamplers(0, 1, &samp);
 
     const QString maskPath = src.settings.value(QStringLiteral("maskPath")).toString();
     const float maskOpacity = static_cast<float>(
@@ -408,6 +414,45 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
             cr = 1.0f - (u0 + uw * (1.0f - fR));
             ct = v0 + vh * fT;
             cbot = 1.0f - (v0 + vh * (1.0f - fB));
+        }
+
+        // Scale / Aspect Ratio filter
+        const int scaleW = src.settings.value(QStringLiteral("scaleW")).toInt(0);
+        const int scaleH = src.settings.value(QStringLiteral("scaleH")).toInt(0);
+        const int scaleAspect = src.settings.value(QStringLiteral("scaleAspect")).toInt(0);
+        if (scaleW > 0 && scaleH > 0) {
+            rw = float(scaleW);
+            rh = float(scaleH);
+            const float texW = float((std::max)(1, frame->width));
+            const float texH = float((std::max)(1, frame->height));
+            const float texA = texW / texH;
+            const float boxA = rw / (std::max)(rh, 0.001f);
+            if (scaleAspect == 1) { // Fit — shrink dest rect to texture aspect
+                if (texA > boxA) {
+                    const float nh = rw / texA;
+                    ry += (rh - nh) * 0.5f;
+                    rh = nh;
+                } else {
+                    const float nw = rh * texA;
+                    rx += (rw - nw) * 0.5f;
+                    rw = nw;
+                }
+            } else if (scaleAspect == 2) { // Crop — fill box, crop UVs
+                const float uSpan = (std::max)(0.01f, (1.0f - cr) - cl);
+                const float vSpan = (std::max)(0.01f, (1.0f - cbot) - ct);
+                if (texA > boxA) {
+                    const float visible = boxA / texA;
+                    const float inset = (1.0f - visible) * 0.5f;
+                    cl += uSpan * inset;
+                    cr += uSpan * inset;
+                } else {
+                    const float visible = texA / boxA;
+                    const float inset = (1.0f - visible) * 0.5f;
+                    ct += vSpan * inset;
+                    cbot += vSpan * inset;
+                }
+            }
+            // aspect 0 = Stretch: keep full UV, force size
         }
 
         cb->rect[0] = rx;

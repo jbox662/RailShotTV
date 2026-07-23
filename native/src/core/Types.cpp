@@ -344,6 +344,11 @@ QJsonObject AudioChannelState::toJson() const
         {QStringLiteral("expRatio"), double(expRatio)},
         {QStringLiteral("expAttackMs"), double(expAttackMs)},
         {QStringLiteral("expReleaseMs"), double(expReleaseMs)},
+        {QStringLiteral("upCompEnabled"), upCompEnabled},
+        {QStringLiteral("upCompThresholdDb"), double(upCompThresholdDb)},
+        {QStringLiteral("upCompRatio"), double(upCompRatio)},
+        {QStringLiteral("upCompAttackMs"), double(upCompAttackMs)},
+        {QStringLiteral("upCompReleaseMs"), double(upCompReleaseMs)},
         {QStringLiteral("echoEnabled"), echoEnabled},
         {QStringLiteral("echoDelayMs"), double(echoDelayMs)},
         {QStringLiteral("echoDecay"), double(echoDecay)},
@@ -393,6 +398,11 @@ AudioChannelState AudioChannelState::fromJson(const QJsonObject& o)
     s.expRatio = float(o.value(QStringLiteral("expRatio")).toDouble(2.0));
     s.expAttackMs = float(o.value(QStringLiteral("expAttackMs")).toDouble(10.0));
     s.expReleaseMs = float(o.value(QStringLiteral("expReleaseMs")).toDouble(100.0));
+    s.upCompEnabled = o.value(QStringLiteral("upCompEnabled")).toBool(false);
+    s.upCompThresholdDb = float(o.value(QStringLiteral("upCompThresholdDb")).toDouble(-32.0));
+    s.upCompRatio = float(o.value(QStringLiteral("upCompRatio")).toDouble(2.0));
+    s.upCompAttackMs = float(o.value(QStringLiteral("upCompAttackMs")).toDouble(10.0));
+    s.upCompReleaseMs = float(o.value(QStringLiteral("upCompReleaseMs")).toDouble(60.0));
     s.echoEnabled = o.value(QStringLiteral("echoEnabled")).toBool(false);
     s.echoDelayMs = float(o.value(QStringLiteral("echoDelayMs")).toDouble(250.0));
     s.echoDecay = float(o.value(QStringLiteral("echoDecay")).toDouble(0.45));

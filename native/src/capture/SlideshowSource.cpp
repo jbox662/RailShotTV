@@ -1,7 +1,8 @@
 #include "capture/SlideshowSource.h"
 #include "core/Logger.h"
-#include <QImage>
+#include <QRandomGenerator>
 #include <algorithm>
+#include <cstring>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -17,21 +18,24 @@ using Microsoft::WRL::ComPtr;
 
 namespace railshot {
 
-SlideshowSource::SlideshowSource(QString id, QString name, QStringList paths, int intervalMs, bool loop)
+SlideshowSource::SlideshowSource(QString id, QString name, QStringList paths, int intervalMs, bool loop,
+                                 QString transition, int transitionMs, bool randomize)
     : m_id(std::move(id))
     , m_name(std::move(name))
     , m_paths(std::move(paths))
     , m_intervalMs((std::max)(250, intervalMs))
     , m_loop(loop)
+    , m_transition(std::move(transition))
+    , m_transitionMs((std::max)(0, transitionMs))
+    , m_randomize(randomize)
 {
 }
 
 SlideshowSource::~SlideshowSource() { stop(); }
 
-bool SlideshowSource::loadIndex(int index, QString* error)
+bool SlideshowSource::loadImage(int index, QImage* out, QString* error)
 {
-#ifdef _WIN32
-    if (!m_device || m_paths.isEmpty() || index < 0 || index >= m_paths.size()) {
+    if (!out || m_paths.isEmpty() || index < 0 || index >= m_paths.size()) {
         if (error) *error = QStringLiteral("No slideshow images");
         return false;
     }
@@ -40,7 +44,14 @@ bool SlideshowSource::loadIndex(int index, QString* error)
         if (error) *error = QStringLiteral("Failed to load image: %1").arg(m_paths.at(index));
         return false;
     }
-    img = img.convertToFormat(QImage::Format_ARGB32);
+    *out = img.convertToFormat(QImage::Format_ARGB32);
+    return true;
+}
+
+bool SlideshowSource::uploadImage(const QImage& img)
+{
+#ifdef _WIN32
+    if (!m_device || img.isNull()) return false;
     m_width = img.width();
     m_height = img.height();
 
@@ -59,22 +70,36 @@ bool SlideshowSource::loadIndex(int index, QString* error)
     init.SysMemPitch = static_cast<UINT>(img.bytesPerLine());
 
     ComPtr<ID3D11Texture2D> tex;
-    if (FAILED(m_device->CreateTexture2D(&desc, &init, &tex))) {
-        if (error) *error = QStringLiteral("CreateTexture2D failed for slideshow");
+    if (FAILED(m_device->CreateTexture2D(&desc, &init, &tex)))
         return false;
-    }
     if (m_texture) {
         m_texture->Release();
         m_texture = nullptr;
     }
     m_texture = tex.Detach();
-    m_index = index;
     return true;
 #else
-    Q_UNUSED(index);
-    Q_UNUSED(error);
+    Q_UNUSED(img);
     return false;
 #endif
+}
+
+int SlideshowSource::pickNextIndex() const
+{
+    if (m_paths.size() <= 1)
+        return m_index;
+    if (m_randomize) {
+        for (int tries = 0; tries < 16; ++tries) {
+            const int n = QRandomGenerator::global()->bounded(m_paths.size());
+            if (n != m_index)
+                return n;
+        }
+        return (m_index + 1) % m_paths.size();
+    }
+    int next = m_index + 1;
+    if (next >= m_paths.size())
+        return m_loop ? 0 : m_index;
+    return next;
 }
 
 bool SlideshowSource::start(ID3D11Device* device, QString* error)
@@ -90,16 +115,25 @@ bool SlideshowSource::start(ID3D11Device* device, QString* error)
         return false;
     }
     std::lock_guard lock(m_mutex);
-    // Try first valid image
     for (int i = 0; i < m_paths.size(); ++i) {
-        if (loadIndex(i, error)) {
-            m_running = true;
-            m_timer.restart();
-            Logger::info(QStringLiteral("Slideshow started: %1 images, %2 ms")
-                             .arg(m_paths.size())
-                             .arg(m_intervalMs));
-            return true;
+        QImage img;
+        if (!loadImage(i, &img, error))
+            continue;
+        if (!uploadImage(img)) {
+            if (error) *error = QStringLiteral("CreateTexture2D failed for slideshow");
+            return false;
         }
+        m_toImg = img;
+        m_fromImg = img;
+        m_index = i;
+        m_running = true;
+        m_fading = false;
+        m_slideTimer.restart();
+        Logger::info(QStringLiteral("Slideshow started: %1 images, %2 ms, %3")
+                         .arg(m_paths.size())
+                         .arg(m_intervalMs)
+                         .arg(m_transition));
+        return true;
     }
     return false;
 #else
@@ -112,41 +146,107 @@ void SlideshowSource::stop()
 {
     std::lock_guard lock(m_mutex);
     m_running = false;
+    m_fading = false;
 #ifdef _WIN32
     if (m_texture) {
         m_texture->Release();
         m_texture = nullptr;
     }
 #endif
+    m_fromImg = {};
+    m_toImg = {};
 }
 
-void SlideshowSource::advanceIfNeeded()
+void SlideshowSource::beginAdvance()
 {
-    if (!m_running || m_paths.size() <= 1)
+    if (!m_running || m_paths.size() <= 1 || m_fading)
         return;
-    if (m_timer.elapsed() < m_intervalMs)
+    const int next = pickNextIndex();
+    if (next == m_index && !m_loop)
         return;
-    m_timer.restart();
-    int next = m_index + 1;
-    if (next >= m_paths.size()) {
-        if (!m_loop)
-            return;
-        next = 0;
-    }
-    // Skip unloadable frames
+
+    QImage nextImg;
+    int tryIdx = next;
+    bool loaded = false;
     for (int tries = 0; tries < m_paths.size(); ++tries) {
-        if (loadIndex(next, nullptr))
+        if (loadImage(tryIdx, &nextImg, nullptr)) {
+            loaded = true;
+            break;
+        }
+        tryIdx = (tryIdx + 1) % m_paths.size();
+        if (!m_loop && tryIdx == 0)
             return;
-        next = (next + 1) % m_paths.size();
-        if (!m_loop && next == 0)
+    }
+    if (!loaded)
+        return;
+
+    const bool useFade = (m_transition.compare(QLatin1String("fade"), Qt::CaseInsensitive) == 0)
+                         && m_transitionMs > 0;
+    if (!useFade) {
+        if (!uploadImage(nextImg))
             return;
+        m_fromImg = nextImg;
+        m_toImg = nextImg;
+        m_index = tryIdx;
+        m_slideTimer.restart();
+        return;
+    }
+
+    m_fromImg = m_toImg.isNull() ? nextImg : m_toImg;
+    m_toImg = nextImg;
+    m_index = tryIdx;
+    m_fading = true;
+    m_fadeTimer.restart();
+    tickFade(); // first blended frame
+}
+
+void SlideshowSource::tickFade()
+{
+    if (!m_fading)
+        return;
+    const float t = m_transitionMs > 0
+                        ? float(m_fadeTimer.elapsed()) / float(m_transitionMs)
+                        : 1.f;
+    const float p = (std::min)(1.f, (std::max)(0.f, t));
+
+    // Blend onto toImg size; scale from if needed
+    QImage a = m_fromImg;
+    QImage b = m_toImg;
+    if (a.size() != b.size())
+        a = a.scaled(b.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    if (a.format() != QImage::Format_ARGB32)
+        a = a.convertToFormat(QImage::Format_ARGB32);
+    if (b.format() != QImage::Format_ARGB32)
+        b = b.convertToFormat(QImage::Format_ARGB32);
+
+    QImage out(b.size(), QImage::Format_ARGB32);
+    const int bytes = out.sizeInBytes();
+    const uchar* pa = a.constBits();
+    const uchar* pb = b.constBits();
+    uchar* po = out.bits();
+    const float inv = 1.f - p;
+    for (int i = 0; i < bytes; ++i) {
+        po[i] = static_cast<uchar>(pa[i] * inv + pb[i] * p + 0.5f);
+    }
+    uploadImage(out);
+
+    if (p >= 1.f - 1e-4f) {
+        m_fading = false;
+        m_fromImg = m_toImg;
+        uploadImage(m_toImg);
+        m_slideTimer.restart();
     }
 }
 
 bool SlideshowSource::acquireLatest(VideoFrame& out)
 {
     std::lock_guard lock(m_mutex);
-    advanceIfNeeded();
+    if (!m_running)
+        return false;
+    if (m_fading)
+        tickFade();
+    else if (m_slideTimer.elapsed() >= m_intervalMs)
+        beginAdvance();
     if (!m_texture) return false;
     out.texture = m_texture;
     out.width = m_width;

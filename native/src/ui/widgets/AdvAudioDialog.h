@@ -58,6 +58,9 @@ private:
         QCheckBox* expOn = nullptr;
         QDoubleSpinBox* expThresh = nullptr;
         QDoubleSpinBox* expRatio = nullptr;
+        QCheckBox* upCompOn = nullptr;
+        QDoubleSpinBox* upCompThresh = nullptr;
+        QDoubleSpinBox* upCompRatio = nullptr;
         QDoubleSpinBox* eqLow = nullptr;
         QDoubleSpinBox* eqMid = nullptr;
         QDoubleSpinBox* eqHigh = nullptr;

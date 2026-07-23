@@ -509,11 +509,25 @@ public:
         m_interval->setSuffix(QStringLiteral(" ms"));
         m_interval->setValue(5000);
         form->addRow(QStringLiteral("Slide Time"), m_interval);
+        m_transition = new QComboBox(this);
+        m_transition->addItem(QStringLiteral("Cut"), QStringLiteral("cut"));
+        m_transition->addItem(QStringLiteral("Fade"), QStringLiteral("fade"));
+        form->addRow(QStringLiteral("Transition"), m_transition);
+        m_transitionMs = new QSpinBox(this);
+        m_transitionMs->setRange(0, 10000);
+        m_transitionMs->setSuffix(QStringLiteral(" ms"));
+        m_transitionMs->setValue(700);
+        form->addRow(QStringLiteral("Transition Speed"), m_transitionMs);
         m_loop = new QCheckBox(QStringLiteral("Loop"), this);
         m_loop->setChecked(true);
         form->addRow(m_loop);
+        m_randomize = new QCheckBox(QStringLiteral("Randomize Playback"), this);
+        form->addRow(m_randomize);
         wireChanged(this, m_interval);
+        wireChanged(this, m_transition);
+        wireChanged(this, m_transitionMs);
         wireChanged(this, m_loop);
+        wireChanged(this, m_randomize);
     }
     void loadFrom(const SourceItem& src) override
     {
@@ -530,7 +544,12 @@ public:
                 m_list->addItem(one);
         }
         m_interval->setValue(src.settings.value(QStringLiteral("intervalMs")).toInt(5000));
+        const int tIdx = m_transition->findData(
+            src.settings.value(QStringLiteral("transition")).toString(QStringLiteral("cut")));
+        m_transition->setCurrentIndex(tIdx >= 0 ? tIdx : 0);
+        m_transitionMs->setValue(src.settings.value(QStringLiteral("transitionMs")).toInt(700));
         m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(true));
+        m_randomize->setChecked(src.settings.value(QStringLiteral("randomize")).toBool(false));
     }
     void applyTo(QJsonObject& s) const override
     {
@@ -539,19 +558,28 @@ public:
             arr.append(m_list->item(i)->text());
         s.insert(QStringLiteral("paths"), arr);
         s.insert(QStringLiteral("intervalMs"), m_interval->value());
+        s.insert(QStringLiteral("transition"), m_transition->currentData().toString());
+        s.insert(QStringLiteral("transitionMs"), m_transitionMs->value());
         s.insert(QStringLiteral("loop"), m_loop->isChecked());
+        s.insert(QStringLiteral("randomize"), m_randomize->isChecked());
     }
     void resetDefaults(QJsonObject& s) const override
     {
         s.insert(QStringLiteral("paths"), QJsonArray{});
         s.insert(QStringLiteral("intervalMs"), 5000);
+        s.insert(QStringLiteral("transition"), QStringLiteral("cut"));
+        s.insert(QStringLiteral("transitionMs"), 700);
         s.insert(QStringLiteral("loop"), true);
+        s.insert(QStringLiteral("randomize"), false);
     }
 
 private:
     QListWidget* m_list = nullptr;
     QSpinBox* m_interval = nullptr;
+    QComboBox* m_transition = nullptr;
+    QSpinBox* m_transitionMs = nullptr;
     QCheckBox* m_loop = nullptr;
+    QCheckBox* m_randomize = nullptr;
 };
 
 /// OBS Media Source: Local File checkbox, or network Input URL (rtsp/http/hls/…).

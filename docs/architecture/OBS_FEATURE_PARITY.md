@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 26 (Color Invert filter + Image Slide Show source).
+Last updated: Wave 28 (Scale/Aspect Ratio filter + Upward Compressor).
 
 ## Design rules
 
@@ -39,7 +39,7 @@ Last updated: Wave 26 (Color Invert filter + Image Slide Show source).
 | Undo / Redo | Edit history | partial | `UndoStack` + Edit menu + Ctrl+Z/Y (project snapshots) |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
 | Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options; Restart on activate + End Action |
-| Image Slide Show | Slideshow | partial | `SlideshowSource` (paths + interval + loop; hard cut) |
+| Image Slide Show | Slideshow | partial | `SlideshowSource` (paths + interval + loop; Fade/Cut + randomize) |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
 | ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 
@@ -49,10 +49,10 @@ Last updated: Wave 26 (Color Invert filter + Image Slide Show source).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Color Invert, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Color Invert, Scale/Aspect Ratio, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
-| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, 3-Band EQ, Limiter, Echo, Invert Polarity) |
+| OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, Upward Comp, 3-Band EQ, Limiter, Echo, Invert Polarity) |
 | OBSBasicVCamConfig | partial | `VCamConfigDialog` (View → Virtual Camera…) |
 | OBSRemux / MissingFiles / LogViewer | partial | `RemuxDialog` / `MissingFilesDialog` / `LogViewerDialog` |
 | NameDialog | partial | QInputDialog |
@@ -86,3 +86,5 @@ Last updated: Wave 26 (Color Invert filter + Image Slide Show source).
 - [x] Wave 24 — Source Show/Hide opacity fades + visibility/lock hotkeys (Shift+V / Shift+L)
 - [x] Wave 25 — Image Luma Wipe (path/invert/softness) + Adv Audio Invert Polarity
 - [x] Wave 26 — Color Invert filter + Image Slide Show source (cut interval)
+- [x] Wave 27 — Slideshow Fade + Randomize playback
+- [x] Wave 28 — Scale/Aspect Ratio filter + Adv Audio Upward Compressor

@@ -17,6 +17,7 @@
 #include <QColorDialog>
 #include <QFileDialog>
 #include <QLineEdit>
+#include <QSpinBox>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -37,6 +38,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("blur")) return QStringLiteral("Blur");
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
     if (type == QLatin1String("color_invert")) return QStringLiteral("Color Invert");
+    if (type == QLatin1String("scale")) return QStringLiteral("Scale/Aspect Ratio");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
     if (type == QLatin1String("scroll")) return QStringLiteral("Scroll");
     if (type == QLatin1String("sharpen")) return QStringLiteral("Sharpen");
@@ -80,6 +82,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     int scrollX = 0, scrollY = 0;
     int sharpen = 0;
     bool colorInvert = false;
+    int scaleW = 0, scaleH = 0, scaleAspect = 0;
+    bool scalePoint = false;
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
@@ -140,6 +144,11 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             sharpen = qMax(sharpen, o.value(QStringLiteral("amount")).toInt(0));
         } else if (type == QLatin1String("color_invert")) {
             colorInvert = true;
+        } else if (type == QLatin1String("scale")) {
+            scaleW = o.value(QStringLiteral("width")).toInt(1920);
+            scaleH = o.value(QStringLiteral("height")).toInt(1080);
+            scaleAspect = o.value(QStringLiteral("aspect")).toInt(0);
+            scalePoint = o.value(QStringLiteral("pointSample")).toBool(false);
         }
     }
 
@@ -174,6 +183,10 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("scrollSpeedY"), scrollY);
     settings.insert(QStringLiteral("sharpen"), sharpen);
     settings.insert(QStringLiteral("colorInvert"), colorInvert);
+    settings.insert(QStringLiteral("scaleW"), scaleW);
+    settings.insert(QStringLiteral("scaleH"), scaleH);
+    settings.insert(QStringLiteral("scaleAspect"), scaleAspect);
+    settings.insert(QStringLiteral("scalePoint"), scalePoint);
 }
 
 void fillKeyTypeCombo(QComboBox* box)
@@ -458,6 +471,29 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_invertPage);
 
+    m_scalePage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_scalePage);
+        m_scaleEnabled = new QCheckBox(QStringLiteral("Enabled"), m_scalePage);
+        m_scaleW = new QSpinBox(m_scalePage);
+        m_scaleH = new QSpinBox(m_scalePage);
+        m_scaleW->setRange(1, 7680);
+        m_scaleH->setRange(1, 4320);
+        m_scaleW->setValue(1920);
+        m_scaleH->setValue(1080);
+        m_scaleAspect = new QComboBox(m_scalePage);
+        m_scaleAspect->addItem(QStringLiteral("Stretch"), 0);
+        m_scaleAspect->addItem(QStringLiteral("Fit (letterbox)"), 1);
+        m_scaleAspect->addItem(QStringLiteral("Crop (fill)"), 2);
+        m_scalePoint = new QCheckBox(QStringLiteral("Point sampling"), m_scalePage);
+        form->addRow(m_scaleEnabled);
+        form->addRow(QStringLiteral("Width"), m_scaleW);
+        form->addRow(QStringLiteral("Height"), m_scaleH);
+        form->addRow(QStringLiteral("Aspect"), m_scaleAspect);
+        form->addRow(m_scalePoint);
+    }
+    m_stack->addWidget(m_scalePage);
+
     right->addWidget(m_stack, 1);
     auto* closeRow = new QHBoxLayout();
     closeRow->addStretch();
@@ -491,7 +527,8 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
                          m_lutEnabled, m_blurEnabled, m_colorEnabled,
-                         m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled, m_invertEnabled})
+                         m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled, m_invertEnabled,
+                         m_scaleEnabled, m_scalePoint})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
                        m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
@@ -502,6 +539,9 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_maskMode, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
+    connect(m_scaleAspect, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
+    connect(m_scaleW, qOverload<int>(&QSpinBox::valueChanged), this, &FiltersDialog::saveCurrent);
+    connect(m_scaleH, qOverload<int>(&QSpinBox::valueChanged), this, &FiltersDialog::saveCurrent);
 
     updateKeyColorButton();
     reload();
@@ -698,6 +738,7 @@ void FiltersDialog::onAddFilter()
     auto* scroll = menu.addAction(QStringLiteral("Scroll"));
     auto* sharpen = menu.addAction(QStringLiteral("Sharpen"));
     auto* invert = menu.addAction(QStringLiteral("Color Invert"));
+    auto* scale = menu.addAction(QStringLiteral("Scale/Aspect Ratio"));
     auto* chosen = menu.exec(QCursor::pos());
     if (!chosen) return;
 
@@ -760,6 +801,12 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("amount"), 35);
     } else if (chosen == invert) {
         f.insert(QStringLiteral("type"), QStringLiteral("color_invert"));
+    } else if (chosen == scale) {
+        f.insert(QStringLiteral("type"), QStringLiteral("scale"));
+        f.insert(QStringLiteral("width"), 1920);
+        f.insert(QStringLiteral("height"), 1080);
+        f.insert(QStringLiteral("aspect"), 0);
+        f.insert(QStringLiteral("pointSample"), false);
     } else {
         return;
     }
@@ -937,6 +984,14 @@ void FiltersDialog::onSelectionChanged()
     } else if (type == QLatin1String("color_invert")) {
         m_invertEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_stack->setCurrentWidget(m_invertPage);
+    } else if (type == QLatin1String("scale")) {
+        m_scaleEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_scaleW->setValue(f.value(QStringLiteral("width")).toInt(1920));
+        m_scaleH->setValue(f.value(QStringLiteral("height")).toInt(1080));
+        const int aIdx = m_scaleAspect->findData(f.value(QStringLiteral("aspect")).toInt(0));
+        m_scaleAspect->setCurrentIndex(aIdx >= 0 ? aIdx : 0);
+        m_scalePoint->setChecked(f.value(QStringLiteral("pointSample")).toBool(false));
+        m_stack->setCurrentWidget(m_scalePage);
     } else {
         m_stack->setCurrentWidget(m_emptyPage);
     }
@@ -1013,6 +1068,12 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("amount"), m_sharpenAmount->value());
                 } else if (type == QLatin1String("color_invert")) {
                     o.insert(QStringLiteral("enabled"), m_invertEnabled->isChecked());
+                } else if (type == QLatin1String("scale")) {
+                    o.insert(QStringLiteral("enabled"), m_scaleEnabled->isChecked());
+                    o.insert(QStringLiteral("width"), m_scaleW->value());
+                    o.insert(QStringLiteral("height"), m_scaleH->value());
+                    o.insert(QStringLiteral("aspect"), m_scaleAspect->currentData().toInt());
+                    o.insert(QStringLiteral("pointSample"), m_scalePoint->isChecked());
                 }
                 arr.replace(i, o);
                 break;

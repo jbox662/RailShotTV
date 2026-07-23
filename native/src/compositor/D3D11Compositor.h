@@ -112,6 +112,7 @@ private:
     ID3D11Buffer* m_cb = nullptr;
     ID3D11Buffer* m_transCb = nullptr;
     ID3D11SamplerState* m_sampler = nullptr;
+    ID3D11SamplerState* m_pointSampler = nullptr;
     ID3D11BlendState* m_blend = nullptr;
     ID3D11BlendState* m_blendOpaque = nullptr;
     int m_wipeDirection = 0;

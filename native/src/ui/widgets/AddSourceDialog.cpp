@@ -84,7 +84,10 @@ QJsonObject defaultSettingsFor(SourceType type)
     case SourceType::Slideshow:
         s.insert(QStringLiteral("paths"), QJsonArray{});
         s.insert(QStringLiteral("intervalMs"), 5000);
+        s.insert(QStringLiteral("transition"), QStringLiteral("fade"));
+        s.insert(QStringLiteral("transitionMs"), 700);
         s.insert(QStringLiteral("loop"), true);
+        s.insert(QStringLiteral("randomize"), false);
         break;
     case SourceType::Scene:
         s.insert(QStringLiteral("sceneId"), QString());

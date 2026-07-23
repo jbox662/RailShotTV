@@ -145,12 +145,13 @@ void AdvAudioDialog::addHeader(QGridLayout* grid)
     mk(8, QStringLiteral("Gate"));
     mk(9, QStringLiteral("Compressor"));
     mk(10, QStringLiteral("Expander"));
-    mk(11, QStringLiteral("EQ L/M/H"));
-    mk(12, QStringLiteral("Limiter"));
-    mk(13, QStringLiteral("Echo"));
-    mk(14, QStringLiteral("Invert Polarity"));
-    mk(15, QStringLiteral("Audio Monitoring"));
-    mk(16, QStringLiteral("Tracks"));
+    mk(11, QStringLiteral("Upward Comp"));
+    mk(12, QStringLiteral("EQ L/M/H"));
+    mk(13, QStringLiteral("Limiter"));
+    mk(14, QStringLiteral("Echo"));
+    mk(15, QStringLiteral("Invert Polarity"));
+    mk(16, QStringLiteral("Audio Monitoring"));
+    mk(17, QStringLiteral("Tracks"));
 }
 
 void AdvAudioDialog::rebuildRows()
@@ -358,6 +359,30 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     expLay->addWidget(w.expRatio);
     grid->addWidget(expHost, row, 10);
 
+    auto* upHost = new QWidget(m_rowsHost);
+    auto* upLay = new QHBoxLayout(upHost);
+    upLay->setContentsMargins(0, 0, 0, 0);
+    upLay->setSpacing(4);
+    w.upCompOn = new QCheckBox(upHost);
+    w.upCompOn->setChecked(ch.upCompEnabled);
+    w.upCompOn->setToolTip(QStringLiteral("Upward compressor — boost below threshold"));
+    w.upCompThresh = new QDoubleSpinBox(upHost);
+    w.upCompThresh->setRange(-80.0, 0.0);
+    w.upCompThresh->setDecimals(0);
+    w.upCompThresh->setSuffix(QStringLiteral(" dB"));
+    w.upCompThresh->setValue(ch.upCompThresholdDb);
+    w.upCompThresh->setFixedWidth(72);
+    w.upCompRatio = new QDoubleSpinBox(upHost);
+    w.upCompRatio->setRange(1.0, 20.0);
+    w.upCompRatio->setDecimals(1);
+    w.upCompRatio->setPrefix(QStringLiteral("1:"));
+    w.upCompRatio->setValue(ch.upCompRatio);
+    w.upCompRatio->setFixedWidth(64);
+    upLay->addWidget(w.upCompOn);
+    upLay->addWidget(w.upCompThresh);
+    upLay->addWidget(w.upCompRatio);
+    grid->addWidget(upHost, row, 11);
+
     auto* eqHost = new QWidget(m_rowsHost);
     auto* eqLay = new QHBoxLayout(eqHost);
     eqLay->setContentsMargins(0, 0, 0, 0);
@@ -375,7 +400,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     mkEq(w.eqLow, ch.eqLowDb, QStringLiteral("Low band (< ~800 Hz)"));
     mkEq(w.eqMid, ch.eqMidDb, QStringLiteral("Mid band"));
     mkEq(w.eqHigh, ch.eqHighDb, QStringLiteral("High band (> ~5 kHz)"));
-    grid->addWidget(eqHost, row, 11);
+    grid->addWidget(eqHost, row, 12);
 
     auto* limHost = new QWidget(m_rowsHost);
     auto* limLay = new QHBoxLayout(limHost);
@@ -399,7 +424,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     limLay->addWidget(w.limOn);
     limLay->addWidget(w.limThresh);
     limLay->addWidget(w.limRelease);
-    grid->addWidget(limHost, row, 12);
+    grid->addWidget(limHost, row, 13);
 
     auto* echoHost = new QWidget(m_rowsHost);
     auto* echoLay = new QHBoxLayout(echoHost);
@@ -431,12 +456,12 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     echoLay->addWidget(w.echoDelay);
     echoLay->addWidget(w.echoDecay);
     echoLay->addWidget(w.echoWet);
-    grid->addWidget(echoHost, row, 13);
+    grid->addWidget(echoHost, row, 14);
 
     w.invertPolarity = new QCheckBox(m_rowsHost);
     w.invertPolarity->setChecked(ch.invertPolarity);
     w.invertPolarity->setToolTip(QStringLiteral("Invert audio polarity (phase flip)"));
-    grid->addWidget(w.invertPolarity, row, 14);
+    grid->addWidget(w.invertPolarity, row, 15);
 
     w.monitoring = new QComboBox(m_rowsHost);
     w.monitoring->addItem(QStringLiteral("Monitor Off"), int(AudioMonitoringType::None));
@@ -444,7 +469,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     w.monitoring->addItem(QStringLiteral("Monitor and Output"), int(AudioMonitoringType::MonitorAndOutput));
     const int monIdx = w.monitoring->findData(int(ch.monitoring));
     w.monitoring->setCurrentIndex(monIdx >= 0 ? monIdx : 2);
-    grid->addWidget(w.monitoring, row, 15);
+    grid->addWidget(w.monitoring, row, 16);
 
     auto* trackHost = new QWidget(m_rowsHost);
     auto* trackLay = new QHBoxLayout(trackHost);
@@ -455,7 +480,7 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
         w.tracks[t]->setChecked(ch.trackMask & (1u << t));
         trackLay->addWidget(w.tracks[t]);
     }
-    grid->addWidget(trackHost, row, 16);
+    grid->addWidget(trackHost, row, 17);
 
     m_rows.insert(channelId, w);
 
@@ -478,6 +503,9 @@ void AdvAudioDialog::addChannelRow(QGridLayout* grid, int row, const QString& ch
     connect(w.expOn, &QCheckBox::toggled, this, wire);
     connect(w.expThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.expRatio, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.upCompOn, &QCheckBox::toggled, this, wire);
+    connect(w.upCompThresh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
+    connect(w.upCompRatio, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.eqLow, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.eqMid, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
     connect(w.eqHigh, qOverload<double>(&QDoubleSpinBox::valueChanged), this, wire);
@@ -537,6 +565,9 @@ void AdvAudioDialog::applyChannel(const QString& id)
     if (w.expOn) state.expEnabled = w.expOn->isChecked();
     if (w.expThresh) state.expThresholdDb = float(w.expThresh->value());
     if (w.expRatio) state.expRatio = float(w.expRatio->value());
+    if (w.upCompOn) state.upCompEnabled = w.upCompOn->isChecked();
+    if (w.upCompThresh) state.upCompThresholdDb = float(w.upCompThresh->value());
+    if (w.upCompRatio) state.upCompRatio = float(w.upCompRatio->value());
     if (w.eqLow) state.eqLowDb = float(w.eqLow->value());
     if (w.eqMid) state.eqMidDb = float(w.eqMid->value());
     if (w.eqHigh) state.eqHighDb = float(w.eqHigh->value());

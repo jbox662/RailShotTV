@@ -186,6 +186,12 @@ struct AudioChannelState {
     float expAttackMs = 10.f;
     float expReleaseMs = 100.f;
 
+    bool upCompEnabled = false;       // Upward compressor (boost below threshold)
+    float upCompThresholdDb = -32.f;
+    float upCompRatio = 2.f;
+    float upCompAttackMs = 10.f;
+    float upCompReleaseMs = 60.f;
+
     bool echoEnabled = false;
     float echoDelayMs = 250.f;        // 1..1000
     float echoDecay = 0.45f;          // feedback 0..0.95

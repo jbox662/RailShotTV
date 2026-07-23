@@ -13,6 +13,7 @@ class QStackedWidget;
 class QPushButton;
 class QComboBox;
 class QLineEdit;
+class QSpinBox;
 
 namespace railshot {
 class EngineController;
@@ -56,6 +57,7 @@ private:
     QWidget* m_scrollPage = nullptr;
     QWidget* m_sharpenPage = nullptr;
     QWidget* m_invertPage = nullptr;
+    QWidget* m_scalePage = nullptr;
     QWidget* m_emptyPage = nullptr;
 
     QCheckBox* m_chromaEnabled = nullptr;
@@ -112,6 +114,11 @@ private:
     QCheckBox* m_sharpenEnabled = nullptr;
     QSlider* m_sharpenAmount = nullptr;
     QCheckBox* m_invertEnabled = nullptr;
+    QCheckBox* m_scaleEnabled = nullptr;
+    QSpinBox* m_scaleW = nullptr;
+    QSpinBox* m_scaleH = nullptr;
+    QComboBox* m_scaleAspect = nullptr;
+    QCheckBox* m_scalePoint = nullptr;
     QLabel* m_hint = nullptr;
     QPushButton* m_upBtn = nullptr;
     QPushButton* m_downBtn = nullptr;

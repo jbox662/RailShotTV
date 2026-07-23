@@ -332,6 +332,11 @@ void AudioGraph::applyChannelsFromJson(const QJsonArray& arr)
                 cur.expRatio = s.expRatio;
                 cur.expAttackMs = s.expAttackMs;
                 cur.expReleaseMs = s.expReleaseMs;
+                cur.upCompEnabled = s.upCompEnabled;
+                cur.upCompThresholdDb = s.upCompThresholdDb;
+                cur.upCompRatio = s.upCompRatio;
+                cur.upCompAttackMs = s.upCompAttackMs;
+                cur.upCompReleaseMs = s.upCompReleaseMs;
                 cur.echoEnabled = s.echoEnabled;
                 cur.echoDelayMs = s.echoDelayMs;
                 cur.echoDecay = s.echoDecay;
@@ -520,6 +525,30 @@ void AudioGraph::applyChannelDsp(const QString& channelId, const AudioChannelSta
             if (env < thrLin && thrLin > 1e-6f) {
                 const float under = std::max(env / thrLin, 1e-4f);
                 gain = std::pow(under, ratio - 1.f);
+            }
+            buf.samples[size_t(i) * bch] = l * gain;
+            if (bch > 1)
+                buf.samples[size_t(i) * bch + 1] = r * gain;
+        }
+    }
+
+    if (ch.upCompEnabled) {
+        float& env = m_upCompEnv[channelId];
+        const float thrLin = std::pow(10.f, ch.upCompThresholdDb / 20.f);
+        const float ratio = std::max(1.f, ch.upCompRatio);
+        const float att = std::exp(-1.f / std::max(1.f, ch.upCompAttackMs * 0.001f * sr));
+        const float rel = std::exp(-1.f / std::max(1.f, ch.upCompReleaseMs * 0.001f * sr));
+        for (int i = 0; i < n; ++i) {
+            float l = buf.samples[size_t(i) * bch];
+            float r = bch > 1 ? buf.samples[size_t(i) * bch + 1] : l;
+            const float level = std::max(std::abs(l), std::abs(r));
+            const float coef = (level > env) ? att : rel;
+            env = level + coef * (env - level);
+            float gain = 1.f;
+            if (env < thrLin && thrLin > 1e-6f && env > 1e-6f) {
+                const float under = env / thrLin;
+                // Boost quiet signals toward threshold (OBS upward compressor).
+                gain = std::pow(under, 1.f / ratio - 1.f);
             }
             buf.samples[size_t(i) * bch] = l * gain;
             if (bch > 1)
