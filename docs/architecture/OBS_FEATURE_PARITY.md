@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 23 (Audio Echo + procedural Luma Wipe).
+Last updated: Wave 24 (Show/Hide opacity fades + source visibility/lock hotkeys).
 
 ## Design rules
 
@@ -22,14 +22,14 @@ Last updated: Wave 23 (Audio Echo + procedural Luma Wipe).
 | OBSBasicPreview | Interactive preview | partial | `PreviewWidget` + Display ▾ (scale/lock/projectors) |
 | OBSBasic_StudioMode | Preview/Program | partial | Dual monitors; Studio Mode toggle + Swap |
 | OBSBasic_Scenes | Scenes dock | partial | `SceneListWidget` + full toolbar |
-| OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color) |
+| OBSBasic_SceneItems | Sources dock | partial | `InputTilesWidget` (OBS context menu: rename, filters, transform, order, duplicate, copy/paste filters, Set Color); Show/Hide opacity fade |
 | AudioMixer | Mixer dock | partial | `AudioMixerWidget` + Adv Audio (OBS audio-capable sources only) |
-| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe/Luma Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override |
+| OBSBasic_Transitions | Transitions | partial | `TransitionPanel` (Wipe/Push/Swipe/Luma Wipe L/R/U/D; Merge ≠ Fade; Stinger + POT); per-scene Transition Override; Show/Hide fade duration |
 | Groups / Scene | Scene-as-source + Groups | partial | `SourceType::Scene` / `Group`; nested compose + `childIds` |
 | OBSBasicStats | Stats dock | partial | `ObsStatsDock` + Analytics page |
 | OBSProjector / Multiview | Projectors | partial | `ProjectorWindow` + `MultiviewWindow` |
 | OBSBasic_ContextToolbar | Source context toolbar | partial | `SourceContextToolbar` |
-| OBSBasic_Hotkeys | Hotkeys | partial | `HotkeyDispatcher` + Settings labels + Shortcuts overlay |
+| OBSBasic_Hotkeys | Hotkeys | partial | `HotkeyDispatcher` + Settings labels + Shortcuts overlay (+ Show/Hide / Lock selected source) |
 | OBSBasic_Recording/_Streaming/_ReplayBuffer/_VirtualCam | Outputs | partial | `OutputHub` + Settings Stream/Output/Advanced |
 | OBSBasic_Screenshots | Screenshots | partial | Preview/Program PNG via View menu + F12 |
 | OBSBasic_Projectors | Projector windows | partial | `ProjectorWindow` + View menu |
@@ -82,3 +82,4 @@ Last updated: Wave 23 (Audio Echo + procedural Luma Wipe).
 - [x] Wave 21 — Color Correction Multiply/Add + Swipe transition (OBS-style; Show/Hide still deferred)
 - [x] Wave 22 — Media Restart/End Action + Adv Audio Expander (Show/Hide still deferred)
 - [x] Wave 23 — Adv Audio Echo/Delay FX + procedural Luma Wipe (image-luma / Show/Hide deferred)
+- [x] Wave 24 — Source Show/Hide opacity fades + visibility/lock hotkeys (Shift+V / Shift+L)

@@ -311,6 +311,7 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
 
     connect(engine, &EngineController::selectedSourceChanged, this, [this](const QString&) { rebuild(); });
     connect(engine->sceneGraph(), &SceneGraph::projectChanged, this, [this] { rebuild(); });
+    connect(engine, &EngineController::showHideFadeChanged, this, [this] { rebuild(); });
     rebuild();
 }
 
@@ -443,7 +444,7 @@ void SourcePropertiesWidget::rebuild()
                              ? QStringLiteral("PROPERTIES — %1").arg(src->name.toUpper())
                              : QStringLiteral("INPUT SETTINGS — %1").arg(src->name.toUpper()));
         m_name->setText(src->name);
-        m_visible->setChecked(src->visible);
+        m_visible->setChecked(m_engine->sourceVisibilityTarget(src->id));
         m_locked->setChecked(src->locked);
         m_x->setValue(src->transform.x);
         m_y->setValue(src->transform.y);

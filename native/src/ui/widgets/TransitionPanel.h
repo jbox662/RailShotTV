@@ -35,6 +35,8 @@ private:
     QPushButton* m_go = nullptr;
     QLabel* m_speedValue = nullptr;
     QSlider* m_speed = nullptr;
+    QLabel* m_showHideValue = nullptr;
+    QSlider* m_showHideFade = nullptr;
     QLineEdit* m_stingerPath = nullptr;
     QSlider* m_stingerPoint = nullptr;
     QWidget* m_stingerBox = nullptr;

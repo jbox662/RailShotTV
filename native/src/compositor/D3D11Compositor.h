@@ -50,6 +50,9 @@ public:
     void setWipeDirection(int direction);
     int wipeDirection() const { return m_wipeDirection; }
 
+    /// Per-source opacity multipliers for Show/Hide fades (missing id → 1.0).
+    void setShowHideFadeMuls(const QHash<QString, float>& muls) { m_showHideFadeMuls = muls; }
+
     /// Fullscreen overlay (stinger) using source alpha.
     void drawFullscreenOverlay(ID3D11Texture2D* tex, float opacity = 1.0f, bool toProgram = true);
 
@@ -109,6 +112,9 @@ private:
     int m_wipeDirection = 0;
     QElapsedTimer m_fxClock;
     QHash<QString, MaskEntry> m_maskCache;
+    QHash<QString, float> m_showHideFadeMuls;
+
+    float showHideFadeMul(const QString& sourceId) const;
 };
 
 } // namespace railshot

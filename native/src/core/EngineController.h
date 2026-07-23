@@ -5,6 +5,8 @@
 #include "core/SettingsStore.h"
 #include <QObject>
 #include <QTimer>
+#include <QHash>
+#include <QElapsedTimer>
 #include <memory>
 #include <optional>
 
@@ -81,8 +83,16 @@ public:
     /// OBS Duplicate Source — returns new id (empty on failure).
     QString duplicateSource(const QString& sourceId);
     void setSourceVisible(const QString& sourceId, bool visible);
+    /// Instant show/hide without opacity fade (e.g. internal cleanup).
+    void setSourceVisibleImmediate(const QString& sourceId, bool visible);
+    /// Target visibility (accounts for in-progress Show/Hide fade).
+    bool sourceVisibilityTarget(const QString& sourceId) const;
+    void toggleSourceVisible(const QString& sourceId);
     void setSourceName(const QString& sourceId, const QString& name);
     void setSourceLocked(const QString& sourceId, bool locked);
+    /// Project extras `showHideFadeMs` (default 300; 0 = instant).
+    int showHideFadeMs() const;
+    void setShowHideFadeMs(int ms);
     void setSourceColor(const QString& sourceId, const QString& colorHex);
     void moveSourceZOrder(const QString& sourceId, int delta);
     /// toTop=true moves to top of stack (drawn last).
@@ -123,6 +133,8 @@ signals:
     void studioModeChanged(bool enabled);
     void replayBufferEnabledChanged(bool enabled);
     void historyChanged();
+    /// Fired when a Show/Hide fade starts, reverses, or completes (UI eye/target refresh).
+    void showHideFadeChanged();
 
 private slots:
     void onTelemetryTick();
@@ -134,9 +146,16 @@ private:
     void restartMediaOnSceneActivate(const QString& sceneId);
     void updateEngineState();
     void tickIsoRecorders(qint64 ptsUs);
+    void tickShowHideFades();
     void syncSourceAudioToGraph(const QString& sourceId, const QString& name, const QJsonObject& settings);
     /// OBS mixer: only audio-capable sources (Browser needs controlAudioViaObs).
     void syncMixerChannelsFromProject();
+    void applyVisibilityFlag(const QString& sourceId, bool visible);
+
+    struct ShowHideFade {
+        float mul = 1.f;
+        float target = 1.f;
+    };
 
     std::unique_ptr<SceneGraph> m_sceneGraph;
     std::unique_ptr<SettingsStore> m_settings;
@@ -165,6 +184,8 @@ private:
     bool m_studioMode = true;
     QString m_selectedSourceId;
     class IsoRecordManager* m_iso = nullptr;
+    QHash<QString, ShowHideFade> m_showHideFades;
+    QElapsedTimer m_showHideClock;
 };
 
 } // namespace railshot

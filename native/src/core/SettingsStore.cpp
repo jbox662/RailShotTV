@@ -82,6 +82,8 @@ QJsonObject SettingsStore::hotkeys() const
         {QStringLiteral("studioModeToggle"), QStringLiteral("Shift+F10")},
         {QStringLiteral("muteMic"), QStringLiteral("M")},
         {QStringLiteral("muteDesktop"), QStringLiteral("Shift+M")},
+        {QStringLiteral("toggleSourceVisible"), QStringLiteral("Shift+V")},
+        {QStringLiteral("toggleSourceLocked"), QStringLiteral("Shift+L")},
         {QStringLiteral("scoreAPlus"), QStringLiteral("Q")},
         {QStringLiteral("scoreAMinus"), QStringLiteral("A")},
         {QStringLiteral("scoreBPlus"), QStringLiteral("E")},

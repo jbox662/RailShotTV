@@ -41,6 +41,8 @@ QString HotkeyDispatcher::labelForAction(const QString& action)
         {QStringLiteral("studioModeToggle"), QStringLiteral("Toggle Studio Mode")},
         {QStringLiteral("muteMic"), QStringLiteral("Mute/Unmute Mic")},
         {QStringLiteral("muteDesktop"), QStringLiteral("Mute/Unmute Desktop Audio")},
+        {QStringLiteral("toggleSourceVisible"), QStringLiteral("Show/Hide Selected Source")},
+        {QStringLiteral("toggleSourceLocked"), QStringLiteral("Lock/Unlock Selected Source")},
         {QStringLiteral("scoreAPlus"), QStringLiteral("Score A +1")},
         {QStringLiteral("scoreAMinus"), QStringLiteral("Score A −1")},
         {QStringLiteral("scoreBPlus"), QStringLiteral("Score B +1")},
@@ -71,6 +73,7 @@ QStringList HotkeyDispatcher::orderedActions()
         QStringLiteral("replayToggle"), QStringLiteral("saveReplay"),
         QStringLiteral("studioSwap"), QStringLiteral("studioModeToggle"),
         QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
+        QStringLiteral("toggleSourceVisible"), QStringLiteral("toggleSourceLocked"),
         QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
         QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
         QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
@@ -223,6 +226,20 @@ void HotkeyDispatcher::dispatch(const QString& action)
             st.muted = !st.muted;
             m_engine->audio()->setChannelState(st.id, st);
         }
+        return;
+    }
+    if (action == QLatin1String("toggleSourceVisible")) {
+        const QString id = m_engine->selectedSourceId();
+        if (id.isEmpty()) return;
+        m_engine->toggleSourceVisible(id);
+        return;
+    }
+    if (action == QLatin1String("toggleSourceLocked")) {
+        const QString id = m_engine->selectedSourceId();
+        if (id.isEmpty()) return;
+        const auto src = m_engine->selectedSource();
+        if (!src) return;
+        m_engine->setSourceLocked(id, !src->locked);
         return;
     }
     auto* sb = m_engine->scoreboard();

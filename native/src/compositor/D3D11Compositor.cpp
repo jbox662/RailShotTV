@@ -499,6 +499,12 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
 #endif
 }
 
+float D3D11Compositor::showHideFadeMul(const QString& sourceId) const
+{
+    const auto it = m_showHideFadeMuls.constFind(sourceId);
+    return it == m_showHideFadeMuls.cend() ? 1.0f : it.value();
+}
+
 bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProgram, float transitionMix,
                               float clearR, float clearG, float clearB, const Project* project)
 {
@@ -513,7 +519,7 @@ bool D3D11Compositor::compose(const SceneItem& scene, FrameBus& bus, bool toProg
         if (!src.visible) continue;
         if (grouped.contains(src.id)) continue; // drawn via parent Group
         SourceItem drawn = src;
-        drawn.transform.opacity *= transitionMix;
+        drawn.transform.opacity *= transitionMix * showHideFadeMul(src.id);
         drawSource(drawn, bus, rtv);
     }
     m_nestDepth = savedDepth;
@@ -661,6 +667,7 @@ void D3D11Compositor::drawSceneOrGroup(const SourceItem& src, FrameBus& bus, ID3
             if (!child || !child->visible) continue;
             SourceItem drawn = *child;
             drawn.transform = combineTransform(src.transform, child->transform);
+            drawn.transform.opacity *= showHideFadeMul(child->id);
             drawSource(drawn, bus, rtv);
         }
         return;
@@ -684,7 +691,9 @@ void D3D11Compositor::drawSceneOrGroup(const SourceItem& src, FrameBus& bus, ID3
     for (const auto& child : nested->sources) {
         if (!child.visible) continue;
         if (grouped.contains(child.id)) continue;
-        drawSource(child, bus, m_nestRtv);
+        SourceItem drawn = child;
+        drawn.transform.opacity *= showHideFadeMul(child.id);
+        drawSource(drawn, bus, m_nestRtv);
     }
     --m_nestDepth;
     drawTexture(m_nestTex, src.transform, 1.0f, rtv);

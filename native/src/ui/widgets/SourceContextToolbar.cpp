@@ -48,6 +48,7 @@ SourceContextToolbar::SourceContextToolbar(EngineController* engine, QWidget* pa
 
     connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, &SourceContextToolbar::rebuild);
     connect(m_engine, &EngineController::selectedSourceChanged, this, &SourceContextToolbar::setSourceId);
+    connect(m_engine, &EngineController::showHideFadeChanged, this, &SourceContextToolbar::rebuild);
     setSourceId(m_engine->selectedSourceId());
 }
 
@@ -87,13 +88,10 @@ void SourceContextToolbar::rebuild()
 
     m_title->setText(QStringLiteral("%1 · %2").arg(sourceTypeToString(src->type), src->name));
 
-    auto* vis = addBtn(src->visible ? QStringLiteral("Hide") : QStringLiteral("Show"),
+    auto* vis = addBtn(m_engine->sourceVisibilityTarget(m_sourceId) ? QStringLiteral("Hide") : QStringLiteral("Show"),
                        QStringLiteral("Toggle visibility"));
     connect(vis, &QPushButton::clicked, this, [this] {
-        m_engine->sceneGraph()->mutate([this](Project& p) {
-            if (auto* s = p.findSourceAnywhere(m_sourceId))
-                s->visible = !s->visible;
-        });
+        m_engine->toggleSourceVisible(m_sourceId);
     });
 
     auto* lock = addBtn(src->locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"),

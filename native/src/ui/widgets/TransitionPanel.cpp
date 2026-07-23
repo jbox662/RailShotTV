@@ -284,6 +284,32 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     });
     m_speedValue->setText(QStringLiteral("%1 ms").arg(m_speed->value()));
     col->addWidget(m_speed);
+
+    auto* shLab = new QLabel(QStringLiteral("SHOW / HIDE FADE"), this);
+    shLab->setObjectName(QStringLiteral("sec"));
+    col->addWidget(shLab);
+    auto* shRow = new QHBoxLayout();
+    m_showHideValue = new QLabel(QStringLiteral("300 ms"), this);
+    m_showHideValue->setObjectName(QStringLiteral("hint"));
+    m_showHideValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_showHideValue->setMinimumWidth(52);
+    shRow->addStretch(1);
+    shRow->addWidget(m_showHideValue);
+    col->addLayout(shRow);
+    m_showHideFade = new QSlider(Qt::Horizontal, this);
+    m_showHideFade->setObjectName(QStringLiteral("speedSlider"));
+    m_showHideFade->setRange(0, 2000);
+    m_showHideFade->setSingleStep(50);
+    m_showHideFade->setPageStep(100);
+    m_showHideFade->setValue(m_engine->showHideFadeMs());
+    m_showHideFade->setToolTip(QStringLiteral("Source Show/Hide opacity fade (0 = instant)"));
+    connect(m_showHideFade, &QSlider::valueChanged, this, [this](int v) {
+        m_showHideValue->setText(QStringLiteral("%1 ms").arg(v));
+        m_engine->setShowHideFadeMs(v);
+    });
+    m_showHideValue->setText(QStringLiteral("%1 ms").arg(m_showHideFade->value()));
+    col->addWidget(m_showHideFade);
+
     col->addStretch();
 
     connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, [this] {
@@ -427,6 +453,13 @@ void TransitionPanel::syncSpeedFromProject()
     m_speed->setValue(ms);
     if (m_speedValue)
         m_speedValue->setText(QStringLiteral("%1 ms").arg(ms));
+    if (m_showHideFade && !m_showHideFade->isSliderDown()) {
+        const int sh = m_engine->showHideFadeMs();
+        QSignalBlocker bsh(m_showHideFade);
+        m_showHideFade->setValue(sh);
+        if (m_showHideValue)
+            m_showHideValue->setText(QStringLiteral("%1 ms").arg(sh));
+    }
     if (m_stingerPath) {
         QSignalBlocker bp(m_stingerPath);
         m_stingerPath->setText(snap.extras.value(QStringLiteral("stingerPath")).toString());

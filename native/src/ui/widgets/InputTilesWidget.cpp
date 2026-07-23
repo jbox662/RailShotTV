@@ -191,6 +191,7 @@ InputTilesWidget::InputTilesWidget(EngineController* engine, QWidget* parent)
 
     connect(m_engine->sceneGraph(), &SceneGraph::projectChanged, this, &InputTilesWidget::refresh);
     connect(m_engine, &EngineController::selectedSourceChanged, this, [this](const QString&) { refresh(); });
+    connect(m_engine, &EngineController::showHideFadeChanged, this, &InputTilesWidget::refresh);
     refresh();
 }
 
@@ -282,24 +283,25 @@ void InputTilesWidget::refresh()
         icon->setStyleSheet(QStringLiteral("font-size:13px; color:%1;")
                                 .arg(src.colorHex.isEmpty() ? QStringLiteral("#C8CAD0") : src.colorHex));
 
+        const bool shown = m_engine->sourceVisibilityTarget(src.id);
         auto* name = new QLabel(src.name, bar);
         name->setStyleSheet(QStringLiteral(
             "color:#E8ECF4; font-family:'DM Sans'; font-size:12px; font-weight:600;"));
-        if (!src.visible)
+        if (!shown)
             name->setStyleSheet(QStringLiteral(
                 "color:#606878; font-family:'DM Sans'; font-size:12px; font-weight:600;"));
 
         auto* vis = new QToolButton(bar);
-        vis->setText(src.visible ? QStringLiteral("👁") : QStringLiteral("◌"));
-        vis->setToolTip(src.visible ? QStringLiteral("Hide") : QStringLiteral("Show"));
+        vis->setText(shown ? QStringLiteral("👁") : QStringLiteral("◌"));
+        vis->setToolTip(shown ? QStringLiteral("Hide") : QStringLiteral("Show"));
         vis->setAutoRaise(true);
         vis->setFixedSize(24, 24);
         vis->setCursor(Qt::PointingHandCursor);
         vis->setStyleSheet(QStringLiteral(
             "QToolButton{background:transparent;border:none;font-size:12px;}"
             "QToolButton:hover{background:#2A2D35;border-radius:3px;}"));
-        connect(vis, &QToolButton::clicked, this, [this, id = src.id, v = src.visible] {
-            m_engine->setSourceVisible(id, !v);
+        connect(vis, &QToolButton::clicked, this, [this, id = src.id] {
+            m_engine->toggleSourceVisible(id);
         });
 
         auto* lock = new QToolButton(bar);
@@ -387,8 +389,8 @@ void InputTilesWidget::refresh()
             });
 
             menu.addSeparator();
-            menu.addAction(src.visible ? QStringLiteral("Hide") : QStringLiteral("Show"), this,
-                           [this, id, v = src.visible] { m_engine->setSourceVisible(id, !v); });
+            menu.addAction(m_engine->sourceVisibilityTarget(id) ? QStringLiteral("Hide") : QStringLiteral("Show"), this,
+                           [this, id] { m_engine->toggleSourceVisible(id); });
             menu.addAction(src.locked ? QStringLiteral("Unlock") : QStringLiteral("Lock"), this,
                            [this, id, l = src.locked] { m_engine->setSourceLocked(id, !l); });
 

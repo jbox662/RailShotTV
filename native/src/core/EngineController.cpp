@@ -24,6 +24,7 @@
 #include <QJsonArray>
 #include <QThread>
 #include <algorithm>
+#include <cmath>
 
 namespace railshot {
 
@@ -210,6 +211,14 @@ bool EngineController::initialize(QString* error)
         m_capture->syncWithScenes(scenes);
         m_capture->poll();
 
+        tickShowHideFades();
+        if (m_compositor) {
+            QHash<QString, float> fadeMuls;
+            for (auto it = m_showHideFades.cbegin(); it != m_showHideFades.cend(); ++it)
+                fadeMuls.insert(it.key(), it.value().mul);
+            m_compositor->setShowHideFadeMuls(fadeMuls);
+        }
+
         float mix = 1.0f;
         TransitionType activeType = TransitionType::Cut;
         if (m_transition) {
@@ -279,6 +288,7 @@ bool EngineController::initialize(QString* error)
     });
     renderTimer->start(16);
 
+    m_showHideClock.start();
     m_telemetryTimer.start(500);
     m_autosaveTimer.start(30000);
     m_initialized = true;
@@ -614,6 +624,7 @@ QString EngineController::addSource(SourceType type, const QString& name, const 
 
 void EngineController::removeSource(const QString& sourceId)
 {
+    m_showHideFades.remove(sourceId);
     m_sceneGraph->mutate([&](Project& p) {
         // Remove from whichever scene owns it (usually the edit scene).
         for (auto& sc : p.scenes) {
@@ -652,7 +663,13 @@ QString EngineController::duplicateSource(const QString& sourceId)
     return newIdOut;
 }
 
-void EngineController::setSourceVisible(const QString& sourceId, bool visible)
+void EngineController::setSourceVisibleImmediate(const QString& sourceId, bool visible)
+{
+    m_showHideFades.remove(sourceId);
+    applyVisibilityFlag(sourceId, visible);
+}
+
+void EngineController::applyVisibilityFlag(const QString& sourceId, bool visible)
 {
     m_sceneGraph->mutate([&](Project& p) {
         if (auto* s = p.findSourceAnywhere(sourceId))
@@ -667,6 +684,133 @@ void EngineController::setSourceVisible(const QString& sourceId, bool visible)
                 media->requestRestart();
         }
     }
+}
+
+int EngineController::showHideFadeMs() const
+{
+    if (!m_sceneGraph) return 300;
+    return std::clamp(m_sceneGraph->snapshot().extras.value(QStringLiteral("showHideFadeMs")).toInt(300),
+                      0, 5000);
+}
+
+void EngineController::setShowHideFadeMs(int ms)
+{
+    if (!m_sceneGraph) return;
+    const int clamped = std::clamp(ms, 0, 5000);
+    m_sceneGraph->mutate([&](Project& p) {
+        p.extras.insert(QStringLiteral("showHideFadeMs"), clamped);
+    });
+}
+
+void EngineController::tickShowHideFades()
+{
+    const qint64 elapsedMs = m_showHideClock.restart();
+    if (m_showHideFades.isEmpty()) return;
+    const int durationMs = showHideFadeMs();
+    const float dt = float(std::max<qint64>(elapsedMs, 0)) * 0.001f;
+
+    if (durationMs <= 0) {
+        QStringList hideDone;
+        for (auto it = m_showHideFades.begin(); it != m_showHideFades.end(); ++it) {
+            it.value().mul = it.value().target;
+            if (it.value().target <= 0.f)
+                hideDone.push_back(it.key());
+        }
+        for (const QString& id : hideDone) {
+            m_showHideFades.remove(id);
+            applyVisibilityFlag(id, false);
+        }
+        m_showHideFades.clear();
+        return;
+    }
+
+    const float rate = 1.0f / (float(durationMs) * 0.001f);
+    QStringList hideDone;
+    QStringList showDone;
+    for (auto it = m_showHideFades.begin(); it != m_showHideFades.end(); ++it) {
+        ShowHideFade& f = it.value();
+        if (f.mul < f.target)
+            f.mul = std::min(f.target, f.mul + rate * dt);
+        else if (f.mul > f.target)
+            f.mul = std::max(f.target, f.mul - rate * dt);
+        if (std::abs(f.mul - f.target) < 0.001f) {
+            f.mul = f.target;
+            if (f.target <= 0.f)
+                hideDone.push_back(it.key());
+            else
+                showDone.push_back(it.key());
+        }
+    }
+    for (const QString& id : showDone)
+        m_showHideFades.remove(id);
+    for (const QString& id : hideDone) {
+        m_showHideFades.remove(id);
+        applyVisibilityFlag(id, false);
+    }
+    if (!showDone.isEmpty() || !hideDone.isEmpty())
+        emit showHideFadeChanged();
+}
+
+void EngineController::setSourceVisible(const QString& sourceId, bool visible)
+{
+    if (sourceId.isEmpty() || !m_sceneGraph) return;
+    const auto* cur = m_sceneGraph->snapshot().findSourceAnywhere(sourceId);
+    if (!cur) return;
+
+    const int durationMs = showHideFadeMs();
+    if (durationMs <= 0) {
+        setSourceVisibleImmediate(sourceId, visible);
+        return;
+    }
+
+    if (visible) {
+        const bool alreadyVisible = cur->visible;
+        if (!alreadyVisible) {
+            applyVisibilityFlag(sourceId, true);
+            ShowHideFade f;
+            f.mul = 0.f;
+            f.target = 1.f;
+            m_showHideFades.insert(sourceId, f);
+            emit showHideFadeChanged();
+            return;
+        }
+        auto it = m_showHideFades.find(sourceId);
+        if (it == m_showHideFades.end())
+            return; // fully shown
+        it->target = 1.f;
+        emit showHideFadeChanged();
+        return;
+    }
+
+    // Hide
+    if (!cur->visible && !m_showHideFades.contains(sourceId))
+        return;
+    auto it = m_showHideFades.find(sourceId);
+    if (it == m_showHideFades.end()) {
+        ShowHideFade f;
+        f.mul = 1.f;
+        f.target = 0.f;
+        m_showHideFades.insert(sourceId, f);
+    } else {
+        it->target = 0.f;
+    }
+    emit showHideFadeChanged();
+}
+
+bool EngineController::sourceVisibilityTarget(const QString& sourceId) const
+{
+    const auto it = m_showHideFades.constFind(sourceId);
+    if (it != m_showHideFades.cend())
+        return it->target > 0.5f;
+    if (!m_sceneGraph) return false;
+    const auto* src = m_sceneGraph->snapshot().findSourceAnywhere(sourceId);
+    return src && src->visible;
+}
+
+void EngineController::toggleSourceVisible(const QString& sourceId)
+{
+    if (sourceId.isEmpty()) return;
+    setSourceVisible(sourceId, !sourceVisibilityTarget(sourceId));
 }
 
 void EngineController::setSourceName(const QString& sourceId, const QString& name)
