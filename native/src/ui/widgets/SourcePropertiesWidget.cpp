@@ -204,7 +204,7 @@ SourcePropertiesWidget::SourcePropertiesWidget(EngineController* engine, QWidget
     eForm->addRow(m_chromaKey);
     eForm->addRow(QStringLiteral("Similarity"), m_chromaSim);
     eForm->addRow(QStringLiteral("Blur"), m_blur);
-    auto* effectsNote = new QLabel(QStringLiteral("Chroma + blur are live. Sharpen / pixelate still deferred."), effects);
+    auto* effectsNote = new QLabel(QStringLiteral("Chroma + blur + sharpen + pixelate are live via Filters."), effects);
     effectsNote->setWordWrap(true);
     effectsNote->setStyleSheet(QStringLiteral("color:#606878; font-size:10px;"));
     eForm->addRow(effectsNote);

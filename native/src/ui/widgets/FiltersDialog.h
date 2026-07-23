@@ -58,6 +58,7 @@ private:
     QWidget* m_sharpenPage = nullptr;
     QWidget* m_invertPage = nullptr;
     QWidget* m_scalePage = nullptr;
+    QWidget* m_pixelatePage = nullptr;
     QWidget* m_emptyPage = nullptr;
 
     QCheckBox* m_chromaEnabled = nullptr;
@@ -119,6 +120,8 @@ private:
     QSpinBox* m_scaleH = nullptr;
     QComboBox* m_scaleAspect = nullptr;
     QCheckBox* m_scalePoint = nullptr;
+    QCheckBox* m_pixelateEnabled = nullptr;
+    QSlider* m_pixelateAmount = nullptr;
     QLabel* m_hint = nullptr;
     QPushButton* m_upBtn = nullptr;
     QPushButton* m_downBtn = nullptr;

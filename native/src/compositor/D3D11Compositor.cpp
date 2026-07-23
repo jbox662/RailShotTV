@@ -526,6 +526,11 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
             std::clamp(src.settings.value(QStringLiteral("lumaMin")).toDouble(0.0), 0.0, 100.0) / 100.0);
         cb->keyParams[3] = static_cast<float>(
             std::clamp(src.settings.value(QStringLiteral("lumaMax")).toDouble(100.0), 0.0, 100.0) / 100.0);
+        // Pixelate reuses keyParams.x when no key is active
+        if (keyMode == 0) {
+            cb->keyParams[0] = static_cast<float>(
+                std::clamp(src.settings.value(QStringLiteral("pixelate")).toDouble(0.0), 0.0, 100.0) / 100.0);
+        }
 
         const double tSec = m_fxClock.isValid() ? m_fxClock.elapsed() / 1000.0 : 0.0;
         const double sx = src.settings.value(QStringLiteral("scrollSpeedX")).toDouble(0.0);
@@ -894,6 +899,94 @@ void D3D11Compositor::blendProgramHold(float progress, TransitionType type)
     ctx->PSSetShaderResources(0, 3, nullSrvs);
 #else
     Q_UNUSED(progress); Q_UNUSED(type);
+#endif
+}
+
+void D3D11Compositor::blendStingerMatte(ID3D11Texture2D* matteTex, bool invert)
+{
+#ifdef _WIN32
+    if (!matteTex || !m_holdTex || !m_programRtv || !m_device || !m_transScratch || !m_transPs || !m_transCb)
+        return;
+    auto* ctx = m_device->context();
+    auto* dev = m_device->device();
+
+    ctx->CopyResource(m_transScratch, m_programTex);
+
+    ComPtr<ID3D11ShaderResourceView> srvOld;
+    ComPtr<ID3D11ShaderResourceView> srvNew;
+    ComPtr<ID3D11ShaderResourceView> srvMatte;
+    if (FAILED(dev->CreateShaderResourceView(m_holdTex, nullptr, &srvOld)))
+        return;
+    if (FAILED(dev->CreateShaderResourceView(m_transScratch, nullptr, &srvNew)))
+        return;
+    if (FAILED(dev->CreateShaderResourceView(matteTex, nullptr, &srvMatte)))
+        return;
+
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(m_width);
+    vp.Height = static_cast<float>(m_height);
+    vp.MaxDepth = 1.0f;
+    ctx->RSSetViewports(1, &vp);
+    ctx->OMSetRenderTargets(1, &m_programRtv, nullptr);
+    ctx->OMSetBlendState(m_blendOpaque, nullptr, 0xffffffff);
+    ctx->IASetInputLayout(m_layout);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    UINT stride = 16, offset = 0;
+    ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
+    ctx->VSSetShader(m_vs, nullptr, 0);
+    ctx->PSSetShader(m_transPs, nullptr, 0);
+
+    ID3D11ShaderResourceView* srvs[3] = { srvOld.Get(), srvNew.Get(), srvMatte.Get() };
+    ctx->PSSetShaderResources(0, 3, srvs);
+    ctx->PSSetSamplers(0, 1, &m_sampler);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(ctx->Map(m_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        auto* cb = reinterpret_cast<CBData*>(mapped.pData);
+        cb->rect[0] = 0.0f;
+        cb->rect[1] = 0.0f;
+        cb->rect[2] = 1.0f;
+        cb->rect[3] = 1.0f;
+        cb->opacity = 1.0f;
+        cb->rotation = 0.0f;
+        cb->cropMin[0] = 0.0f;
+        cb->cropMin[1] = 0.0f;
+        cb->cropMax[0] = 1.0f;
+        cb->cropMax[1] = 1.0f;
+        cb->_padCrop[0] = 0.0f;
+        cb->_padCrop[1] = 0.0f;
+        cb->colorMul[0] = cb->colorMul[1] = cb->colorMul[2] = cb->colorMul[3] = 1.0f;
+        cb->colorAdd[0] = cb->colorAdd[1] = cb->colorAdd[2] = cb->colorAdd[3] = 0.0f;
+        cb->fxParams[0] = cb->fxParams[1] = cb->fxParams[2] = cb->fxParams[3] = 0.0f;
+        cb->keyColor[0] = cb->keyColor[1] = cb->keyColor[2] = cb->keyColor[3] = 0.0f;
+        cb->keyParams[0] = cb->keyParams[1] = cb->keyParams[2] = 0.0f;
+        cb->keyParams[3] = 1.0f;
+        cb->ccParams[0] = 0.0f;
+        cb->ccParams[1] = 1.0f;
+        cb->ccParams[2] = 1.0f;
+        cb->ccParams[3] = 0.0f;
+        ctx->Unmap(m_cb, 0);
+    }
+    if (SUCCEEDED(ctx->Map(m_transCb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        auto* tcb = reinterpret_cast<TransCBData*>(mapped.pData);
+        tcb->progress = 1.0f;
+        tcb->mode = 24.0f;
+        tcb->aspect = m_height > 0 ? float(m_width) / float(m_height) : 1.0f;
+        tcb->wipeDir = invert ? 1.0f : 0.0f;
+        tcb->hasLuma = 1.0f;
+        tcb->lumaInvert = 0.f;
+        tcb->lumaSoft = 0.07f;
+        tcb->_pad = 0.f;
+        ctx->Unmap(m_transCb, 0);
+    }
+    ctx->VSSetConstantBuffers(0, 1, &m_cb);
+    ctx->PSSetConstantBuffers(0, 1, &m_transCb);
+    ctx->Draw(4, 0);
+
+    ID3D11ShaderResourceView* nullSrvs[3] = { nullptr, nullptr, nullptr };
+    ctx->PSSetShaderResources(0, 3, nullSrvs);
+#else
+    Q_UNUSED(matteTex); Q_UNUSED(invert);
 #endif
 }
 

@@ -39,6 +39,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("color_correction")) return QStringLiteral("Color Correction");
     if (type == QLatin1String("color_invert")) return QStringLiteral("Color Invert");
     if (type == QLatin1String("scale")) return QStringLiteral("Scale/Aspect Ratio");
+    if (type == QLatin1String("pixelate")) return QStringLiteral("Pixelate");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
     if (type == QLatin1String("scroll")) return QStringLiteral("Scroll");
     if (type == QLatin1String("sharpen")) return QStringLiteral("Sharpen");
@@ -84,6 +85,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     bool colorInvert = false;
     int scaleW = 0, scaleH = 0, scaleAspect = 0;
     bool scalePoint = false;
+    int pixelate = 0;
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
@@ -149,6 +151,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             scaleH = o.value(QStringLiteral("height")).toInt(1080);
             scaleAspect = o.value(QStringLiteral("aspect")).toInt(0);
             scalePoint = o.value(QStringLiteral("pointSample")).toBool(false);
+        } else if (type == QLatin1String("pixelate")) {
+            pixelate = qMax(pixelate, o.value(QStringLiteral("amount")).toInt(0));
         }
     }
 
@@ -187,6 +191,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("scaleH"), scaleH);
     settings.insert(QStringLiteral("scaleAspect"), scaleAspect);
     settings.insert(QStringLiteral("scalePoint"), scalePoint);
+    settings.insert(QStringLiteral("pixelate"), pixelate);
 }
 
 void fillKeyTypeCombo(QComboBox* box)
@@ -494,6 +499,19 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_scalePage);
 
+    m_pixelatePage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_pixelatePage);
+        m_pixelateEnabled = new QCheckBox(QStringLiteral("Enabled"), m_pixelatePage);
+        m_pixelateAmount = new QSlider(Qt::Horizontal, m_pixelatePage);
+        m_pixelateAmount->setRange(0, 100);
+        m_pixelateAmount->setValue(40);
+        form->addRow(m_pixelateEnabled);
+        form->addRow(QStringLiteral("Amount"), m_pixelateAmount);
+        form->addRow(new QLabel(QStringLiteral("Disabled while a Key filter is active."), m_pixelatePage));
+    }
+    m_stack->addWidget(m_pixelatePage);
+
     right->addWidget(m_stack, 1);
     auto* closeRow = new QHBoxLayout();
     closeRow->addStretch();
@@ -528,13 +546,13 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
                          m_lutEnabled, m_blurEnabled, m_colorEnabled,
                          m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled, m_invertEnabled,
-                         m_scaleEnabled, m_scalePoint})
+                         m_scaleEnabled, m_scalePoint, m_pixelateEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
                        m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
                        m_brightness, m_contrast, m_saturation, m_hue, m_gamma, m_colorOpacity,
                        m_cropL, m_cropR, m_cropT, m_cropB,
-                       m_scrollX, m_scrollY, m_sharpenAmount})
+                       m_scrollX, m_scrollY, m_sharpenAmount, m_pixelateAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
@@ -739,6 +757,7 @@ void FiltersDialog::onAddFilter()
     auto* sharpen = menu.addAction(QStringLiteral("Sharpen"));
     auto* invert = menu.addAction(QStringLiteral("Color Invert"));
     auto* scale = menu.addAction(QStringLiteral("Scale/Aspect Ratio"));
+    auto* pixelate = menu.addAction(QStringLiteral("Pixelate"));
     auto* chosen = menu.exec(QCursor::pos());
     if (!chosen) return;
 
@@ -807,6 +826,9 @@ void FiltersDialog::onAddFilter()
         f.insert(QStringLiteral("height"), 1080);
         f.insert(QStringLiteral("aspect"), 0);
         f.insert(QStringLiteral("pointSample"), false);
+    } else if (chosen == pixelate) {
+        f.insert(QStringLiteral("type"), QStringLiteral("pixelate"));
+        f.insert(QStringLiteral("amount"), 40);
     } else {
         return;
     }
@@ -992,6 +1014,10 @@ void FiltersDialog::onSelectionChanged()
         m_scaleAspect->setCurrentIndex(aIdx >= 0 ? aIdx : 0);
         m_scalePoint->setChecked(f.value(QStringLiteral("pointSample")).toBool(false));
         m_stack->setCurrentWidget(m_scalePage);
+    } else if (type == QLatin1String("pixelate")) {
+        m_pixelateEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_pixelateAmount->setValue(f.value(QStringLiteral("amount")).toInt(40));
+        m_stack->setCurrentWidget(m_pixelatePage);
     } else {
         m_stack->setCurrentWidget(m_emptyPage);
     }
@@ -1074,6 +1100,9 @@ void FiltersDialog::saveCurrent()
                     o.insert(QStringLiteral("height"), m_scaleH->value());
                     o.insert(QStringLiteral("aspect"), m_scaleAspect->currentData().toInt());
                     o.insert(QStringLiteral("pointSample"), m_scalePoint->isChecked());
+                } else if (type == QLatin1String("pixelate")) {
+                    o.insert(QStringLiteral("enabled"), m_pixelateEnabled->isChecked());
+                    o.insert(QStringLiteral("amount"), m_pixelateAmount->value());
                 }
                 arr.replace(i, o);
                 break;

@@ -92,6 +92,11 @@ float3 hsvToRgb(float3 c) {
 }
 float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
     float2 suv = frac(uv + fxParams.xy);
+    // Pixelate (when no key filter): keyParams.x holds 0..1 amount
+    if (keyColor.w < 0.5 && keyParams.x > 0.001) {
+        float cells = lerp(120.0, 6.0, saturate(keyParams.x));
+        suv = (floor(suv * cells) + 0.5) / cells;
+    }
     float blur = colorAdd.a;
     float4 c = tex.Sample(samp, suv);
     if (blur > 0.0005) {
@@ -470,6 +475,14 @@ float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
                  texNew.Sample(samp, uv - float2(split, 0)).b, p),
             1.0);
         return lerp(mid, n, smoothstep(0.55, 1.0, p));
+    }
+
+    // 24 Stinger Track Matte — luma of t2 mixes old(hold)→new; wipeDir>0.5 = invert
+    if (m == 24) {
+        float3 sample = texLuma.Sample(samp, uv).rgb;
+        float luma = dot(sample, float3(0.2126, 0.7152, 0.0722));
+        if (wipeDir > 0.5) luma = 1.0 - luma;
+        return lerp(o, n, saturate(luma));
     }
 
     return lerp(o, n, p);

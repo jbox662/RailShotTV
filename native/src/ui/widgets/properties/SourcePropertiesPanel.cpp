@@ -512,22 +512,42 @@ public:
         m_transition = new QComboBox(this);
         m_transition->addItem(QStringLiteral("Cut"), QStringLiteral("cut"));
         m_transition->addItem(QStringLiteral("Fade"), QStringLiteral("fade"));
+        m_transition->addItem(QStringLiteral("Swipe"), QStringLiteral("swipe"));
         form->addRow(QStringLiteral("Transition"), m_transition);
         m_transitionMs = new QSpinBox(this);
         m_transitionMs->setRange(0, 10000);
         m_transitionMs->setSuffix(QStringLiteral(" ms"));
         m_transitionMs->setValue(700);
         form->addRow(QStringLiteral("Transition Speed"), m_transitionMs);
+        m_swipeDir = new QComboBox(this);
+        m_swipeDir->addItem(QStringLiteral("Left → Right"), 0);
+        m_swipeDir->addItem(QStringLiteral("Right → Left"), 1);
+        m_swipeDir->addItem(QStringLiteral("Top → Bottom"), 2);
+        m_swipeDir->addItem(QStringLiteral("Bottom → Top"), 3);
+        form->addRow(QStringLiteral("Swipe Direction"), m_swipeDir);
         m_loop = new QCheckBox(QStringLiteral("Loop"), this);
         m_loop->setChecked(true);
         form->addRow(m_loop);
         m_randomize = new QCheckBox(QStringLiteral("Randomize Playback"), this);
         form->addRow(m_randomize);
-        wireChanged(this, m_interval);
+        auto* stepRow = new QHBoxLayout();
+        auto* prevBtn = new QPushButton(QStringLiteral("◀ Prev"), this);
+        auto* nextBtn = new QPushButton(QStringLiteral("Next ▶"), this);
+        connect(prevBtn, &QPushButton::clicked, this, [this] {
+            if (m_engine) m_engine->slideshowStepSelected(-1);
+        });
+        connect(nextBtn, &QPushButton::clicked, this, [this] {
+            if (m_engine) m_engine->slideshowStepSelected(1);
+        });
+        stepRow->addWidget(prevBtn);
+        stepRow->addWidget(nextBtn);
+        form->addRow(stepRow);
         wireChanged(this, m_transition);
         wireChanged(this, m_transitionMs);
+        wireChanged(this, m_swipeDir);
         wireChanged(this, m_loop);
         wireChanged(this, m_randomize);
+        wireChanged(this, m_interval);
     }
     void loadFrom(const SourceItem& src) override
     {
@@ -548,6 +568,8 @@ public:
             src.settings.value(QStringLiteral("transition")).toString(QStringLiteral("cut")));
         m_transition->setCurrentIndex(tIdx >= 0 ? tIdx : 0);
         m_transitionMs->setValue(src.settings.value(QStringLiteral("transitionMs")).toInt(700));
+        const int sIdx = m_swipeDir->findData(src.settings.value(QStringLiteral("swipeDir")).toInt(0));
+        m_swipeDir->setCurrentIndex(sIdx >= 0 ? sIdx : 0);
         m_loop->setChecked(src.settings.value(QStringLiteral("loop")).toBool(true));
         m_randomize->setChecked(src.settings.value(QStringLiteral("randomize")).toBool(false));
     }
@@ -560,6 +582,7 @@ public:
         s.insert(QStringLiteral("intervalMs"), m_interval->value());
         s.insert(QStringLiteral("transition"), m_transition->currentData().toString());
         s.insert(QStringLiteral("transitionMs"), m_transitionMs->value());
+        s.insert(QStringLiteral("swipeDir"), m_swipeDir->currentData().toInt());
         s.insert(QStringLiteral("loop"), m_loop->isChecked());
         s.insert(QStringLiteral("randomize"), m_randomize->isChecked());
     }
@@ -569,6 +592,7 @@ public:
         s.insert(QStringLiteral("intervalMs"), 5000);
         s.insert(QStringLiteral("transition"), QStringLiteral("cut"));
         s.insert(QStringLiteral("transitionMs"), 700);
+        s.insert(QStringLiteral("swipeDir"), 0);
         s.insert(QStringLiteral("loop"), true);
         s.insert(QStringLiteral("randomize"), false);
     }
@@ -578,6 +602,7 @@ private:
     QSpinBox* m_interval = nullptr;
     QComboBox* m_transition = nullptr;
     QSpinBox* m_transitionMs = nullptr;
+    QComboBox* m_swipeDir = nullptr;
     QCheckBox* m_loop = nullptr;
     QCheckBox* m_randomize = nullptr;
 };

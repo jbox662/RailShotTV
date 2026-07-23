@@ -2,6 +2,7 @@
 #include "capture/CaptureManager.h"
 #include "capture/OverlaySource.h"
 #include "capture/MediaSource.h"
+#include "capture/SlideshowSource.h"
 #include "compositor/D3D11Device.h"
 #include "compositor/D3D11Compositor.h"
 #include "compositor/TransitionEngine.h"
@@ -241,19 +242,36 @@ bool EngineController::initialize(QString* error)
                 m_stingerSwapped = true;
                 project = m_sceneGraph->snapshot();
             }
-            const SceneItem* show = nullptr;
-            if (m_stingerSwapped)
-                show = project.findScene(project.programSceneId);
-            else
-                show = project.findScene(m_stingerFromSceneId);
-            if (!show)
-                show = project.findScene(project.programSceneId);
-            if (show)
-                m_compositor->compose(*show, m_capture->frameBus(), true, 1.0f, 0.02f, 0.02f, 0.03f, &project);
-            if (m_stingerMedia) {
-                VideoFrame vf;
-                if (m_stingerMedia->acquireLatest(vf) && vf.texture)
-                    m_compositor->drawFullscreenOverlay(vf.texture, 1.0f, true);
+            const bool trackMatte = project.extras.value(QStringLiteral("stingerTrackMatte")).toBool(false)
+                                    && m_compositor->hasProgramHold();
+            if (trackMatte) {
+                const SceneItem* to = project.findScene(m_stingerToSceneId);
+                if (!to)
+                    to = project.findScene(project.programSceneId);
+                if (to)
+                    m_compositor->compose(*to, m_capture->frameBus(), true, 1.0f, 0.02f, 0.02f, 0.03f, &project);
+                if (m_stingerMedia) {
+                    VideoFrame vf;
+                    if (m_stingerMedia->acquireLatest(vf) && vf.texture) {
+                        const bool invert = project.extras.value(QStringLiteral("stingerMatteInvert")).toBool(false);
+                        m_compositor->blendStingerMatte(vf.texture, invert);
+                    }
+                }
+            } else {
+                const SceneItem* show = nullptr;
+                if (m_stingerSwapped)
+                    show = project.findScene(project.programSceneId);
+                else
+                    show = project.findScene(m_stingerFromSceneId);
+                if (!show)
+                    show = project.findScene(project.programSceneId);
+                if (show)
+                    m_compositor->compose(*show, m_capture->frameBus(), true, 1.0f, 0.02f, 0.02f, 0.03f, &project);
+                if (m_stingerMedia) {
+                    VideoFrame vf;
+                    if (m_stingerMedia->acquireLatest(vf) && vf.texture)
+                        m_compositor->drawFullscreenOverlay(vf.texture, 1.0f, true);
+                }
             }
         } else if (const auto* program = project.findScene(project.programSceneId)) {
             // Crossfade: compose new program at full, then blend hold on top
@@ -502,6 +520,12 @@ void EngineController::go(TransitionType type)
                     emit transitionFinished();
                     return;
                 }
+            }
+            if (m_compositor) {
+                if (p.extras.value(QStringLiteral("stingerTrackMatte")).toBool(false))
+                    m_compositor->captureProgramHold();
+                else
+                    m_compositor->clearProgramHold();
             }
             connect(m_transition, &TransitionEngine::finished, this, [this] {
                 stopStingerMedia();
@@ -815,6 +839,17 @@ void EngineController::toggleSourceVisible(const QString& sourceId)
 {
     if (sourceId.isEmpty()) return;
     setSourceVisible(sourceId, !sourceVisibilityTarget(sourceId));
+}
+
+void EngineController::slideshowStepSelected(int delta)
+{
+    if (delta == 0 || !m_capture) return;
+    const QString id = m_selectedSourceId;
+    if (id.isEmpty()) return;
+    const auto* src = m_sceneGraph ? m_sceneGraph->snapshot().findSourceAnywhere(id) : nullptr;
+    if (!src || src->type != SourceType::Slideshow) return;
+    if (auto* slide = dynamic_cast<SlideshowSource*>(m_capture->source(id)))
+        slide->requestStep(delta);
 }
 
 void EngineController::setSourceName(const QString& sourceId, const QString& name)

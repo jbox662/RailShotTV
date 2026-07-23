@@ -43,6 +43,8 @@ QString HotkeyDispatcher::labelForAction(const QString& action)
         {QStringLiteral("muteDesktop"), QStringLiteral("Mute/Unmute Desktop Audio")},
         {QStringLiteral("toggleSourceVisible"), QStringLiteral("Show/Hide Selected Source")},
         {QStringLiteral("toggleSourceLocked"), QStringLiteral("Lock/Unlock Selected Source")},
+        {QStringLiteral("slideshowNext"), QStringLiteral("Slideshow Next Slide")},
+        {QStringLiteral("slideshowPrev"), QStringLiteral("Slideshow Previous Slide")},
         {QStringLiteral("scoreAPlus"), QStringLiteral("Score A +1")},
         {QStringLiteral("scoreAMinus"), QStringLiteral("Score A −1")},
         {QStringLiteral("scoreBPlus"), QStringLiteral("Score B +1")},
@@ -74,6 +76,7 @@ QStringList HotkeyDispatcher::orderedActions()
         QStringLiteral("studioSwap"), QStringLiteral("studioModeToggle"),
         QStringLiteral("muteMic"), QStringLiteral("muteDesktop"),
         QStringLiteral("toggleSourceVisible"), QStringLiteral("toggleSourceLocked"),
+        QStringLiteral("slideshowNext"), QStringLiteral("slideshowPrev"),
         QStringLiteral("scoreAPlus"), QStringLiteral("scoreAMinus"),
         QStringLiteral("scoreBPlus"), QStringLiteral("scoreBMinus"),
         QStringLiteral("scoreReset"), QStringLiteral("scoreSwap"),
@@ -240,6 +243,14 @@ void HotkeyDispatcher::dispatch(const QString& action)
         const auto src = m_engine->selectedSource();
         if (!src) return;
         m_engine->setSourceLocked(id, !src->locked);
+        return;
+    }
+    if (action == QLatin1String("slideshowNext")) {
+        m_engine->slideshowStepSelected(1);
+        return;
+    }
+    if (action == QLatin1String("slideshowPrev")) {
+        m_engine->slideshowStepSelected(-1);
         return;
     }
     auto* sb = m_engine->scoreboard();

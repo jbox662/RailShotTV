@@ -19,7 +19,7 @@ using Microsoft::WRL::ComPtr;
 namespace railshot {
 
 SlideshowSource::SlideshowSource(QString id, QString name, QStringList paths, int intervalMs, bool loop,
-                                 QString transition, int transitionMs, bool randomize)
+                                 QString transition, int transitionMs, bool randomize, int swipeDir)
     : m_id(std::move(id))
     , m_name(std::move(name))
     , m_paths(std::move(paths))
@@ -28,6 +28,7 @@ SlideshowSource::SlideshowSource(QString id, QString name, QStringList paths, in
     , m_transition(std::move(transition))
     , m_transitionMs((std::max)(0, transitionMs))
     , m_randomize(randomize)
+    , m_swipeDir(std::clamp(swipeDir, 0, 3))
 {
 }
 
@@ -102,6 +103,25 @@ int SlideshowSource::pickNextIndex() const
     return next;
 }
 
+int SlideshowSource::pickPrevIndex() const
+{
+    if (m_paths.size() <= 1)
+        return m_index;
+    if (m_randomize)
+        return pickNextIndex();
+    int prev = m_index - 1;
+    if (prev < 0)
+        return m_loop ? m_paths.size() - 1 : m_index;
+    return prev;
+}
+
+void SlideshowSource::requestStep(int delta)
+{
+    std::lock_guard lock(m_mutex);
+    if (delta == 0) return;
+    m_pendingStep = delta > 0 ? 1 : -1;
+}
+
 bool SlideshowSource::start(ID3D11Device* device, QString* error)
 {
     m_device = device;
@@ -128,6 +148,7 @@ bool SlideshowSource::start(ID3D11Device* device, QString* error)
         m_index = i;
         m_running = true;
         m_fading = false;
+        m_pendingStep = 0;
         m_slideTimer.restart();
         Logger::info(QStringLiteral("Slideshow started: %1 images, %2 ms, %3")
                          .arg(m_paths.size())
@@ -147,6 +168,7 @@ void SlideshowSource::stop()
     std::lock_guard lock(m_mutex);
     m_running = false;
     m_fading = false;
+    m_pendingStep = 0;
 #ifdef _WIN32
     if (m_texture) {
         m_texture->Release();
@@ -159,14 +181,17 @@ void SlideshowSource::stop()
 
 void SlideshowSource::beginAdvance()
 {
+    beginAdvanceTo(pickNextIndex());
+}
+
+void SlideshowSource::beginAdvanceTo(int tryIdx)
+{
     if (!m_running || m_paths.size() <= 1 || m_fading)
         return;
-    const int next = pickNextIndex();
-    if (next == m_index && !m_loop)
+    if (tryIdx == m_index && !m_loop)
         return;
 
     QImage nextImg;
-    int tryIdx = next;
     bool loaded = false;
     for (int tries = 0; tries < m_paths.size(); ++tries) {
         if (loadImage(tryIdx, &nextImg, nullptr)) {
@@ -180,9 +205,10 @@ void SlideshowSource::beginAdvance()
     if (!loaded)
         return;
 
-    const bool useFade = (m_transition.compare(QLatin1String("fade"), Qt::CaseInsensitive) == 0)
-                         && m_transitionMs > 0;
-    if (!useFade) {
+    const bool animated = (m_transition.compare(QLatin1String("fade"), Qt::CaseInsensitive) == 0
+                           || m_transition.compare(QLatin1String("swipe"), Qt::CaseInsensitive) == 0)
+                          && m_transitionMs > 0;
+    if (!animated) {
         if (!uploadImage(nextImg))
             return;
         m_fromImg = nextImg;
@@ -197,10 +223,10 @@ void SlideshowSource::beginAdvance()
     m_index = tryIdx;
     m_fading = true;
     m_fadeTimer.restart();
-    tickFade(); // first blended frame
+    tickTransition();
 }
 
-void SlideshowSource::tickFade()
+void SlideshowSource::tickTransition()
 {
     if (!m_fading)
         return;
@@ -209,7 +235,6 @@ void SlideshowSource::tickFade()
                         : 1.f;
     const float p = (std::min)(1.f, (std::max)(0.f, t));
 
-    // Blend onto toImg size; scale from if needed
     QImage a = m_fromImg;
     QImage b = m_toImg;
     if (a.size() != b.size())
@@ -220,13 +245,32 @@ void SlideshowSource::tickFade()
         b = b.convertToFormat(QImage::Format_ARGB32);
 
     QImage out(b.size(), QImage::Format_ARGB32);
-    const int bytes = out.sizeInBytes();
-    const uchar* pa = a.constBits();
-    const uchar* pb = b.constBits();
-    uchar* po = out.bits();
-    const float inv = 1.f - p;
-    for (int i = 0; i < bytes; ++i) {
-        po[i] = static_cast<uchar>(pa[i] * inv + pb[i] * p + 0.5f);
+    const int w = out.width();
+    const int h = out.height();
+    const bool swipe = m_transition.compare(QLatin1String("swipe"), Qt::CaseInsensitive) == 0;
+
+    if (swipe) {
+        for (int y = 0; y < h; ++y) {
+            const QRgb* ra = reinterpret_cast<const QRgb*>(a.constScanLine(y));
+            const QRgb* rb = reinterpret_cast<const QRgb*>(b.constScanLine(y));
+            QRgb* ro = reinterpret_cast<QRgb*>(out.scanLine(y));
+            for (int x = 0; x < w; ++x) {
+                float edge = 0.f;
+                if (m_swipeDir == 0) edge = float(x) / float((std::max)(1, w - 1));
+                else if (m_swipeDir == 1) edge = 1.f - float(x) / float((std::max)(1, w - 1));
+                else if (m_swipeDir == 2) edge = float(y) / float((std::max)(1, h - 1));
+                else edge = 1.f - float(y) / float((std::max)(1, h - 1));
+                ro[x] = (edge < p) ? rb[x] : ra[x];
+            }
+        }
+    } else {
+        const int bytes = out.sizeInBytes();
+        const uchar* pa = a.constBits();
+        const uchar* pb = b.constBits();
+        uchar* po = out.bits();
+        const float inv = 1.f - p;
+        for (int i = 0; i < bytes; ++i)
+            po[i] = static_cast<uchar>(pa[i] * inv + pb[i] * p + 0.5f);
     }
     uploadImage(out);
 
@@ -243,8 +287,13 @@ bool SlideshowSource::acquireLatest(VideoFrame& out)
     std::lock_guard lock(m_mutex);
     if (!m_running)
         return false;
+    if (m_pendingStep != 0 && !m_fading) {
+        const int step = m_pendingStep;
+        m_pendingStep = 0;
+        beginAdvanceTo(step > 0 ? pickNextIndex() : pickPrevIndex());
+    }
     if (m_fading)
-        tickFade();
+        tickTransition();
     else if (m_slideTimer.elapsed() >= m_intervalMs)
         beginAdvance();
     if (!m_texture) return false;

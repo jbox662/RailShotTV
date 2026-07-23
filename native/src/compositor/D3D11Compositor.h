@@ -60,6 +60,8 @@ public:
 
     /// Fullscreen overlay (stinger) using source alpha.
     void drawFullscreenOverlay(ID3D11Texture2D* tex, float opacity = 1.0f, bool toProgram = true);
+    /// Track Matte: lerp hold(old) → program(new) by matte luma (mode 24).
+    void blendStingerMatte(ID3D11Texture2D* matteTex, bool invert);
 
     QImage readbackProgram() const;
     QImage readbackPreview() const;

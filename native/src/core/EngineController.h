@@ -88,6 +88,8 @@ public:
     /// Target visibility (accounts for in-progress Show/Hide fade).
     bool sourceVisibilityTarget(const QString& sourceId) const;
     void toggleSourceVisible(const QString& sourceId);
+    /// Step selected Image Slide Show (+1 next / −1 previous).
+    void slideshowStepSelected(int delta);
     void setSourceName(const QString& sourceId, const QString& name);
     void setSourceLocked(const QString& sourceId, bool locked);
     /// Project extras `showHideFadeMs` (default 300; 0 = instant).

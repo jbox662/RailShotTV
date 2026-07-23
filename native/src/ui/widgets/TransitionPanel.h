@@ -40,6 +40,8 @@ private:
     QSlider* m_showHideFade = nullptr;
     QLineEdit* m_stingerPath = nullptr;
     QSlider* m_stingerPoint = nullptr;
+    QCheckBox* m_stingerTrackMatte = nullptr;
+    QCheckBox* m_stingerMatteInvert = nullptr;
     QWidget* m_stingerBox = nullptr;
     QWidget* m_lumaWipeBox = nullptr;
     QLineEdit* m_lumaWipePath = nullptr;

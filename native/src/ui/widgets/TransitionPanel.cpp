@@ -213,6 +213,13 @@ TransitionPanel::TransitionPanel(EngineController* engine, QWidget* parent)
     m_stingerPoint->setToolTip(QStringLiteral("When Program swaps from A→B during the stinger"));
     connect(m_stingerPoint, &QSlider::valueChanged, this, [this](int) { applyEffectToEngine(); });
     stingLay->addWidget(m_stingerPoint);
+    m_stingerTrackMatte = new QCheckBox(QStringLiteral("Track Matte (luma)"), m_stingerBox);
+    m_stingerTrackMatte->setToolTip(QStringLiteral("Use stinger luma to wipe from→to instead of alpha overlay"));
+    connect(m_stingerTrackMatte, &QCheckBox::toggled, this, [this](bool) { applyEffectToEngine(); });
+    stingLay->addWidget(m_stingerTrackMatte);
+    m_stingerMatteInvert = new QCheckBox(QStringLiteral("Invert matte"), m_stingerBox);
+    connect(m_stingerMatteInvert, &QCheckBox::toggled, this, [this](bool) { applyEffectToEngine(); });
+    stingLay->addWidget(m_stingerMatteInvert);
     m_stingerBox->setVisible(false);
     col->addWidget(m_stingerBox);
 
@@ -401,6 +408,8 @@ void TransitionPanel::applyEffectToEngine()
         m_lumaWipeBox->setVisible(fx->type == TransitionType::LumaWipe);
     const QString path = m_stingerPath ? m_stingerPath->text() : QString();
     const int pot = m_stingerPoint ? m_stingerPoint->value() : 50;
+    const bool trackMatte = m_stingerTrackMatte && m_stingerTrackMatte->isChecked();
+    const bool matteInvert = m_stingerMatteInvert && m_stingerMatteInvert->isChecked();
     const QString lumaPath = m_lumaWipePath ? m_lumaWipePath->text() : QString();
     const bool lumaInvert = m_lumaWipeInvert && m_lumaWipeInvert->isChecked();
     const float lumaSoft = m_lumaWipeSoft ? float(m_lumaWipeSoft->value()) * 0.01f : 0.07f;
@@ -408,6 +417,8 @@ void TransitionPanel::applyEffectToEngine()
         if (!path.isEmpty())
             p.extras.insert(QStringLiteral("stingerPath"), path);
         p.extras.insert(QStringLiteral("stingerPoint"), pot);
+        p.extras.insert(QStringLiteral("stingerTrackMatte"), trackMatte);
+        p.extras.insert(QStringLiteral("stingerMatteInvert"), matteInvert);
         p.extras.insert(QStringLiteral("lumaWipePath"), lumaPath);
         p.extras.insert(QStringLiteral("lumaWipeInvert"), lumaInvert);
         p.extras.insert(QStringLiteral("lumaWipeSoftness"), double(lumaSoft));
@@ -526,6 +537,14 @@ void TransitionPanel::syncSpeedFromProject()
     if (m_stingerPoint) {
         QSignalBlocker bpp(m_stingerPoint);
         m_stingerPoint->setValue(snap.extras.value(QStringLiteral("stingerPoint")).toInt(50));
+    }
+    if (m_stingerTrackMatte) {
+        QSignalBlocker bt(m_stingerTrackMatte);
+        m_stingerTrackMatte->setChecked(snap.extras.value(QStringLiteral("stingerTrackMatte")).toBool(false));
+    }
+    if (m_stingerMatteInvert) {
+        QSignalBlocker bi(m_stingerMatteInvert);
+        m_stingerMatteInvert->setChecked(snap.extras.value(QStringLiteral("stingerMatteInvert")).toBool(false));
     }
     if (m_stingerBox)
         m_stingerBox->setVisible(findEffect(m_effect)->type == TransitionType::Stinger);

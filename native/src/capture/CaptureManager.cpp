@@ -104,8 +104,9 @@ std::unique_ptr<IVideoSource> CaptureManager::createSource(const SourceItem& sou
         const QString transition = source.settings.value(QStringLiteral("transition")).toString(QStringLiteral("cut"));
         const int transitionMs = source.settings.value(QStringLiteral("transitionMs")).toInt(700);
         const bool randomize = source.settings.value(QStringLiteral("randomize")).toBool(false);
+        const int swipeDir = source.settings.value(QStringLiteral("swipeDir")).toInt(0);
         return std::make_unique<SlideshowSource>(source.id, source.name, paths, interval, loop,
-                                                 transition, transitionMs, randomize);
+                                                 transition, transitionMs, randomize, swipeDir);
     }
     case SourceType::Text:
         return std::make_unique<TextSource>(
@@ -243,7 +244,7 @@ void CaptureManager::updateSource(const SourceItem& source)
         case SourceType::Slideshow:
             reattach = keyChanged("paths") || keyChanged("path") || keyChanged("intervalMs")
                        || keyChanged("loop") || keyChanged("transition") || keyChanged("transitionMs")
-                       || keyChanged("randomize");
+                       || keyChanged("randomize") || keyChanged("swipeDir");
             break;
         case SourceType::Media:
             reattach = keyChanged("path") || keyChanged("loop") || keyChanged("isLocalFile")
