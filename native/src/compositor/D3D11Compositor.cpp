@@ -242,6 +242,7 @@ void D3D11Compositor::shutdown()
 {
 #ifdef _WIN32
     clearMaskCache();
+    clearDelayRings();
     auto rel = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
     rel(m_blendOpaque); rel(m_blend); rel(m_pointSampler); rel(m_sampler); rel(m_transCb); rel(m_cb); rel(m_vb);
     rel(m_layout); rel(m_transPs); rel(m_ps); rel(m_vs);
@@ -258,6 +259,99 @@ void D3D11Compositor::clearMaskCache()
         if (it->tex) { it->tex->Release(); it->tex = nullptr; }
     }
     m_maskCache.clear();
+#endif
+}
+
+void D3D11Compositor::clearDelayRings()
+{
+#ifdef _WIN32
+    for (auto it = m_delayRings.begin(); it != m_delayRings.end(); ++it) {
+        for (auto& s : it->frames) {
+            if (s.tex) {
+                s.tex->Release();
+                s.tex = nullptr;
+            }
+        }
+    }
+    m_delayRings.clear();
+#endif
+}
+
+ID3D11Texture2D* D3D11Compositor::pushGpuDelay(const QString& sourceId, ID3D11Texture2D* live,
+                                               int width, int height, int delayMs)
+{
+#ifdef _WIN32
+    if (!live || !m_device || !m_device->device() || !m_device->context() || sourceId.isEmpty())
+        return nullptr;
+    delayMs = std::clamp(delayMs, 0, 500);
+    if (delayMs <= 0) {
+        auto it = m_delayRings.find(sourceId);
+        if (it != m_delayRings.end()) {
+            for (auto& s : it->frames) {
+                if (s.tex) {
+                    s.tex->Release();
+                    s.tex = nullptr;
+                }
+            }
+            m_delayRings.erase(it);
+        }
+        return nullptr;
+    }
+    // ~30 fps compose ticks; cap ring to 16 frames (~530 ms)
+    const int target = std::clamp((delayMs + 16) / 33, 1, 16);
+    auto& ring = m_delayRings[sourceId];
+    auto* dev = m_device->device();
+    auto* ctx = m_device->context();
+
+    if (static_cast<int>(ring.frames.size()) != target) {
+        for (auto& s : ring.frames) {
+            if (s.tex) {
+                s.tex->Release();
+                s.tex = nullptr;
+            }
+        }
+        ring.frames.clear();
+        ring.frames.resize(static_cast<size_t>(target));
+        ring.write = 0;
+        ring.filled = 0;
+    }
+
+    GpuDelaySlot& slot = ring.frames[static_cast<size_t>(ring.write)];
+    const int uw = (std::max)(1, width);
+    const int uh = (std::max)(1, height);
+    if (!slot.tex || slot.w != uw || slot.h != uh) {
+        if (slot.tex) {
+            slot.tex->Release();
+            slot.tex = nullptr;
+        }
+        D3D11_TEXTURE2D_DESC desc{};
+        live->GetDesc(&desc);
+        desc.Width = static_cast<UINT>(uw);
+        desc.Height = static_cast<UINT>(uh);
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags = 0;
+        if (FAILED(dev->CreateTexture2D(&desc, nullptr, &slot.tex)))
+            return nullptr;
+        slot.w = uw;
+        slot.h = uh;
+    }
+    ctx->CopyResource(slot.tex, live);
+    ring.write = (ring.write + 1) % target;
+    if (ring.filled < target)
+        ++ring.filled;
+    if (ring.filled < target)
+        return nullptr; // still priming — draw live
+    // Oldest frame is the next write position
+    return ring.frames[static_cast<size_t>(ring.write)].tex;
+#else
+    Q_UNUSED(sourceId); Q_UNUSED(live); Q_UNUSED(width); Q_UNUSED(height); Q_UNUSED(delayMs);
+    return nullptr;
 #endif
 }
 
@@ -341,8 +435,18 @@ void D3D11Compositor::drawSource(const SourceItem& src, FrameBus& bus, ID3D11Ren
     auto* ctx = m_device->context();
     auto* dev = m_device->device();
 
+    ID3D11Texture2D* sampleTex = frame->texture;
+    const int delayMs = src.settings.value(QStringLiteral("renderDelayMs")).toInt(0);
+    const QString delayKey = src.id + ((rtv == m_programRtv) ? QStringLiteral(":P") : QStringLiteral(":V"));
+    if (delayMs > 0) {
+        if (auto* delayed = pushGpuDelay(delayKey, frame->texture, frame->width, frame->height, delayMs))
+            sampleTex = delayed;
+    } else if (m_delayRings.contains(delayKey)) {
+        pushGpuDelay(delayKey, frame->texture, frame->width, frame->height, 0);
+    }
+
     ComPtr<ID3D11ShaderResourceView> srv;
-    if (FAILED(dev->CreateShaderResourceView(frame->texture, nullptr, &srv)))
+    if (FAILED(dev->CreateShaderResourceView(sampleTex, nullptr, &srv)))
         return;
 
     D3D11_VIEWPORT vp{};

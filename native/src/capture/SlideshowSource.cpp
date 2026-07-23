@@ -206,7 +206,8 @@ void SlideshowSource::beginAdvanceTo(int tryIdx)
         return;
 
     const bool animated = (m_transition.compare(QLatin1String("fade"), Qt::CaseInsensitive) == 0
-                           || m_transition.compare(QLatin1String("swipe"), Qt::CaseInsensitive) == 0)
+                           || m_transition.compare(QLatin1String("swipe"), Qt::CaseInsensitive) == 0
+                           || m_transition.compare(QLatin1String("slide"), Qt::CaseInsensitive) == 0)
                           && m_transitionMs > 0;
     if (!animated) {
         if (!uploadImage(nextImg))
@@ -248,8 +249,43 @@ void SlideshowSource::tickTransition()
     const int w = out.width();
     const int h = out.height();
     const bool swipe = m_transition.compare(QLatin1String("swipe"), Qt::CaseInsensitive) == 0;
+    const bool slide = m_transition.compare(QLatin1String("slide"), Qt::CaseInsensitive) == 0;
 
-    if (swipe) {
+    if (slide) {
+        const int shiftX = (m_swipeDir <= 1)
+                               ? int(p * float((std::max)(1, w)))
+                               : 0;
+        const int shiftY = (m_swipeDir >= 2)
+                               ? int(p * float((std::max)(1, h)))
+                               : 0;
+        out.fill(qRgba(0, 0, 0, 0));
+        for (int y = 0; y < h; ++y) {
+            QRgb* ro = reinterpret_cast<QRgb*>(out.scanLine(y));
+            for (int x = 0; x < w; ++x) {
+                int ax = x, ay = y, bx = x, by = y;
+                if (m_swipeDir == 0) { // new from left → old exits right
+                    ax = x - shiftX;
+                    bx = x - shiftX + w;
+                } else if (m_swipeDir == 1) { // new from right
+                    ax = x + shiftX;
+                    bx = x + shiftX - w;
+                } else if (m_swipeDir == 2) { // new from top
+                    ay = y - shiftY;
+                    by = y - shiftY + h;
+                } else { // new from bottom
+                    ay = y + shiftY;
+                    by = y + shiftY - h;
+                }
+                if (bx >= 0 && bx < w && by >= 0 && by < h) {
+                    const QRgb* rb = reinterpret_cast<const QRgb*>(b.constScanLine(by));
+                    ro[x] = rb[bx];
+                } else if (ax >= 0 && ax < w && ay >= 0 && ay < h) {
+                    const QRgb* ra = reinterpret_cast<const QRgb*>(a.constScanLine(ay));
+                    ro[x] = ra[ax];
+                }
+            }
+        }
+    } else if (swipe) {
         for (int y = 0; y < h; ++y) {
             const QRgb* ra = reinterpret_cast<const QRgb*>(a.constScanLine(y));
             const QRgb* rb = reinterpret_cast<const QRgb*>(b.constScanLine(y));

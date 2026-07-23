@@ -10,7 +10,7 @@ struct ID3D11Texture2D;
 
 namespace railshot {
 
-/// OBS-style slideshow: cycle images with cut/fade/swipe + randomize.
+/// OBS-style slideshow: cycle images with cut/fade/swipe/slide + randomize.
 class SlideshowSource : public IVideoSource {
 public:
     SlideshowSource(QString id, QString name, QStringList paths, int intervalMs, bool loop,
@@ -41,10 +41,10 @@ private:
     QStringList m_paths;
     int m_intervalMs = 5000;
     bool m_loop = true;
-    QString m_transition = QStringLiteral("cut"); // cut|fade|swipe
+    QString m_transition = QStringLiteral("cut"); // cut|fade|swipe|slide
     int m_transitionMs = 700;
     bool m_randomize = false;
-    int m_swipeDir = 0; // 0=L→R, 1=R→L, 2=U→D, 3=D→U
+    int m_swipeDir = 0; // 0=L→R, 1=R→L, 2=U→D, 3=D→U (swipe + slide)
     int m_index = 0;
     ID3D11Device* m_device = nullptr;
     ID3D11Texture2D* m_texture = nullptr;

@@ -40,6 +40,7 @@ QString filterTypeLabel(const QString& type)
     if (type == QLatin1String("color_invert")) return QStringLiteral("Color Invert");
     if (type == QLatin1String("scale")) return QStringLiteral("Scale/Aspect Ratio");
     if (type == QLatin1String("pixelate")) return QStringLiteral("Pixelate");
+    if (type == QLatin1String("gpu_delay")) return QStringLiteral("Render Delay");
     if (type == QLatin1String("crop_pad")) return QStringLiteral("Crop/Pad");
     if (type == QLatin1String("scroll")) return QStringLiteral("Scroll");
     if (type == QLatin1String("sharpen")) return QStringLiteral("Sharpen");
@@ -86,6 +87,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     int scaleW = 0, scaleH = 0, scaleAspect = 0;
     bool scalePoint = false;
     int pixelate = 0;
+    int renderDelayMs = 0;
     QString maskPath;
     int maskOpacity = 0;
     bool maskInvert = false;
@@ -153,6 +155,8 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
             scalePoint = o.value(QStringLiteral("pointSample")).toBool(false);
         } else if (type == QLatin1String("pixelate")) {
             pixelate = qMax(pixelate, o.value(QStringLiteral("amount")).toInt(0));
+        } else if (type == QLatin1String("gpu_delay")) {
+            renderDelayMs = qMax(renderDelayMs, o.value(QStringLiteral("delayMs")).toInt(0));
         }
     }
 
@@ -192,6 +196,7 @@ void flattenFiltersToSettings(QJsonObject& settings, const QJsonArray& filters)
     settings.insert(QStringLiteral("scaleAspect"), scaleAspect);
     settings.insert(QStringLiteral("scalePoint"), scalePoint);
     settings.insert(QStringLiteral("pixelate"), pixelate);
+    settings.insert(QStringLiteral("renderDelayMs"), renderDelayMs);
 }
 
 void fillKeyTypeCombo(QComboBox* box)
@@ -512,6 +517,20 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     }
     m_stack->addWidget(m_pixelatePage);
 
+    m_gpuDelayPage = new QWidget(m_stack);
+    {
+        auto* form = new QFormLayout(m_gpuDelayPage);
+        m_gpuDelayEnabled = new QCheckBox(QStringLiteral("Enabled"), m_gpuDelayPage);
+        m_gpuDelayMs = new QSpinBox(m_gpuDelayPage);
+        m_gpuDelayMs->setRange(0, 500);
+        m_gpuDelayMs->setSuffix(QStringLiteral(" ms"));
+        m_gpuDelayMs->setValue(100);
+        m_gpuDelayMs->setToolTip(QStringLiteral("GPU texture ring delay (max 500 ms / ~16 frames)"));
+        form->addRow(m_gpuDelayEnabled);
+        form->addRow(QStringLiteral("Delay"), m_gpuDelayMs);
+    }
+    m_stack->addWidget(m_gpuDelayPage);
+
     right->addWidget(m_stack, 1);
     auto* closeRow = new QHBoxLayout();
     closeRow->addStretch();
@@ -546,7 +565,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
     for (QCheckBox* c : {m_chromaEnabled, m_colorKeyEnabled, m_lumaEnabled, m_maskEnabled, m_maskInvert,
                          m_lutEnabled, m_blurEnabled, m_colorEnabled,
                          m_cropEnabled, m_cropPad, m_scrollEnabled, m_sharpenEnabled, m_invertEnabled,
-                         m_scaleEnabled, m_scalePoint, m_pixelateEnabled})
+                         m_scaleEnabled, m_scalePoint, m_pixelateEnabled, m_gpuDelayEnabled})
         connect(c, &QCheckBox::toggled, this, &FiltersDialog::saveCurrent);
     for (QSlider* s : {m_chromaSim, m_chromaSmooth, m_colorKeySim, m_colorKeySmooth,
                        m_lumaMin, m_lumaMax, m_lumaSmooth, m_maskOpacity, m_lutAmount, m_blurAmount,
@@ -554,6 +573,7 @@ FiltersDialog::FiltersDialog(EngineController* engine, const QString& sourceId, 
                        m_cropL, m_cropR, m_cropT, m_cropB,
                        m_scrollX, m_scrollY, m_sharpenAmount, m_pixelateAmount})
         connect(s, &QSlider::valueChanged, this, &FiltersDialog::saveCurrent);
+    connect(m_gpuDelayMs, qOverload<int>(&QSpinBox::valueChanged), this, &FiltersDialog::saveCurrent);
     connect(m_chromaType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_colorKeyType, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
     connect(m_maskMode, qOverload<int>(&QComboBox::currentIndexChanged), this, &FiltersDialog::saveCurrent);
@@ -758,6 +778,7 @@ void FiltersDialog::onAddFilter()
     auto* invert = menu.addAction(QStringLiteral("Color Invert"));
     auto* scale = menu.addAction(QStringLiteral("Scale/Aspect Ratio"));
     auto* pixelate = menu.addAction(QStringLiteral("Pixelate"));
+    auto* gpuDelay = menu.addAction(QStringLiteral("Render Delay"));
     auto* chosen = menu.exec(QCursor::pos());
     if (!chosen) return;
 
@@ -829,6 +850,9 @@ void FiltersDialog::onAddFilter()
     } else if (chosen == pixelate) {
         f.insert(QStringLiteral("type"), QStringLiteral("pixelate"));
         f.insert(QStringLiteral("amount"), 40);
+    } else if (chosen == gpuDelay) {
+        f.insert(QStringLiteral("type"), QStringLiteral("gpu_delay"));
+        f.insert(QStringLiteral("delayMs"), 100);
     } else {
         return;
     }
@@ -1018,6 +1042,10 @@ void FiltersDialog::onSelectionChanged()
         m_pixelateEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
         m_pixelateAmount->setValue(f.value(QStringLiteral("amount")).toInt(40));
         m_stack->setCurrentWidget(m_pixelatePage);
+    } else if (type == QLatin1String("gpu_delay")) {
+        m_gpuDelayEnabled->setChecked(f.value(QStringLiteral("enabled")).toBool(true));
+        m_gpuDelayMs->setValue(f.value(QStringLiteral("delayMs")).toInt(100));
+        m_stack->setCurrentWidget(m_gpuDelayPage);
     } else {
         m_stack->setCurrentWidget(m_emptyPage);
     }
@@ -1103,6 +1131,9 @@ void FiltersDialog::saveCurrent()
                 } else if (type == QLatin1String("pixelate")) {
                     o.insert(QStringLiteral("enabled"), m_pixelateEnabled->isChecked());
                     o.insert(QStringLiteral("amount"), m_pixelateAmount->value());
+                } else if (type == QLatin1String("gpu_delay")) {
+                    o.insert(QStringLiteral("enabled"), m_gpuDelayEnabled->isChecked());
+                    o.insert(QStringLiteral("delayMs"), m_gpuDelayMs->value());
                 }
                 arr.replace(i, o);
                 break;

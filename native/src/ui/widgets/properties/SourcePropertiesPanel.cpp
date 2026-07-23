@@ -513,6 +513,7 @@ public:
         m_transition->addItem(QStringLiteral("Cut"), QStringLiteral("cut"));
         m_transition->addItem(QStringLiteral("Fade"), QStringLiteral("fade"));
         m_transition->addItem(QStringLiteral("Swipe"), QStringLiteral("swipe"));
+        m_transition->addItem(QStringLiteral("Slide"), QStringLiteral("slide"));
         form->addRow(QStringLiteral("Transition"), m_transition);
         m_transitionMs = new QSpinBox(this);
         m_transitionMs->setRange(0, 10000);
@@ -524,7 +525,7 @@ public:
         m_swipeDir->addItem(QStringLiteral("Right → Left"), 1);
         m_swipeDir->addItem(QStringLiteral("Top → Bottom"), 2);
         m_swipeDir->addItem(QStringLiteral("Bottom → Top"), 3);
-        form->addRow(QStringLiteral("Swipe Direction"), m_swipeDir);
+        form->addRow(QStringLiteral("Direction"), m_swipeDir);
         m_loop = new QCheckBox(QStringLiteral("Loop"), this);
         m_loop->setChecked(true);
         form->addRow(m_loop);

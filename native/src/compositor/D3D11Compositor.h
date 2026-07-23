@@ -8,6 +8,7 @@
 #include <QSet>
 #include <QString>
 #include <QHash>
+#include <vector>
 #include <memory>
 
 struct ID3D11Texture2D;
@@ -24,6 +25,18 @@ namespace railshot {
 
 class D3D11Device;
 class Project;
+
+struct GpuDelaySlot {
+    ID3D11Texture2D* tex = nullptr;
+    int w = 0;
+    int h = 0;
+};
+
+struct GpuDelayRing {
+    std::vector<GpuDelaySlot> frames;
+    int write = 0;
+    int filled = 0;
+};
 
 class D3D11Compositor : public QObject {
     Q_OBJECT
@@ -90,6 +103,9 @@ private:
     QSet<QString> groupedChildIds(const SceneItem& scene) const;
     ID3D11ShaderResourceView* ensureMaskSrv(const QString& path);
     void clearMaskCache();
+    void clearDelayRings();
+    /// Push current frame; return delayed texture once the ring is primed (else nullptr → use live).
+    ID3D11Texture2D* pushGpuDelay(const QString& sourceId, ID3D11Texture2D* live, int width, int height, int delayMs);
 
     D3D11Device* m_device = nullptr;
     int m_width = 1920;
@@ -123,6 +139,7 @@ private:
     float m_lumaWipeSoftness = 0.07f;
     QElapsedTimer m_fxClock;
     QHash<QString, MaskEntry> m_maskCache;
+    QHash<QString, GpuDelayRing> m_delayRings;
     QHash<QString, float> m_showHideFadeMuls;
 
     float showHideFadeMul(const QString& sourceId) const;

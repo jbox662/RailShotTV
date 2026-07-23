@@ -3,7 +3,7 @@
 Living SoT for OBS Studio frontend → RailShot Chromatic Command.
 Status: `done` | `partial` | `todo` | `wont` (documented engine limit).
 
-Last updated: Wave 28 (Scale/Aspect Ratio filter + Upward Compressor).
+Last updated: Wave 32 (Slideshow Slide + GPU Render Delay).
 
 ## Design rules
 
@@ -39,7 +39,7 @@ Last updated: Wave 28 (Scale/Aspect Ratio filter + Upward Compressor).
 | Undo / Redo | Edit history | partial | `UndoStack` + Edit menu + Ctrl+Z/Y (project snapshots) |
 | OBSBasic_Dropfiles | Drag-drop media | partial | Preview drop → Image/Media/Browser |
 | Media Source (network) | Local file / Input URL | partial | `MediaSource` + Properties: Local File off → rtsp/http/hls + FFmpeg options; Restart on activate + End Action |
-| Image Slide Show | Slideshow | partial | `SlideshowSource` (Cut/Fade/Swipe + randomize; Next/Prev hotkeys Shift+Right/Left) |
+| Image Slide Show | Slideshow | partial | `SlideshowSource` (Cut/Fade/Swipe/Slide + randomize; Next/Prev hotkeys Shift+Right/Left) |
 | OBSBasic_Browser | Extra browsers | partial | `ExtraBrowserPanel` docks (Docks → Add Browser Panel) |
 | ColorSelect | Color tags | partial | Sources list tint + Set Color menu + Properties swatches |
 
@@ -49,7 +49,7 @@ Last updated: Wave 28 (Scale/Aspect Ratio filter + Upward Compressor).
 |-----|--------|----------|
 | OBSBasicSourceSelect | partial | Sources **+** type menu → Create/Select → Properties |
 | OBSBasicProperties | partial | `SourcePropertiesDialog` + live source preview |
-| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Color Invert, Scale/Aspect Ratio, Pixelate, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
+| OBSBasicFilters | partial | `FiltersDialog` (Color Correction + Hue/Gamma/Opacity/Multiply/Add, Color Invert, Scale/Aspect Ratio, Pixelate, Render Delay, Chroma/Color/Luma Key, Image Mask/Blend, Apply LUT PNG/.cube, Blur, Crop/Pad, Scroll, Sharpen) |
 | OBSBasicTransform | partial | `TransformDialog` |
 | OBSBasicInteraction | partial | `InteractDialog` |
 | OBSBasicAdvAudio | partial | `AdvAudioDialog` (+ Gain, Noise Suppress, Noise Gate, Compressor, Expander, Upward Comp, 3-Band EQ, Limiter, Echo, Invert Polarity) |
@@ -90,3 +90,5 @@ Last updated: Wave 28 (Scale/Aspect Ratio filter + Upward Compressor).
 - [x] Wave 28 — Scale/Aspect Ratio filter + Adv Audio Upward Compressor
 - [x] Wave 29 — Slideshow Swipe + Next/Prev hotkeys (Shift+Right / Shift+Left)
 - [x] Wave 30 — Pixelate filter + Stinger Track Matte MVP (luma wipe from→to)
+- [x] Wave 31 — Slideshow Slide transition (push; shared direction with Swipe)
+- [x] Wave 32 — GPU Render Delay filter (texture ring, max 500 ms)
