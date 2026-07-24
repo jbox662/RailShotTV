@@ -45,6 +45,8 @@ private:
     mutable std::mutex m_mutex;
     int m_width = 1280;
     int m_height = 720;
+    size_t m_mappedBytes = 0;
+    QString m_liveMappingName;
     quint64 m_lastFrameIndex = 0;
     int m_refreshToken = 0;
     int m_reloadToken = 0;

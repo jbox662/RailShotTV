@@ -204,14 +204,20 @@ SourcePropertiesDialog::SourcePropertiesDialog(EngineController* engine, const Q
     root->addWidget(shell, 1);
 
     refreshTitle();
-    // Pin/attach on first tick so dialog chrome appears before Browser helper start().
+    // Pin once after chrome is up — tickPreview must not re-attach every frame
+    // (Browser start() is heavy and applySettings storms can race SHM).
+    if (showPreview) {
+        QTimer::singleShot(0, this, [this] {
+            pinCaptureSource();
+            tickPreview();
+        });
+    }
 
     m_previewTimer = new QTimer(this);
     connect(m_previewTimer, &QTimer::timeout, this, &SourcePropertiesDialog::tickPreview);
     if (showPreview) {
         m_preview->setPlaceholder(QStringLiteral("Starting preview…"));
         m_previewTimer->start(50); // ~20 fps — readback path
-        QTimer::singleShot(0, this, &SourcePropertiesDialog::tickPreview);
     }
 }
 
@@ -248,9 +254,6 @@ void SourcePropertiesDialog::tickPreview()
 {
     if (!m_engine || !m_preview || !m_previewHost || !m_previewHost->isVisible())
         return;
-
-    // Refresh pin from latest settings (URL/size changes while dialog is open).
-    pinCaptureSource();
 
     CaptureManager* cap = m_engine->capture();
     D3D11Compositor* comp = m_engine->compositor();

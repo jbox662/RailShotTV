@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <cstring>
 #include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -39,7 +40,14 @@ BrowserSource::~BrowserSource()
 
 QString BrowserSource::mappingName() const
 {
+#ifdef _WIN32
+    // Include PID so a zombie helper from a previous run cannot hand us a smaller mapping.
+    return QStringLiteral("Local\\RailShotTV_Browser_%1_%2")
+        .arg(quint64(GetCurrentProcessId()))
+        .arg(m_id);
+#else
     return QStringLiteral("Local\\RailShotTV_Browser_%1").arg(m_id);
+#endif
 }
 
 QString BrowserSource::helperExecutable() const
@@ -59,22 +67,55 @@ bool BrowserSource::openSharedMemory(QString* error)
 {
 #ifdef _WIN32
     closeSharedMemory();
+    m_width = std::clamp(m_width, 64, 7680);
+    m_height = std::clamp(m_height, 64, 4320);
     const std::wstring mapName = mappingName().toStdWString();
     const std::wstring mtxName = (mappingName() + QStringLiteral("_mtx")).toStdWString();
-    const DWORD bytes = static_cast<DWORD>(browser_ipc::bufferBytes(m_width, m_height));
+    const size_t bytes = browser_ipc::bufferBytes(m_width, m_height);
+    if (bytes > size_t(0x7fffffff)) {
+        if (error) *error = QStringLiteral("Browser frame buffer too large");
+        return false;
+    }
+    const DWORD dwBytes = static_cast<DWORD>(bytes);
 
     m_mutexHandle = CreateMutexW(nullptr, FALSE, mtxName.c_str());
-    m_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, bytes, mapName.c_str());
+    SetLastError(0);
+    m_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, dwBytes, mapName.c_str());
     if (!m_mapping) {
         if (error) *error = QStringLiteral("Browser shared mapping failed");
         return false;
     }
-    m_view = MapViewOfFile(m_mapping, FILE_MAP_ALL_ACCESS, 0, 0, bytes);
+    // If an older mapping with this name already exists, CreateFileMapping ignores our size.
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(m_mapping);
+        m_mapping = nullptr;
+        // Unique fallback name for this attempt.
+        const QString alt = mappingName() + QStringLiteral("_%1").arg(QDateTime::currentMSecsSinceEpoch());
+        const std::wstring altMap = alt.toStdWString();
+        const std::wstring altMtx = (alt + QStringLiteral("_mtx")).toStdWString();
+        if (m_mutexHandle) {
+            CloseHandle(m_mutexHandle);
+            m_mutexHandle = nullptr;
+        }
+        m_mutexHandle = CreateMutexW(nullptr, FALSE, altMtx.c_str());
+        m_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, dwBytes, altMap.c_str());
+        if (!m_mapping) {
+            if (error) *error = QStringLiteral("Browser shared mapping failed (alt)");
+            return false;
+        }
+        // Helper still needs the name we actually opened — stash via settings token is awkward;
+        // instead rewrite mapping by storing the live name in a member.
+        m_liveMappingName = alt;
+    } else {
+        m_liveMappingName = mappingName();
+    }
+    m_view = MapViewOfFile(m_mapping, FILE_MAP_ALL_ACCESS, 0, 0, dwBytes);
     if (!m_view) {
         if (error) *error = QStringLiteral("Browser MapViewOfFile failed");
         closeSharedMemory();
         return false;
     }
+    m_mappedBytes = bytes;
     auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
     *hdr = browser_ipc::FrameHeader{};
     hdr->width = static_cast<quint32>(m_width);
@@ -103,6 +144,8 @@ void BrowserSource::closeSharedMemory()
         CloseHandle(m_mutexHandle);
         m_mutexHandle = nullptr;
     }
+    m_mappedBytes = 0;
+    m_liveMappingName.clear();
 #endif
 }
 
@@ -122,11 +165,12 @@ bool BrowserSource::ensureHelper(QString* error)
 
     const QString url = m_settings.value(QStringLiteral("url")).toString(
         QStringLiteral("https://example.com"));
+    const QString shm = m_liveMappingName.isEmpty() ? mappingName() : m_liveMappingName;
     QStringList args;
     args << QStringLiteral("--url") << url
          << QStringLiteral("--width") << QString::number(m_width)
          << QStringLiteral("--height") << QString::number(m_height)
-         << QStringLiteral("--shm") << mappingName()
+         << QStringLiteral("--shm") << shm
          << QStringLiteral("--fps") << QString::number(m_settings.value(QStringLiteral("fps")).toInt(15));
 
     m_helper.setProgram(exe);
@@ -144,7 +188,8 @@ bool BrowserSource::ensureHelper(QString* error)
 bool BrowserSource::uploadLatest(QString* error)
 {
 #ifdef _WIN32
-    if (!m_device || !m_view) return false;
+    if (!m_device || !m_view || m_mappedBytes < sizeof(browser_ipc::FrameHeader))
+        return false;
 
     // Copy header + pixels under the IPC mutex so we never CreateTexture from a
     // buffer the helper is mid-overwrite (that tore frames and flickered).
@@ -155,8 +200,13 @@ bool BrowserSource::uploadLatest(QString* error)
     quint32 status = 0;
     quint32 commandAck = 0;
     std::vector<uint8_t> pixels;
-    if (m_mutexHandle)
-        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
+    bool locked = false;
+    if (m_mutexHandle) {
+        const DWORD wr = WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
+        locked = (wr == WAIT_OBJECT_0 || wr == WAIT_ABANDONED);
+        if (!locked)
+            return m_texture != nullptr; // keep last frame; never memcpy without the lock
+    }
     auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
     if (hdr->magic == browser_ipc::kMagic && hdr->width > 0 && hdr->height > 0) {
         idx = hdr->frameIndex;
@@ -165,13 +215,20 @@ bool BrowserSource::uploadLatest(QString* error)
         stride = static_cast<int>(hdr->stride > 0 ? hdr->stride : hdr->width * 4);
         status = hdr->status;
         commandAck = hdr->commandAck;
-        if (idx != m_lastFrameIndex) {
-            const size_t bytes = size_t(h) * size_t(stride);
-            pixels.resize(bytes);
-            std::memcpy(pixels.data(), reinterpret_cast<const uint8_t*>(hdr + 1), bytes);
+        // Reject absurd / torn dimensions before touching pixel memory.
+        w = std::clamp(w, 0, 7680);
+        h = std::clamp(h, 0, 4320);
+        stride = std::clamp(stride, 0, 7680 * 4);
+        if (w > 0 && h > 0 && stride >= w * 4 && idx != m_lastFrameIndex) {
+            const size_t headerBytes = sizeof(browser_ipc::FrameHeader);
+            const size_t need = size_t(h) * size_t(stride);
+            if (headerBytes + need <= m_mappedBytes) {
+                pixels.resize(need);
+                std::memcpy(pixels.data(), reinterpret_cast<const uint8_t*>(hdr + 1), need);
+            }
         }
     }
-    if (m_mutexHandle)
+    if (locked && m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
 
     // Soft-reload freeze (OBS-style): keep last GPU texture until the helper
@@ -258,14 +315,14 @@ bool BrowserSource::start(ID3D11Device* device, QString* error)
         closeSharedMemory();
         return false;
     }
-    // Give helper a moment to paint first frame; upload may still be empty.
+    // Give helper a brief moment to paint; upload may still be empty.
     QElapsedTimer t;
     t.start();
-    while (t.elapsed() < 1500) {
+    while (t.elapsed() < 300) {
         if (uploadLatest(nullptr) && m_texture)
             break;
 #ifdef _WIN32
-        Sleep(50);
+        Sleep(30);
 #endif
     }
     if (!m_texture) {
@@ -331,8 +388,13 @@ void BrowserSource::writeReloadCommand()
 {
 #ifdef _WIN32
     if (!m_view) return;
-    if (m_mutexHandle)
-        WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
+    bool locked = false;
+    if (m_mutexHandle) {
+        const DWORD wr = WaitForSingleObject(static_cast<HANDLE>(m_mutexHandle), 50);
+        locked = (wr == WAIT_OBJECT_0 || wr == WAIT_ABANDONED);
+        if (!locked)
+            return;
+    }
     auto* hdr = static_cast<browser_ipc::FrameHeader*>(m_view);
     if (hdr->magic == browser_ipc::kMagic || hdr->magic == 0) {
         hdr->magic = browser_ipc::kMagic;
@@ -343,7 +405,7 @@ void BrowserSource::writeReloadCommand()
         m_freezeStartedMs = QDateTime::currentMSecsSinceEpoch();
         hdr->status = 3;
     }
-    if (m_mutexHandle)
+    if (locked && m_mutexHandle)
         ReleaseMutex(static_cast<HANDLE>(m_mutexHandle));
 #endif
 }
@@ -358,11 +420,15 @@ void BrowserSource::applySettings(const QJsonObject& settings)
 {
     std::lock_guard lock(m_mutex);
     const QString oldUrl = m_settings.value(QStringLiteral("url")).toString();
+    const int oldW = m_width;
+    const int oldH = m_height;
     const int oldRefresh = m_settings.value(QStringLiteral("refreshToken")).toInt(m_refreshToken);
     const int oldReload = m_settings.value(QStringLiteral("reloadToken")).toInt(m_reloadToken);
     m_settings = settings;
-    m_width = m_settings.value(QStringLiteral("width")).toInt(m_width);
-    m_height = m_settings.value(QStringLiteral("height")).toInt(m_height);
+    const int wantW = std::clamp(m_settings.value(QStringLiteral("width")).toInt(oldW), 64, 7680);
+    const int wantH = std::clamp(m_settings.value(QStringLiteral("height")).toInt(oldH), 64, 4320);
+    m_width = wantW;
+    m_height = wantH;
     const QString newUrl = m_settings.value(QStringLiteral("url")).toString();
     const int newRefresh = m_settings.value(QStringLiteral("refreshToken")).toInt(0);
     const int newReload = m_settings.value(QStringLiteral("reloadToken")).toInt(0);
@@ -379,11 +445,17 @@ void BrowserSource::applySettings(const QJsonObject& settings)
     m_refreshToken = newRefresh;
     m_reloadToken = newReload;
 
-    // URL change: restart helper (OBS recreates browser on URL update).
-    if (m_running.load() && oldUrl != newUrl) {
+    const bool sizeChanged = (wantW != oldW || wantH != oldH);
+    // URL or canvas size change: remapping + restart helper.
+    if (m_running.load() && (oldUrl != newUrl || sizeChanged)) {
         if (m_helper.state() != QProcess::NotRunning) {
             m_helper.terminate();
             m_helper.waitForFinished(1500);
+        }
+        if (sizeChanged) {
+            QString err;
+            if (!openSharedMemory(&err))
+                Logger::warn(QStringLiteral("Browser remap failed: %1").arg(err));
         }
         ensureHelper(nullptr);
     }
